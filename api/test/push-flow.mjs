@@ -15,10 +15,11 @@
  * up rather than retried forever.
  */
 import { createServer } from 'node:http';
-import { webcrypto as crypto } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { randomBytes, webcrypto as crypto } from 'node:crypto';
 
 const BASE = process.env.API_URL ?? 'http://localhost:8787';
-const INVITE = process.env.GROUP_INVITE_CODE ?? 'futsal-dev';
+
 const PUSH_PORT = Number(process.env.PUSH_PORT ?? 9987);
 
 let passed = 0;
@@ -114,10 +115,19 @@ async function call(method, path, { token, body } = {}) {
   return { status: res.status, body: json };
 }
 
+/**
+ * Bootstrap sign-in: write a claim nonce straight into the dev database and
+ * redeem it. The same escape hatch a real organizer uses on day one.
+ */
 async function signIn(memberId) {
-  const gate = await call('POST', '/auth/gate', { body: { code: INVITE } });
-  const join = await call('POST', '/auth/join', { body: { gateToken: gate.body.gateToken, memberId } });
-  return join.body.token;
+  const nonce = randomBytes(32).toString('base64url');
+  const expires = new Date(Date.now() + 3_600_000).toISOString();
+  execFileSync('npx', ['wrangler', 'd1', 'execute', 'futsal-friday', '--local', '--command',
+    `UPDATE members SET claim_nonce='${nonce}', claim_expires_at='${expires}' WHERE id='${memberId}';`],
+    { encoding: 'utf8', stdio: 'pipe' });
+
+  const claimed = await call('POST', '/auth/claim', { body: { nonce } });
+  return claimed.body?.token;
 }
 
 const runCron = () => fetch(`${BASE}/cdn-cgi/local/scheduled`).then((r) => r.status);
@@ -131,9 +141,7 @@ try {
   const health = await call('GET', '/health');
   check('worker is up', health.status === 200);
 
-  const gate = await call('POST', '/auth/gate', { body: { code: INVITE } });
-  const organizer = gate.body.members.find((m) => m.isOrganizer);
-  const orgToken = await signIn(organizer.id);
+  const orgToken = await signIn('mem_organizer');
   check('signed in as organizer', !!orgToken);
 
   const status = await call('GET', '/push/status', { token: orgToken });

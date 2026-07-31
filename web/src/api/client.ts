@@ -63,6 +63,12 @@ export async function request<T>(
   options: RequestOptions = {},
 ): Promise<T> {
   const headers: Record<string, string> = {};
+  // Remember which credential this request went out with. A 401 may arrive
+  // after a *different* credential has been installed — the boot probe that
+  // races a successful sign-in is the obvious case — and clearing the new
+  // token because the old one was rejected would sign the user straight back
+  // out.
+  const sentWith = token;
   if (token) headers.Authorization = `Bearer ${token}`;
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
   if (options.contentType) headers['Content-Type'] = options.contentType;
@@ -95,9 +101,10 @@ export async function request<T>(
       detail?.code ?? 'unknown',
       detail?.message ?? `Request failed (${response.status})`,
     );
-    // A 401 means the stored token is dead; drop it so the app cannot loop
-    // retrying with a credential that will never work again.
-    if (apiError.isAuthError) {
+    // A 401 means the credential *this request used* is dead; drop it so the
+    // app cannot loop retrying with something that will never work. Only if it
+    // is still the current one — see `sentWith`.
+    if (apiError.isAuthError && token === sentWith) {
       clearToken();
       unauthorizedHandler?.();
     }
@@ -130,6 +137,7 @@ export const del = <T>(path: string, body?: unknown) => request<T>('DELETE', pat
  */
 export async function getBlob(path: string, signal?: AbortSignal): Promise<Blob> {
   const headers: Record<string, string> = {};
+  const sentWith = token;
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const response = await fetch(`${platform.apiBaseUrl}${path}`, {
@@ -139,7 +147,7 @@ export async function getBlob(path: string, signal?: AbortSignal): Promise<Blob>
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
+    if (response.status === 401 && token === sentWith) {
       clearToken();
       unauthorizedHandler?.();
     }

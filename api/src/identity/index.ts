@@ -18,10 +18,13 @@ export interface IdentityProvider {
    * Must not touch the database; membership is re-checked by the caller so a
    * removed member loses access immediately.
    */
-  authenticate(request: Request, env: Env): Promise<{ memberId: string } | null>;
+  authenticate(
+    request: Request,
+    env: Env,
+  ): Promise<{ memberId: string; tokenVersion: number } | null>;
 
-  /** Mint a credential for a member who has just picked their name. */
-  issue(identity: Identity, env: Env): Promise<IssuedCredential>;
+  /** Mint a credential for a member who has just redeemed a claim link. */
+  issue(identity: Identity, tokenVersion: number, env: Env): Promise<IssuedCredential>;
 
   /** Header value that clears any stored credential. */
   revoke(): { setCookie?: string };
@@ -36,8 +39,9 @@ export interface IssuedCredential {
 
 const COOKIE_NAME = 'ff_token';
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 90; // 90 days
-const GATE_TTL_SECONDS = 60 * 15;
 const SSE_TICKET_TTL_SECONDS = 120;
+/** A link is useful for a week; long enough to be seen, short enough to rot. */
+export const CLAIM_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * Web provider: a signed bearer token, mirrored into an HttpOnly cookie.
@@ -57,13 +61,21 @@ export const tokenIdentityProvider: IdentityProvider = {
 
     const claims = await verifyToken(env.AUTH_SECRET, token, 'session');
     if (!claims?.sub) return null;
-    return { memberId: claims.sub };
+    // Tokens minted before revocation existed have no version; treat them as
+    // version 1, which is the column default.
+    return { memberId: claims.sub, tokenVersion: claims.v ?? 1 };
   },
 
-  async issue(identity, env) {
+  async issue(identity, tokenVersion, env) {
     const token = await signToken(
       env.AUTH_SECRET,
-      { scope: 'session', sub: identity.memberId, name: identity.name, org: identity.isOrganizer },
+      {
+        scope: 'session',
+        sub: identity.memberId,
+        name: identity.name,
+        org: identity.isOrganizer,
+        v: tokenVersion,
+      },
       SESSION_TTL_SECONDS,
     );
     return { token, setCookie: buildCookie(token, SESSION_TTL_SECONDS) };
@@ -74,15 +86,21 @@ export const tokenIdentityProvider: IdentityProvider = {
   },
 };
 
-/* ------------------------------------------------------------ invite gate */
+/* ----------------------------------------------------------- claim nonces */
 
-/** Proof that the group invite code was entered, issued before identification. */
-export function issueGateToken(env: Env): Promise<string> {
-  return signToken(env.AUTH_SECRET, { scope: 'gate' }, GATE_TTL_SECONDS);
-}
-
-export async function verifyGateToken(env: Env, token: string | null): Promise<boolean> {
-  return (await verifyToken(env.AUTH_SECRET, token, 'gate')) !== null;
+/**
+ * A claim link's secret.
+ *
+ * 256 bits of randomness, looked up directly in the database. Not a signed
+ * token on purpose: the DB row *is* the proof, so spending a link is a delete
+ * rather than a revocation list, and the bootstrap path can mint one with a
+ * single SQL statement without needing `AUTH_SECRET`.
+ */
+export function newClaimNonce(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
 }
 
 /* ------------------------------------------------------------ SSE tickets */

@@ -11,8 +11,6 @@ export interface Env {
   APP_URL: string;
   SSE_MAX_DURATION_SECS: string;
 
-  /** Shared code that gates the entire app. */
-  GROUP_INVITE_CODE: string;
   /** HMAC key for identity tokens. */
   AUTH_SECRET: string;
 

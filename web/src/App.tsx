@@ -5,12 +5,13 @@ import { getToken, onUnauthorized } from './api/client.js';
 import { Icon, type IconName } from './components/Icon.js';
 import { Spinner } from './components/ui.js';
 import { AdminPage } from './pages/AdminPage.js';
-import { GatePage } from './pages/GatePage.js';
+import { ClaimPage, SignInNeeded } from './pages/ClaimPage.js';
 import { HistoryPage } from './pages/HistoryPage.js';
 import { HomePage } from './pages/HomePage.js';
 import { PaymentsPage } from './pages/PaymentsPage.js';
 import { SessionPage } from './pages/SessionPage.js';
-import { type Route, navigate, replace, useRoute } from './router.js';
+import { platform } from './platform/index.js';
+import { type Route, navigate, parseRoute, replace, useRoute } from './router.js';
 import { AppProvider, useApp } from './state/app.js';
 import { LocaleProvider, useMessages } from './state/locale.js';
 
@@ -29,7 +30,12 @@ export function App() {
     onUnauthorized(() => setIdentity(null));
 
     currentIdentity()
-      .then(setIdentity)
+      // Only ever *establish* an identity, never clear one. This probe is
+      // fired before any credential exists, so on a claim link it races the
+      // sign-in and resolves null a moment after the claim succeeded —
+      // assigning that null would bounce the user back to the sign-in screen
+      // having just signed in.
+      .then((found) => setIdentity((current) => current ?? found))
       .finally(() => setChecking(false));
   }, []);
 
@@ -47,9 +53,11 @@ export function App() {
   }
 
   if (!identity) {
+    // /claim redeems a link; everywhere else just explains that you need one.
+    const onClaimRoute = parseRoute(platform.navigation.path()).name === 'claim';
     return (
       <LocaleProvider>
-        <GatePage onSignedIn={setIdentity} />
+        {onClaimRoute ? <ClaimPage onSignedIn={setIdentity} /> : <SignInNeeded />}
       </LocaleProvider>
     );
   }
@@ -133,6 +141,10 @@ function Page({ route }: { route: Route }) {
   switch (route.name) {
     case 'home':
       return <HomePage />;
+    // Reached only when an already-signed-in device opens a link; the shell is
+    // already up, so just show them the app.
+    case 'claim':
+      return <HomePage />;
     case 'session':
       return <SessionPage sessionId={route.id} />;
     case 'payments':
@@ -147,6 +159,7 @@ function Page({ route }: { route: Route }) {
 function titleFor(route: Route, m: ReturnType<typeof useMessages>): string {
   switch (route.name) {
     case 'home':
+    case 'claim':
       return m.app.name;
     case 'session':
       return m.nav.sessionTitle;

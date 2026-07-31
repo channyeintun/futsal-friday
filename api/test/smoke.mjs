@@ -10,8 +10,10 @@
  * point it at a dev instance only.
  */
 
+import { execFileSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+
 const BASE = process.env.API_URL ?? 'http://localhost:8787';
-const INVITE_CODE = process.env.GROUP_INVITE_CODE ?? 'futsal-dev';
 
 let passed = 0;
 let failed = 0;
@@ -54,49 +56,70 @@ async function call(method, path, { token, body, raw, contentType } = {}) {
   return { status: response.status, body: json, headers: response.headers };
 }
 
-/** Creates a member (as organizer) and signs them in, returning their token. */
+/** The nonce out of a claim URL's fragment. */
+const nonceOf = (url) => url.split('#')[1];
+
+/**
+ * Bootstrap: write a claim nonce straight into the local database.
+ *
+ * This is the documented escape hatch for the first organizer, who by
+ * definition cannot be invited from inside the app. Everyone else in this
+ * suite is invited through the real API.
+ */
+function seedClaimNonce(memberId) {
+  const nonce = randomBytes(32).toString('base64url');
+  const expires = new Date(Date.now() + 3600_000).toISOString();
+  execFileSync('npx', ['wrangler', 'd1', 'execute', 'futsal-friday', '--local', '--command',
+    `UPDATE members SET claim_nonce='${nonce}', claim_expires_at='${expires}' WHERE id='${memberId}';`],
+    { encoding: 'utf8', stdio: 'pipe' });
+  return nonce;
+}
+
+/** Creates a member (as organizer), invites them, and redeems the link. */
 async function addAndLogIn(organizerToken, name) {
   const created = await call('POST', '/members', { token: organizerToken, body: { name } });
   if (created.status !== 201) throw new Error(`could not create ${name}: ${JSON.stringify(created.body)}`);
 
-  const gate = await call('POST', '/auth/gate', { body: { code: INVITE_CODE } });
-  const join = await call('POST', '/auth/join', {
-    body: { gateToken: gate.body.gateToken, memberId: created.body.member.id },
-  });
-  return { id: created.body.member.id, name, token: join.body.token };
+  const link = await call('POST', `/members/${created.body.member.id}/claim-link`, { token: organizerToken });
+  if (link.status !== 200) throw new Error(`no link for ${name}: ${JSON.stringify(link.body)}`);
+
+  const claimed = await call('POST', '/auth/claim', { body: { nonce: nonceOf(link.body.url) } });
+  if (!claimed.body?.token) throw new Error(`could not claim ${name}: ${JSON.stringify(claimed.body)}`);
+
+  return { id: created.body.member.id, name, token: claimed.body.token };
 }
 
 const run = async () => {
   const stamp = Date.now();
 
-  section('health + invite gate');
+  section('health');
   const health = await call('GET', '/health');
   check('health responds', health.status === 200 && health.body.ok === true, health.body);
-
-  const badGate = await call('POST', '/auth/gate', { body: { code: 'definitely-wrong' } });
-  check('wrong invite code is rejected', badGate.status === 401, badGate.body);
-
-  const gate = await call('POST', '/auth/gate', { body: { code: INVITE_CODE } });
-  check('correct invite code opens the gate', gate.status === 200 && !!gate.body.gateToken);
-  check('gate reveals the member list', Array.isArray(gate.body.members) && gate.body.members.length > 0);
 
   const noAuth = await call('GET', '/sessions');
   check('protected routes need a token', noAuth.status === 401, noAuth.body);
 
-  section('identity');
-  const organizerMember = gate.body.members.find((m) => m.isOrganizer);
-  check('seed organizer exists', !!organizerMember, gate.body.members);
+  section('claim links are the only way in');
+  const rosterLeak = await call('GET', '/members');
+  check('the roster is not readable without a token', rosterLeak.status === 401, rosterLeak.status);
 
-  const badJoin = await call('POST', '/auth/join', {
-    body: { gateToken: 'not-a-real-token', memberId: organizerMember.id },
-  });
-  check('join requires a valid gate token', badJoin.status === 401, badJoin.body);
+  const bogus = await call('POST', '/auth/claim', { body: { nonce: 'x'.repeat(40) } });
+  check('an unknown nonce is refused', bogus.status === 401, bogus.body);
+  check('and does not say why', /not valid any more/.test(bogus.body?.error?.message ?? ''),
+    bogus.body?.error?.message);
 
-  const join = await call('POST', '/auth/join', {
-    body: { gateToken: gate.body.gateToken, memberId: organizerMember.id },
-  });
-  check('organizer can join', join.status === 200 && !!join.body.token, join.body);
-  const organizer = join.body.token;
+  // The first organizer cannot be invited from inside the app, so they are
+  // bootstrapped straight against the database — the documented escape hatch.
+  const organizerId = 'mem_organizer';
+  const bootstrapNonce = seedClaimNonce(organizerId);
+  const claimed = await call('POST', '/auth/claim', { body: { nonce: bootstrapNonce } });
+  check('bootstrap link signs the organizer in', claimed.status === 200 && !!claimed.body.token,
+    JSON.stringify(claimed.body).slice(0, 140));
+  check('claim returns the identity', claimed.body?.identity?.isOrganizer === true, claimed.body?.identity);
+  const organizer = claimed.body.token;
+
+  const replay = await call('POST', '/auth/claim', { body: { nonce: bootstrapNonce } });
+  check('a link is single-use', replay.status === 401, replay.body);
 
   const me = await call('GET', '/auth/me', { token: organizer });
   check('/auth/me reflects the organizer', me.body?.identity?.isOrganizer === true, me.body);
@@ -276,6 +299,63 @@ const run = async () => {
   check('cannot register after kickoff', lateJoin.status === 409, lateJoin.body);
   check('closure has its own error code',
     lateJoin.body?.error?.code === 'registration_closed', lateJoin.body);
+
+  section('claim link authority');
+  const aliceLink = await call('POST', `/members/${bob.id}/claim-link`, { token: alice.token });
+  check('a member cannot mint a link for someone else', aliceLink.status === 403, aliceLink.body);
+
+  const ownLink = await call('POST', '/auth/my-device-link', { token: alice.token });
+  check('but can mint one for her own second device', ownLink.status === 200 && !!ownLink.body.url,
+    JSON.stringify(ownLink.body).slice(0, 100));
+  check('the link points at /claim with the nonce in the fragment',
+    /\/claim#[A-Za-z0-9_-]{40,}$/.test(ownLink.body?.url ?? ''), ownLink.body?.url);
+
+  const secondDevice = await call('POST', '/auth/claim', { body: { nonce: nonceOf(ownLink.body.url) } });
+  check('the second device signs in as the same person',
+    secondDevice.body?.identity?.memberId === alice.id, secondDevice.body?.identity);
+  check('the first device still works',
+    (await call('GET', '/auth/me', { token: alice.token })).status === 200);
+
+  // Re-issuing must invalidate whatever was outstanding, or "resend it" would
+  // leave two live links for one identity.
+  const first = await call('POST', `/members/${carol.id}/claim-link`, { token: organizer });
+  const second = await call('POST', `/members/${carol.id}/claim-link`, { token: organizer });
+  const stale = await call('POST', '/auth/claim', { body: { nonce: nonceOf(first.body.url) } });
+  check('re-issuing invalidates the previous link', stale.status === 401, stale.body);
+  const fresh = await call('POST', '/auth/claim', { body: { nonce: nonceOf(second.body.url) } });
+  check('the newest link still works', fresh.status === 200, fresh.body);
+
+  section('roster shows who has joined');
+  const roster = await call('GET', '/members', { token: organizer });
+  const aliceRow = roster.body.members.find((x) => x.id === alice.id);
+  check('claimed members are marked', !!aliceRow?.claimedAt, aliceRow);
+  check('the nonce is never exposed to clients',
+    !JSON.stringify(roster.body).includes('claim_nonce') && !/"nonce"/.test(JSON.stringify(roster.body)));
+
+  section('revocation cuts off a lost device');
+  const bobToken = bob.token;
+  check('bob works before revocation',
+    (await call('GET', '/auth/me', { token: bobToken })).status === 200);
+
+  const selfRevoke = await call('DELETE', `/members/${organizerId}/claim`, { token: organizer });
+  check('the organizer cannot revoke themselves', selfRevoke.status === 409, selfRevoke.body);
+
+  const revoked = await call('DELETE', `/members/${bob.id}/claim`, { token: organizer });
+  check('organizer revokes a member', revoked.status === 200, revoked.body);
+
+  const afterRevoke = await call('GET', '/auth/me', { token: bobToken });
+  check('the revoked token stops working immediately', afterRevoke.status === 401, afterRevoke.status);
+  check('and says what to do', /new link/i.test(afterRevoke.body?.error?.message ?? ''),
+    afterRevoke.body?.error?.message);
+
+  const memberRevoke = await call('DELETE', `/members/${carol.id}/claim`, { token: alice.token });
+  check('members cannot revoke each other', memberRevoke.status === 403, memberRevoke.body);
+
+  // Bob needs a fresh invitation, and it must work.
+  const bobAgain = await call('POST', `/members/${bob.id}/claim-link`, { token: organizer });
+  const bobBack = await call('POST', '/auth/claim', { body: { nonce: nonceOf(bobAgain.body.url) } });
+  check('a re-invited member gets back in', bobBack.status === 200, bobBack.body);
+  bob.token = bobBack.body.token;
 
   section('realtime plumbing');
   const ticket = await call('POST', '/realtime/ticket', { token: alice.token });

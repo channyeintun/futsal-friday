@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { localClaimPath, localOrganizerId } from './helpers.mjs';
 
 const CHROME = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const PORT = 9333;
@@ -120,50 +121,33 @@ async function run() {
     return false;
   };
 
-  console.log('\nloading the app');
+  console.log('\nwithout a link');
   await send('Page.navigate', { url: `${APP_URL}/` });
   await waitFor('!!document.querySelector("#root")?.children.length', 'app mounts');
   await sleep(600);
 
-  check('gate screen renders', await evalJs('document.body.innerText.includes("Futsal Friday")'));
-  check('asks for the invite code', await evalJs('document.body.innerText.includes("group code")'), await evalJs('document.body.innerText.slice(0,200)'));
-  await shoot('01-gate');
+  check('shows the app name', await evalJs('document.body.innerText.includes("Futsal Friday")'));
+  check('explains that a link is needed',
+    await evalJs('document.body.innerText.includes("personal link")'),
+    await evalJs('document.body.innerText.slice(0,200)'));
+  check('does not reveal who is in the group',
+    await evalJs(`document.querySelectorAll('md-outlined-button').length <= 2`),
+    await evalJs(`[...document.querySelectorAll('md-outlined-button')].map(b=>b.textContent.trim()).join('|')`));
+  await shoot('01-needs-link');
 
-  console.log('\nwrong code is refused');
-  await evalJs(`(() => {
-    const f = document.querySelector('md-outlined-text-field');
-    f.value = 'nope';
-    f.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-  })()`);
-  await sleep(200);
-  await evalJs(`document.querySelector('md-filled-button').click()`);
-  await waitFor('document.body.innerText.includes("not right")', 'wrong code shows an error');
-  await shoot('02-bad-code');
+  console.log('\na bad link is refused');
+  await send('Page.navigate', { url: `${APP_URL}/claim#${'z'.repeat(43)}` });
+  await waitFor('document.body.innerText.includes("not valid any more")', 'bad link shows an error');
+  await shoot('02-bad-link');
 
-  console.log('\ncorrect code opens the name picker');
-  await evalJs(`(() => {
-    const f = document.querySelector('md-outlined-text-field');
-    f.value = ${JSON.stringify(INVITE_CODE)};
-    f.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-  })()`);
-  await sleep(250);
-  await evalJs(`document.querySelector('md-filled-button').click()`);
-  const gotNames = await waitFor('document.body.innerText.includes("Which one are you")', 'name picker appears');
-  await shoot('03-pick-name');
-
-  if (gotNames) {
-    const names = await evalJs(`[...document.querySelectorAll('md-outlined-button')].map(b => b.textContent.trim())`);
-    check('lists the roster', Array.isArray(names) && names.length > 1, JSON.stringify(names));
-    check('marks the organizer', names.some((n) => n.includes('organizer')), JSON.stringify(names));
-
-    console.log('\nsigning in as the organizer');
-    await evalJs(`(() => {
-      const b = [...document.querySelectorAll('md-outlined-button')].find(x => x.textContent.includes('organizer'));
-      b.click();
-    })()`);
-  }
+  console.log('\nsigning in with a claim link');
+  // Cold load, which is what tapping a link in a chat app actually does.
+  await send('Page.navigate', { url: 'about:blank' });
+  await send('Page.navigate', { url: `${APP_URL}${localClaimPath(localOrganizerId())}` });
 
   await waitFor('!!document.querySelector(".bottom-nav")', 'app shell renders after sign-in', 12000);
+  check('the secret is stripped from the address bar',
+    await evalJs('location.hash === ""'), await evalJs('location.hash'));
   await sleep(1200);
   await shoot('04-home');
 

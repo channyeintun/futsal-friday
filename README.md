@@ -22,8 +22,7 @@ Available in English and Burmese (မြန်မာ).
 | Cron | `0 * * * *` — hourly |
 | Push | VAPID configured; reminders live |
 
-The group invite code is a secret and is not stored in this repo. Rotate it any
-time with `wrangler secret put GROUP_INVITE_CODE`.
+Getting in is by personal invite link — see [Who can get in](#who-can-get-in).
 
 ---
 
@@ -119,8 +118,13 @@ npm run dev
 
 The API is on `http://localhost:8787` and the app on `http://localhost:5173`.
 Vite proxies `/api` to the Worker, so everything is same-origin in development
-and there is no CORS to think about. Sign in with the invite code from
-`.dev.vars` (`futsal-dev` by default).
+and there is no CORS to think about.
+
+To sign in locally, mint yourself a link:
+
+```bash
+npm run claim:bootstrap -w @futsal/api -- mem_organizer --local
+```
 
 Realtime is **off** by default locally — without Upstash credentials the app
 falls back to polling every 30 seconds, which is a perfectly good way to
@@ -162,22 +166,24 @@ npm run db:migrate:remote
 Then create your first organizer — nobody can get in until one exists:
 
 ```bash
-npx wrangler d1 execute futsal-friday --remote --command "INSERT INTO members (id, name, is_organizer, active, created_at) VALUES ('mem_boss', 'YOUR NAME', 1, 1, datetime('now'));"
+npx wrangler d1 execute futsal-friday --remote --command "INSERT INTO members (id, name, is_organizer, active, created_at) VALUES ('mem_boss', 'YOUR NAME', 1, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'));"
+```
+
+Once the Worker and frontend are up, mint yourself a link to sign in with:
+
+```bash
+npm run claim:bootstrap -w @futsal/api -- mem_boss
 ```
 
 ### 3. Set the secrets
 
 ```bash
-npx wrangler secret put GROUP_INVITE_CODE
-```
-
-```bash
 npx wrangler secret put AUTH_SECRET
 ```
 
-Use something long and random for `AUTH_SECRET` — `openssl rand -base64 32`.
-Changing it later signs everybody out, which is also how you revoke access in a
-hurry.
+Use something long and random — `openssl rand -base64 32`. Changing it later
+signs everybody out, which is one way to revoke access in a hurry (the targeted
+way is per-member, below).
 
 Optional, for realtime. Create a free Redis database at
 [console.upstash.com](https://console.upstash.com) and set both:
@@ -219,7 +225,7 @@ Set `VITE_API_URL` to the Worker URL and `VITE_APP_URL` to the Pages URL, then:
 
 Use `.env.production`, not `.env.local` — Vite reads `.env.local` in *every*
 mode including `vite dev`, which would quietly point local development at the
-deployed API and make the local invite code stop working.
+deployed API, which is rarely what you want while developing.
 
 ```bash
 npm run deploy:web
@@ -354,36 +360,58 @@ Trigger it locally with:
 curl "http://localhost:8787/cdn-cgi/local/scheduled"
 ```
 
-### Identity, and how thin it is
+### Who can get in
 
-This is a private app for about fifteen friends, so the security model is
-deliberately small:
+The only way in is a **single-use link**, sent to one person.
 
-1. A shared **invite code** gates everything. Until you enter it, the API will
-   not even tell you who is in the group.
-2. You then pick your name from the roster and get a signed token (90 days),
-   mirrored into an `HttpOnly` cookie for same-origin deployments.
+The organizer opens **Setup**, taps *Copy link* next to a name, and sends it to
+that person directly. Opening it signs them in as that member and spends the
+link; forwarding it afterwards does nothing. Nobody has a password, and the app
+never shows a list of who is in the group to anyone who is not already in it.
 
-Step 2 is on the honour system — anyone past the gate could claim to be anyone.
-That is the right trade for a group this size — the invite code is the real
-boundary. `IdentityProvider` in `api/src/identity/` is where a provider with
-verified user ids would slot in if that ever stops being true.
+This replaced a shared invite code plus a "pick who you are" screen. That was
+too weak in a way that only looks small until you think about money: anyone
+holding the code — which lives in a group chat forever — could pick *any* name
+on the roster, including an organizer's, and inherit the ability to settle
+bills, confirm payments and remove members. Two taps to full admin.
 
 Worth knowing:
 
-- The invite code is compared in constant time, but there is **no rate limiting**
-  on the gate endpoint. Use a code with real entropy, not `futsal`. If you want
-  a belt, put a Cloudflare Rate Limiting rule in front of `POST /auth/gate`.
-- Tokens are signed, not encrypted; nothing secret is in them. Membership and
-  the organizer flag are re-read from the database on **every** request, so
-  removing someone or demoting an organizer takes effect immediately rather than
-  in 90 days.
-- `EventSource` cannot send an `Authorization` header, so the SSE endpoint takes
-  a **two-minute, stream-only ticket** in the query string instead of the
-  long-lived token — much safer to have sitting in a proxy log.
-- Payment screenshots are never linked directly. The R2 key stays server-side
-  and images are streamed through a route restricted to the organizer and the
-  member who uploaded it.
+- **A link is a bearer credential.** Whoever opens it first becomes that person,
+  so send it one-to-one, not to the group. It expires after 7 days, and issuing
+  a new one for the same member invalidates the old one.
+- **The secret travels in the URL fragment** (`/claim#…`), which browsers never
+  send to the server — so it stays out of access logs, proxy logs and `Referer`
+  headers. The page reads it, posts it once, and strips it from the address bar.
+- **It is a random 256-bit value looked up in the database**, not a signed
+  token. That makes single-use a delete rather than a revocation list, and lets
+  the bootstrap path mint one with a single SQL statement and no secrets.
+- **Lost phone?** *Sign out their devices* on the roster bumps that member's
+  `token_version`, which invalidates every session token they hold — session
+  tokens are stateless and otherwise last 90 days. Then send a new link.
+- **Second device?** Anyone can mint a link for themselves under **Setup → Add
+  another device**, without waiting on the organizer. That is not a privilege
+  escalation: they already have the access they are copying.
+- **Membership and role are re-read on every request**, so removing someone or
+  demoting an organizer takes effect immediately.
+- **`EventSource` cannot send an `Authorization` header**, so the SSE endpoint
+  takes a two-minute, stream-only ticket in its query string instead of the
+  long-lived token.
+
+#### Locked out
+
+If nobody can sign in — the first organizer, or one who lost their only device —
+mint a link straight from the database. It needs no secrets:
+
+```bash
+npm run claim:bootstrap -w @futsal/api -- <memberId>
+```
+
+Find the id with:
+
+```bash
+npx wrangler d1 execute futsal-friday --remote --command "SELECT id, name FROM members;"
+```
 
 ---
 
@@ -668,10 +696,8 @@ propagates in about 250 ms.
 
 ## Known limitations
 
-- **No rate limiting on the invite gate.** Use a strong code, or add a
-  Cloudflare Rate Limiting rule.
-- **Name picking is unauthenticated** past the invite code. Intentional; see
-  above.
+- **A claim link is a bearer credential.** Anyone who sees it before its
+  intended recipient can use it. Send links one-to-one, never to the group.
 - **The realtime keepalive is the library's, not ours.** If Upstash usage ever
   becomes a problem, the client's idle timeout is the first knob and the
   `PubSub` interface is the escape hatch.

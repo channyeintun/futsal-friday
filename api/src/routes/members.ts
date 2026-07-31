@@ -36,35 +36,28 @@ export const memberRoutes = new Hono<AppContext>()
 
   .post('/', requireOrganizer(), async (c) => {
     const input = await parseBody(c.req.raw, createMemberSchema);
-    const row: MemberRow = {
-      id: newId('mem'),
-      name: input.name,
-      is_organizer: input.isOrganizer ? 1 : 0,
-      active: 1,
-      external_id: null,
-      created_at: nowIso(),
-      // Matches the column defaults; nothing is delivered until the member
-      // actually grants push permission on a device.
-      notify_session: 1,
-      notify_payment: 1,
-      // The organizer adds people before they ever open the app, so their real
-      // language is unknown until they pick one.
-      language: 'en',
-    };
+    const id = newId('mem');
 
     try {
       await c.env.DB.prepare(
         `INSERT INTO members (id, name, is_organizer, active, created_at)
          VALUES (?1, ?2, ?3, 1, ?4)`,
       )
-        .bind(row.id, row.name, row.is_organizer, row.created_at)
+        .bind(id, input.name, input.isOrganizer ? 1 : 0, nowIso())
         .run();
     } catch (error) {
-      // The unique index on name COLLATE NOCASE is what makes the
-      // pick-your-name screen unambiguous, so surface it as a real message.
+      // Names have to be unambiguous — they are how the organizer picks who a
+      // claim link is for — so surface the collision as a real message.
       if (isUniqueViolation(error)) throw conflict(`${input.name} is already on the list`);
       throw error;
     }
+
+    // Read the row back rather than mirroring the column defaults by hand;
+    // every migration that adds a column would otherwise break this literal.
+    const row = await c.env.DB.prepare(`SELECT * FROM members WHERE id = ?1`)
+      .bind(id)
+      .first<MemberRow>();
+    if (!row) throw conflict('Member vanished after insert');
 
     return c.json({ member: toMember(row) }, 201);
   })

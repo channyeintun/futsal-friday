@@ -88,10 +88,15 @@ function notify() {
 
 if (typeof window !== 'undefined') {
   window.addEventListener('popstate', notify);
+  // A URL that differs only in its fragment is a same-document navigation:
+  // no reload, no popstate. Claim links live in the fragment, so without this
+  // opening a second one in an already-open tab would appear to do nothing.
+  window.addEventListener('hashchange', notify);
 }
 
 const navigation: Platform['navigation'] = {
   path: currentPath,
+  hash: () => window.location.hash.replace(/^#/, ''),
   push(path) {
     window.history.pushState({}, '', path);
     notify();

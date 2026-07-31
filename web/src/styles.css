@@ -424,6 +424,20 @@ body {
   }
 }
 
+/* Roster rows carry a name, a role switch and invite controls — too much for
+   one line on a phone, so they stack. */
+.member-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.member-row:last-of-type {
+  border-bottom: 0;
+}
+
 /* --------------------------------------------------------------- badges */
 
 .badge {

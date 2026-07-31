@@ -9,8 +9,6 @@
 export type TokenScope =
   /** Long-lived credential proving "I am this member". */
   | 'session'
-  /** Short-lived proof that the group invite code was entered correctly. */
-  | 'gate'
   /** Very short-lived, single-purpose ticket for the SSE query string. */
   | 'sse';
 
@@ -18,10 +16,15 @@ export interface TokenClaims {
   scope: TokenScope;
   /** Expiry, epoch seconds. */
   exp: number;
-  /** Member id. Empty for `gate` tokens, which precede identification. */
+  /** Member id. */
   sub?: string;
   name?: string;
   org?: boolean;
+  /**
+   * Snapshot of `members.token_version` when this token was issued. Compared
+   * on every request, so bumping the column signs out that member everywhere.
+   */
+  v?: number;
 }
 
 const encoder = new TextEncoder();

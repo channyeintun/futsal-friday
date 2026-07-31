@@ -20,6 +20,10 @@ export const memberSchema = z.object({
   isOrganizer: z.boolean(),
   active: z.boolean(),
   createdAt: isoSchema,
+  /** When this identity was first claimed via a link; null if nobody has. */
+  claimedAt: isoSchema.nullable(),
+  /** True while an unspent claim link is outstanding for this member. */
+  hasPendingLink: z.boolean(),
   /** Reminder preferences; only meaningful once push is granted on a device. */
   notifySession: z.boolean().default(true),
   notifyPayment: z.boolean().default(true),
@@ -261,13 +265,22 @@ export const identitySchema = z.object({
 });
 export type Identity = z.infer<typeof identitySchema>;
 
-export const gateSchema = z.object({
-  code: z.string().trim().min(1, 'Invite code is required').max(100),
+/**
+ * Redeeming a claim link.
+ *
+ * The nonce travels in the URL *fragment*, which browsers never send to the
+ * server and which stays out of access logs and `Referer` headers. The page
+ * reads it and posts it here.
+ */
+export const claimSchema = z.object({
+  nonce: z.string().min(20).max(100),
 });
-export type GateInput = z.infer<typeof gateSchema>;
+export type ClaimInput = z.infer<typeof claimSchema>;
 
-export const joinSchema = z.object({
-  gateToken: z.string().min(1),
-  memberId: idSchema,
+export const claimLinkSchema = z.object({
+  /** Full URL to send to the person. Contains the only copy of the nonce. */
+  url: z.string(),
+  expiresAt: isoSchema,
+  memberName: z.string(),
 });
-export type JoinInput = z.infer<typeof joinSchema>;
+export type ClaimLink = z.infer<typeof claimLinkSchema>;

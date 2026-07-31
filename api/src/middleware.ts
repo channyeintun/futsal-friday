@@ -53,6 +53,17 @@ export function requireMember(): MiddlewareHandler<AppContext> {
     const member = await getMemberById(c.env.DB, resolved.memberId);
     if (!member) throw unauthorized('Your account is no longer active');
 
+    // Revocation. The row is already loaded to re-check membership, so cutting
+    // off a lost phone costs nothing extra.
+    const current = await c.env.DB.prepare(
+      `SELECT token_version FROM members WHERE id = ?1`,
+    )
+      .bind(member.id)
+      .first<{ token_version: number }>();
+    if ((current?.token_version ?? 1) !== resolved.tokenVersion) {
+      throw unauthorized('This device was signed out. Ask for a new link.');
+    }
+
     c.set('identity', {
       memberId: member.id,
       name: member.name,

@@ -30,17 +30,37 @@ export const en = {
     sessionTitle: 'Session',
   },
 
-  gate: {
-    tagline: 'Enter the group code to get in',
-    whichOne: 'Which one are you?',
-    inviteCode: 'Invite code',
-    inviteHint: 'Ask whoever organises the games',
-    continue: 'Continue',
-    checking: 'Checking…',
-    codeWrong: 'That invite code is not right',
-    couldNotCheck: 'Could not check that code',
-    couldNotSignIn: 'Could not sign you in',
-    emptyRoster: 'Nobody is on the list yet. The organizer needs to add players first.',
+  claim: {
+    tagline: 'Private group',
+    signingIn: 'Signing you in…',
+    noLink: 'This page needs an invite link.',
+    failed: 'Could not sign you in',
+    askOrganizer:
+      'Ask the organizer to send you your personal link. It signs you in as you — no password to remember.',
+  },
+
+  invite: {
+    title: 'Invite links',
+    copyLink: 'Copy link',
+    reissue: 'New link',
+    claimed: 'joined',
+    pending: 'link sent',
+    notYet: 'not invited',
+    linkReady: (name: string) => `Link for ${name}`,
+    linkBody:
+      'Send this to that person only. It signs in whoever opens it first, and stops working after that.',
+    expires: (when: string) => `Works until ${when}`,
+    copied: 'Link copied — send it to them directly',
+    couldNotMint: 'Could not create a link',
+    myDevice: 'Add another device',
+    myDeviceBody:
+      'Open this link on your other phone or laptop to sign in there as well.',
+    removeAccess: 'Sign out their devices',
+    removeAccessBody:
+      'Signs out every device they are using and cancels any unused link. They will need a new one.',
+    confirmRemove: (name: string) => `Sign out all of ${name}'s devices?`,
+    removed: (name: string) => `${name} signed out everywhere`,
+    couldNotRemove: 'Could not do that',
   },
 
   session: {

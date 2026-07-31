@@ -121,7 +121,7 @@ try {
   // No sign-in here on purpose. The service worker caches the *shell*, never
   // API responses, so the gate screen is exactly what offline has to deliver —
   // and it keeps this test independent of which API the build points at.
-  await waitFor('document.body.innerText.includes("group code")', 'gate renders');
+  await waitFor('document.body.innerText.includes("personal link")', 'sign-in screen renders');
   await sleep(1500);
 
   const cached = await js(`caches.keys().then(k => JSON.stringify(k))`);

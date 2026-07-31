@@ -3,13 +3,13 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { localClaimPath, localOrganizerId } from './helpers.mjs';
 
 const CHROME = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const PORT = 9334;
 const OUT_DIR = process.env.SHOTS_DIR ?? '/tmp/ff-shots';
-// Point at a deployment with APP_URL / INVITE_CODE; defaults to local dev.
+// Point at a deployment with APP_URL; defaults to local dev.
 const APP_URL = (process.env.APP_URL ?? 'http://localhost:5173').replace(/\/$/, '');
-const INVITE_CODE = process.env.INVITE_CODE ?? 'futsal-dev';
 
 const profile = mkdtempSync(join(tmpdir(), 'ff-chrome-pay-'));
 const chrome = spawn(CHROME, [
@@ -81,14 +81,7 @@ async function run() {
   };
 
   console.log('\nsigning in');
-  await send('Page.navigate', { url: `${APP_URL}/` });
-  await waitFor('document.body.innerText.includes("group code")', 'gate renders');
-  await js(`(() => { const f=document.querySelector('md-outlined-text-field'); f.value=${JSON.stringify(INVITE_CODE)};
-    f.dispatchEvent(new Event('input',{bubbles:true,composed:true})); })()`);
-  await sleep(250);
-  await js(`document.querySelector('md-filled-button').click()`);
-  await waitFor('document.body.innerText.includes("Which one are you")', 'picker');
-  await js(`[...document.querySelectorAll('md-outlined-button')].find(b=>b.textContent.includes('organizer')).click()`);
+  await send('Page.navigate', { url: `${APP_URL}${localClaimPath(localOrganizerId())}` });
   await waitFor('!!document.querySelector(".bottom-nav")', 'shell');
   await sleep(1500);
 

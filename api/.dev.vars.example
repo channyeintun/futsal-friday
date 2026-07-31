@@ -1,8 +1,8 @@
 # Copy to `.dev.vars` (gitignored) for local development.
 # In production these are set with `wrangler secret put <NAME>`.
 
-# Shared code that gates the whole app.
-GROUP_INVITE_CODE=futsal-dev
+# There is no shared invite code any more — sign in with a claim link:
+#   npm run claim:bootstrap -w @futsal/api -- mem_organizer --local
 
 # HMAC key for identity tokens. Generate a real one for production:
 #   openssl rand -base64 32

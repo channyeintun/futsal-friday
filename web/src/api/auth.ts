@@ -1,22 +1,12 @@
-import type { Identity, Member } from '@futsal/shared';
-import { clearToken, get, post, setToken } from './client.js';
+import type { ClaimLink, Identity } from '@futsal/shared';
+import { clearToken, del, get, post, setToken } from './client.js';
 
-export interface GateResponse {
-  gateToken: string;
-  members: Member[];
-}
-
-/** Step 1: prove you know the group's invite code, and get the name list. */
-export function openGate(code: string): Promise<GateResponse> {
-  return post<GateResponse>('/auth/gate', { code });
-}
-
-/** Step 2: say which of those people you are. Stores the returned token. */
-export async function join(gateToken: string, memberId: string): Promise<Identity> {
-  const result = await post<{ token: string; identity: Identity }>('/auth/join', {
-    gateToken,
-    memberId,
-  });
+/**
+ * Redeem a claim link. The nonce comes from the URL fragment, never the query
+ * string, so it does not reach any server log on the way in.
+ */
+export async function claim(nonce: string): Promise<Identity> {
+  const result = await post<{ token: string; identity: Identity }>('/auth/claim', { nonce });
   setToken(result.token);
   return result.identity;
 }
@@ -32,6 +22,17 @@ export async function currentIdentity(): Promise<Identity | null> {
     return null;
   }
 }
+
+/** A link for one of your own other devices. */
+export const myDeviceLink = () => post<ClaimLink>('/auth/my-device-link');
+
+/** Organizer: a link inviting one person to claim their identity. */
+export const memberClaimLink = (memberId: string) =>
+  post<ClaimLink>(`/members/${memberId}/claim-link`);
+
+/** Organizer: sign out all of a member's devices and require a fresh link. */
+export const revokeMemberClaim = (memberId: string) =>
+  del<{ ok: true }>(`/members/${memberId}/claim`);
 
 export async function logout(): Promise<void> {
   try {

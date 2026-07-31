@@ -26,6 +26,14 @@ export interface Clipboard {
 export interface Navigation {
   /** Current in-app path, e.g. `/session/ses_123`. */
   path(): string;
+  /**
+   * The URL fragment, without the leading `#`.
+   *
+   * Claim links carry their secret here rather than in the query string:
+   * browsers never send a fragment to the server, so it stays out of access
+   * logs, proxy logs and `Referer` headers.
+   */
+  hash(): string;
   push(path: string): void;
   replace(path: string): void;
   /** Subscribe to path changes. Returns an unsubscribe function. */

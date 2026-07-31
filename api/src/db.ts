@@ -33,6 +33,10 @@ export interface MemberRow {
   notify_session: number;
   notify_payment: number;
   language: string;
+  claimed_at: string | null;
+  claim_nonce: string | null;
+  claim_expires_at: string | null;
+  token_version: number;
 }
 
 export interface VenueRow {
@@ -107,6 +111,10 @@ export const toMember = (row: MemberRow): Member => ({
   notifySession: (row.notify_session ?? 1) === 1,
   notifyPayment: (row.notify_payment ?? 1) === 1,
   language: normalizeLocale(row.language),
+  claimedAt: row.claimed_at ?? null,
+  // The nonce itself never leaves the server; the roster only needs to know
+  // whether an invitation is outstanding.
+  hasPendingLink: row.claim_nonce !== null,
 });
 
 export const toVenue = (row: VenueRow): Venue => ({

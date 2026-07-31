@@ -11,6 +11,7 @@ import { platform } from './platform/index.js';
 
 export type Route =
   | { name: 'home' }
+  | { name: 'claim' }
   | { name: 'session'; id: string }
   | { name: 'payments'; id: string }
   | { name: 'history' }
@@ -23,6 +24,8 @@ export function parseRoute(path: string): Route {
   if (segments.length === 0) return { name: 'home' };
 
   switch (segments[0]) {
+    case 'claim':
+      return { name: 'claim' };
     case 'session':
       return segments[1] ? { name: 'session', id: segments[1] } : { name: 'home' };
     case 'payments':
@@ -40,6 +43,8 @@ export function routePath(route: Route): string {
   switch (route.name) {
     case 'home':
       return '/';
+    case 'claim':
+      return '/claim';
     case 'session':
       return `/session/${route.id}`;
     case 'payments':

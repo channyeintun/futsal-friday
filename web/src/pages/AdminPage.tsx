@@ -4,6 +4,7 @@ import { createMember, listMembers, removeMember, updateMember } from '../api/me
 import { createSession } from '../api/sessions.js';
 import { createVenue, listVenues, retireVenue, updateVenue } from '../api/venues.js';
 import { Icon } from '../components/Icon.js';
+import { MemberInviteControls, MyDeviceCard } from '../components/InviteLink.js';
 import { ReminderSettings } from '../components/ReminderSettings.js';
 import { Button, Dialog, ErrorBanner, Spinner, Switch, TextField } from '../components/ui.js';
 import { useAsync } from '../hooks/useAsync.js';
@@ -25,6 +26,7 @@ export function AdminPage() {
       <>
         {/* Reminders are everyone's setting, not an organizer tool. */}
         <LanguageCard />
+        <MyDeviceCard />
         <ReminderSettings />
         <div className="card">
           <h2 className="card-title">{m.admin.signedInAs(identity.name)}</h2>
@@ -41,6 +43,7 @@ export function AdminPage() {
   return (
     <>
       <LanguageCard />
+      <MyDeviceCard />
       <ReminderSettings />
       <MembersCard state={members} />
       <VenuesCard state={venues} />
@@ -116,16 +119,21 @@ function MembersCard({ state }: { state: ReturnType<typeof useAsync<Member[]>> }
       {state.loading && !state.data ? <Spinner /> : null}
 
       {(state.data ?? []).map((member) => (
-        <div key={member.id} className="player-row">
-          <Icon name="person" size={18} />
-          <span className="player-name truncate">{member.name}</span>
-          <span className="muted" style={{ fontSize: '0.75rem' }}>
-            {m.app.organizerSuffix}
-          </span>
-          <Switch selected={member.isOrganizer} onChange={() => toggleOrganizer(member)} />
-          <Button variant="text" onClick={() => remove(member)}>
-            <Icon name="close" size={16} />
-          </Button>
+        <div key={member.id} className="member-row">
+          <div className="row" style={{ gap: 8 }}>
+            <Icon name="person" size={18} />
+            <span className="player-name truncate grow">{member.name}</span>
+            <span className="muted" style={{ fontSize: '0.75rem' }}>
+              {m.app.organizerSuffix}
+            </span>
+            <Switch selected={member.isOrganizer} onChange={() => toggleOrganizer(member)} />
+          </div>
+          <div className="row wrap" style={{ gap: 4, justifyContent: 'flex-end' }}>
+            <MemberInviteControls member={member} onChanged={() => state.reload()} />
+            <Button variant="text" onClick={() => remove(member)}>
+              <Icon name="close" size={16} />
+            </Button>
+          </div>
         </div>
       ))}
 
@@ -284,16 +292,18 @@ function LanguageCard() {
     <div className="card">
       <h2 className="card-title">{m.admin.language}</h2>
       <p className="card-sub">{m.admin.languageBody}</p>
-      <div className="row" style={{ gap: 8 }}>
+      {/* Adjacent pills, not two half-width columns: a Material button keeps
+          its intrinsic width, so stretching the wrapper only pushes the two
+          apart and leaves a gap in the middle. */}
+      <div className="row wrap" style={{ gap: 8 }}>
         {LOCALES.map((code) => (
-          <div key={code} className="grow">
-            <Button
-              variant={code === locale ? 'filled' : 'outlined'}
-              onClick={() => setLocale(code)}
-            >
-              {LOCALE_LABELS[code]}
-            </Button>
-          </div>
+          <Button
+            key={code}
+            variant={code === locale ? 'filled' : 'outlined'}
+            onClick={() => setLocale(code)}
+          >
+            {LOCALE_LABELS[code]}
+          </Button>
         ))}
       </div>
     </div>
