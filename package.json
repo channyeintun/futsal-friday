@@ -1,0 +1,38 @@
+{
+  "name": "futsal-friday",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Weekly futsal session manager for a small friend group. Cloudflare Workers + D1 + R2 + Upstash Realtime.",
+  "type": "module",
+  "workspaces": [
+    "shared",
+    "api",
+    "web"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,magenta \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run dev -w @futsal/api",
+    "dev:web": "npm run dev -w @futsal/web",
+    "build": "npm run build -w @futsal/web",
+    "typecheck": "npm run typecheck -w @futsal/shared && npm run typecheck -w @futsal/api && npm run typecheck -w @futsal/web",
+    "db:migrate:local": "npm run db:migrate:local -w @futsal/api",
+    "db:migrate:remote": "npm run db:migrate:remote -w @futsal/api",
+    "deploy:api": "npm run deploy -w @futsal/api",
+    "deploy:web": "npm run deploy -w @futsal/web",
+    "test": "npm run test:shared",
+    "test:shared": "npm run test -w @futsal/shared",
+    "test:api": "npm run test -w @futsal/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.4",
+    "typescript": "^5.9.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "workerd@1.20260730.1": true,
+    "fsevents@2.3.3": true
+  }
+}

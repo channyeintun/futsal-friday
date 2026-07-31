@@ -1,0 +1,233 @@
+import { z } from 'zod';
+
+/**
+ * Domain models + request payloads, defined once and used on both sides of the
+ * wire: the Worker parses inbound bodies with these, the frontend types its
+ * fetch results from them.
+ */
+
+export const idSchema = z.string().min(1).max(64);
+/** ISO-8601 UTC instant. Every timestamp in the API is one of these. */
+export const isoSchema = z.iso.datetime();
+/** Non-negative integer dong. */
+export const vndSchema = z.number().int().min(0).max(1_000_000_000);
+
+/* ------------------------------------------------------------------ member */
+
+export const memberSchema = z.object({
+  id: idSchema,
+  name: z.string().min(1).max(40),
+  isOrganizer: z.boolean(),
+  active: z.boolean(),
+  createdAt: isoSchema,
+});
+export type Member = z.infer<typeof memberSchema>;
+
+export const createMemberSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(40),
+  isOrganizer: z.boolean().optional().default(false),
+});
+export type CreateMemberInput = z.infer<typeof createMemberSchema>;
+
+export const updateMemberSchema = z.object({
+  name: z.string().trim().min(1).max(40).optional(),
+  isOrganizer: z.boolean().optional(),
+  active: z.boolean().optional(),
+});
+export type UpdateMemberInput = z.infer<typeof updateMemberSchema>;
+
+/* ------------------------------------------------------------------- venue */
+
+export const venueSchema = z.object({
+  id: idSchema,
+  name: z.string().min(1).max(80),
+  address: z.string().max(200).nullable(),
+  mapUrl: z.url().max(500).nullable(),
+  priceNote: z.string().max(120).nullable(),
+  active: z.boolean(),
+  createdAt: isoSchema,
+});
+export type Venue = z.infer<typeof venueSchema>;
+
+export const createVenueSchema = z.object({
+  name: z.string().trim().min(1, 'Venue name is required').max(80),
+  address: z.string().trim().max(200).nullish(),
+  mapUrl: z.url('Must be a valid URL').max(500).nullish().or(z.literal('')),
+  priceNote: z.string().trim().max(120).nullish(),
+});
+export type CreateVenueInput = z.infer<typeof createVenueSchema>;
+
+export const updateVenueSchema = createVenueSchema.partial().extend({
+  active: z.boolean().optional(),
+});
+export type UpdateVenueInput = z.infer<typeof updateVenueSchema>;
+
+/* ----------------------------------------------------------------- session */
+
+export const sessionStatusSchema = z.enum(['scheduled', 'cancelled', 'completed']);
+export type SessionStatus = z.infer<typeof sessionStatusSchema>;
+
+export const sessionSchema = z.object({
+  id: idSchema,
+  startsAt: isoSchema,
+  venueId: idSchema.nullable(),
+  venue: venueSchema.nullable(),
+  status: sessionStatusSchema,
+  /** Organizer's up-front estimate, shown before the session is settled. */
+  feePerPerson: vndSchema.nullable(),
+  /** Actual charge, entered after the session. Drives the payment split. */
+  totalCharge: vndSchema.nullable(),
+  maxPlayers: z.number().int().min(1).max(60).nullable(),
+  notes: z.string().max(500).nullable(),
+  createdAt: isoSchema,
+  updatedAt: isoSchema,
+});
+export type Session = z.infer<typeof sessionSchema>;
+
+export const createSessionSchema = z.object({
+  startsAt: isoSchema,
+  venueId: idSchema.nullish(),
+  feePerPerson: vndSchema.nullish(),
+  maxPlayers: z.number().int().min(1).max(60).nullish(),
+  notes: z.string().trim().max(500).nullish(),
+});
+export type CreateSessionInput = z.infer<typeof createSessionSchema>;
+
+export const updateSessionSchema = createSessionSchema.partial().extend({
+  status: sessionStatusSchema.optional(),
+});
+export type UpdateSessionInput = z.infer<typeof updateSessionSchema>;
+
+/* ------------------------------------------------------------ registration */
+
+export const registrationStatusSchema = z.enum(['in', 'waitlist']);
+export type RegistrationStatus = z.infer<typeof registrationStatusSchema>;
+
+export const registrationSchema = z.object({
+  id: idSchema,
+  sessionId: idSchema,
+  memberId: idSchema,
+  memberName: z.string(),
+  status: registrationStatusSchema,
+  /** Monotonic per session; defines display order and waitlist promotion order. */
+  position: z.number().int(),
+  createdAt: isoSchema,
+});
+export type Registration = z.infer<typeof registrationSchema>;
+
+/* ----------------------------------------------------------------- payment */
+
+/** unpaid -> pending (member claims) -> confirmed (organizer verifies). */
+export const paymentStatusSchema = z.enum(['unpaid', 'pending', 'confirmed']);
+export type PaymentStatus = z.infer<typeof paymentStatusSchema>;
+
+export const paymentSchema = z.object({
+  id: idSchema,
+  sessionId: idSchema,
+  memberId: idSchema,
+  memberName: z.string(),
+  /** What this person owes after the split and any override. */
+  amountDue: vndSchema,
+  /** Organizer's manual per-person amount, when set. */
+  amountOverride: vndSchema.nullable(),
+  status: paymentStatusSchema,
+  /** True when a screenshot exists; the object key itself stays server-side. */
+  hasProof: z.boolean(),
+  note: z.string().max(300).nullable(),
+  rejectReason: z.string().max(300).nullable(),
+  claimedAt: isoSchema.nullable(),
+  confirmedAt: isoSchema.nullable(),
+  updatedAt: isoSchema,
+});
+export type Payment = z.infer<typeof paymentSchema>;
+
+export const settleSessionSchema = z.object({
+  totalCharge: vndSchema,
+  /** Round each share to this grain (dong). 1 disables rounding. */
+  granularity: z.number().int().min(1).max(100_000).optional(),
+  /** Absolute amounts that bypass the equal split. */
+  overrides: z.array(z.object({ memberId: idSchema, amount: vndSchema })).max(60).optional(),
+});
+export type SettleSessionInput = z.infer<typeof settleSessionSchema>;
+
+export const claimPaymentSchema = z.object({
+  /** R2 object key returned by the upload endpoint. */
+  proofKey: z.string().max(200).nullish(),
+  note: z.string().trim().max(300).nullish(),
+});
+export type ClaimPaymentInput = z.infer<typeof claimPaymentSchema>;
+
+export const reviewPaymentSchema = z.object({
+  decision: z.enum(['confirm', 'reject']),
+  reason: z.string().trim().max(300).nullish(),
+});
+export type ReviewPaymentInput = z.infer<typeof reviewPaymentSchema>;
+
+export const overridePaymentSchema = z.object({
+  /** null clears the override and returns this person to the equal split. */
+  amount: vndSchema.nullable(),
+});
+export type OverridePaymentInput = z.infer<typeof overridePaymentSchema>;
+
+/* -------------------------------------------------------- composite views */
+
+export const sessionDetailSchema = z.object({
+  session: sessionSchema,
+  registrations: z.array(registrationSchema),
+  counts: z.object({
+    in: z.number().int(),
+    waitlist: z.number().int(),
+  }),
+  /** Whether registration is still open (before kickoff, not cancelled). */
+  registrationOpen: z.boolean(),
+  /** The caller's own registration, if any. */
+  me: registrationSchema.nullable(),
+});
+export type SessionDetail = z.infer<typeof sessionDetailSchema>;
+
+export const paymentSummarySchema = z.object({
+  sessionId: idSchema,
+  totalCharge: vndSchema.nullable(),
+  collected: vndSchema,
+  pending: vndSchema,
+  outstanding: vndSchema,
+  payments: z.array(paymentSchema),
+});
+export type PaymentSummary = z.infer<typeof paymentSummarySchema>;
+
+export const memberBalanceSchema = z.object({
+  member: memberSchema,
+  sessionsPlayed: z.number().int(),
+  totalOwed: vndSchema,
+  totalConfirmed: vndSchema,
+  /** Owed minus confirmed: what this person still needs to settle up. */
+  outstanding: vndSchema,
+});
+export type MemberBalance = z.infer<typeof memberBalanceSchema>;
+
+export const memberHistoryEntrySchema = z.object({
+  session: sessionSchema,
+  registrationStatus: registrationStatusSchema.nullable(),
+  payment: paymentSchema.nullable(),
+});
+export type MemberHistoryEntry = z.infer<typeof memberHistoryEntrySchema>;
+
+/* -------------------------------------------------------------- identity */
+
+export const identitySchema = z.object({
+  memberId: idSchema,
+  name: z.string(),
+  isOrganizer: z.boolean(),
+});
+export type Identity = z.infer<typeof identitySchema>;
+
+export const gateSchema = z.object({
+  code: z.string().trim().min(1, 'Invite code is required').max(100),
+});
+export type GateInput = z.infer<typeof gateSchema>;
+
+export const joinSchema = z.object({
+  gateToken: z.string().min(1),
+  memberId: idSchema,
+});
+export type JoinInput = z.infer<typeof joinSchema>;
