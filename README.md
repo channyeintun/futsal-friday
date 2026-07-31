@@ -353,27 +353,75 @@ Worth knowing:
 
 The UI is meant to be reused as-is. Two files are the seam.
 
-**`web/src/platform/index.ts`** declares everything the browser provides:
-storage, clipboard, navigation, visibility, image picking, image compression,
-object URLs, and the event stream. `web.ts` is the browser implementation and is
-the *only* file in the frontend that touches `window`, `document`,
-`localStorage`, `navigator` or `EventSource`. Write a `zmp.ts` alongside it —
-`setStorage`/`getStorage`, `setClipboardData`, `chooseImage`, ZMP's router — and
-change the one export at the bottom of `index.ts`.
+### The paperwork is the long pole, not the code
 
-**`web/src/api/`** holds every network call, as plain `fetch`. If ZMP requires
-its own request API, `request()` in `client.ts` is the single function to
-rewrite.
+Publishing a Mini App is a business process before it is an engineering one:
 
-On the server, `api/src/identity/index.ts` defines an `IdentityProvider`
-interface. The Zalo version verifies a ZMP access token and maps it to
-`members.external_id` — a column that already exists in migration 0001 for
-exactly this. No route, query or component changes.
+1. Register a Zalo App at [developers.zalo.me](https://developers.zalo.me/), then
+   a Mini App at [mini.zalo.me/developers](https://mini.zalo.me/developers/).
+2. The registering Zalo account must pass **eKYC** identity verification.
+3. The Mini App itself must be verified — via a linked **Official Account** or by
+   submitting documents. Zalo asks for brand-proving evidence (business signage,
+   a website showing ownership, press links, an app-store listing, a domain
+   certificate). Official Account review is quoted at **~7 working days**.
 
-Things to know before you start: this app deliberately avoids React Router (its
-whole job is wrapping the History API, which ZMP replaces), uses no webfonts and
-no icon font, and keeps all realtime behind `PubSub` so it can become
-WebSockets if ZMP's SSE support disappoints.
+For a fifteen-person kickabout that is a lot of ceremony, and it effectively
+requires a Vietnamese business identity. The Pages deployment needs none of it —
+treat ZMP as the option for when the group outgrows a link in a chat thread.
+
+### Mapping the platform seam
+
+`web/src/platform/index.ts` declares everything the browser provides. `web.ts`
+is the browser implementation and is the *only* file in the frontend that
+touches `window`, `document`, `localStorage`, `navigator` or `EventSource`.
+Write a `zmp.ts` beside it and change the one export at the bottom of
+`index.ts`. Verified against `zmp-sdk` **2.52.2**:
+
+| Platform capability | Zalo Mini App |
+| --- | --- |
+| `storage` | `nativeStorage.getItem / setItem / removeItem` — synchronous, a direct 1:1 swap |
+| `pickImage` | `chooseImage` |
+| `openExternal` | `openWebview` (in-app) or `openOutApp` |
+| `navigation` | ZMP's own router; keep `router.tsx`'s `Route` type and reimplement `path/push/replace/subscribe` |
+| `clipboard` | **No clipboard API exists in the SDK.** Use `openShareSheet` to hand the summary text to a chat, or keep the `navigator.clipboard` fallback — ZMP is a webview, so it may still work. `openShareSheet` is the better fit anyway. |
+| `visibility`, `objectUrl`, `compressImage` | Standard web APIs; they work in the webview unchanged |
+| `openEventStream` | `EventSource` — the SDK wraps neither SSE nor WebSockets, so the web API is used directly |
+
+Two corrections worth flagging, both found by reading the shipped SDK rather
+than the docs: there is **no `setClipboardData`**, and the permission API is
+`authorize` / `getSetting`, not `requestPermission`.
+
+### Identity — the part that genuinely improves
+
+`api/src/identity/index.ts` defines an `IdentityProvider`. The Zalo version:
+
+1. Client calls `login()`, then `getAccessToken()`.
+2. Client sends that token to the Worker.
+3. Worker verifies it server-side against Zalo's Graph API and reads the Zalo
+   user id.
+4. Worker maps that id to `members.external_id` — a column that has been in
+   migration 0001 from the start for exactly this.
+
+That replaces the honour-system name picker with real identity, and the shared
+invite code can then be retired. No route, query or component changes.
+
+Request personal-data permission only at the point of use: `zmp-sdk` 2.31.1+
+requires an explicit grant before `getUserInfo` / `getAccessToken`.
+
+### What was built to make this easy
+
+- **No React Router** — its whole job is wrapping the History API, which ZMP
+  replaces. `router.tsx` is ~50 lines behind `platform.navigation`.
+- **No webfonts, no icon font** — icons are inline SVG, so there is no external
+  request to whitelist.
+- **All realtime behind `PubSub`** — swappable for Durable Object WebSockets if
+  ZMP's SSE behaviour disappoints.
+- **`web/src/api/` is plain `fetch`** — if ZMP mandates its own request API,
+  `request()` in `client.ts` is the single function to rewrite.
+
+Expect to declare your Worker's domain in the Mini App's config before network
+calls are allowed; check the current console for the exact field, as this is one
+of the parts the public docs cover least well.
 
 ---
 
