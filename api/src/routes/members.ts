@@ -43,6 +43,10 @@ export const memberRoutes = new Hono<AppContext>()
       active: 1,
       external_id: null,
       created_at: nowIso(),
+      // Matches the column defaults; nothing is delivered until the member
+      // actually grants push permission on a device.
+      notify_session: 1,
+      notify_payment: 1,
     };
 
     try {

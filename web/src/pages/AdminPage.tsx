@@ -4,6 +4,7 @@ import { createMember, listMembers, removeMember, updateMember } from '../api/me
 import { createSession } from '../api/sessions.js';
 import { createVenue, listVenues, retireVenue, updateVenue } from '../api/venues.js';
 import { Icon } from '../components/Icon.js';
+import { ReminderSettings } from '../components/ReminderSettings.js';
 import { Button, Dialog, ErrorBanner, Spinner, Switch, TextField } from '../components/ui.js';
 import { useAsync } from '../hooks/useAsync.js';
 import { navigate } from '../router.js';
@@ -19,6 +20,8 @@ export function AdminPage() {
   if (!identity.isOrganizer) {
     return (
       <>
+        {/* Reminders are everyone's setting, not an organizer tool. */}
+        <ReminderSettings />
         <div className="card">
           <h2 className="card-title">Signed in as {identity.name}</h2>
           <p className="card-sub">Only organizers can edit the roster and venues.</p>
@@ -33,6 +36,7 @@ export function AdminPage() {
 
   return (
     <>
+      <ReminderSettings />
       <MembersCard state={members} />
       <VenuesCard state={venues} />
       <ManualSessionCard />

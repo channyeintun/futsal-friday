@@ -5,9 +5,8 @@ import { platform } from '../platform/index.js';
  *
  * Every network call in the app goes through this file: plain `fetch`, plain
  * JSON, no framework. The rest of the frontend imports typed functions from
- * `api/*` and never constructs a URL. Moving to the Zalo Mini App means
- * pointing `platform.apiBaseUrl` somewhere else — or, if ZMP's own request API
- * is required, reimplementing `request()` alone.
+ * `api/*` and never constructs a URL, so auth, error shape and offline handling
+ * are decided once, here.
  */
 
 export class ApiError extends Error {

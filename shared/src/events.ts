@@ -170,8 +170,8 @@ export type RealtimeEvent = {
  * SSE frame shapes emitted by `@upstash/realtime`'s `handle()`.
  *
  * Mirrored here (rather than imported) so the frontend never has to depend on
- * the server library, and so the ZMP port can talk the same protocol with a
- * different transport.
+ * the server library, and so a different transport could speak the same
+ * protocol.
  */
 export const wireUserEventSchema = z.object({
   data: z.unknown(),

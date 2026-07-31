@@ -1,11 +1,12 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { runWeeklyMaintenance } from './cron.js';
+import { runScheduledMaintenance } from './cron.js';
 import type { AppContext, Env } from './env.js';
 import { corsMiddleware, pubsubMiddleware, requireMember } from './middleware.js';
 import { authRoutes } from './routes/auth.js';
 import { memberRoutes } from './routes/members.js';
 import { paymentRoutes } from './routes/payments.js';
+import { pushRoutes } from './routes/push.js';
 import { realtimeRoutes } from './routes/realtime.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { uploadRoutes } from './routes/uploads.js';
@@ -24,7 +25,8 @@ const protectedRoutes = new Hono<AppContext>()
   // Payment routes declare their own full paths (`/sessions/:id/settle`,
   // `/payments/:id/review`) because they straddle both resources.
   .route('/', paymentRoutes)
-  .route('/uploads', uploadRoutes);
+  .route('/uploads', uploadRoutes)
+  .route('/push', pushRoutes);
 
 const app = new Hono<AppContext>()
   .use('*', corsMiddleware())
@@ -72,8 +74,8 @@ export default {
     // database writes, which would otherwise be cancelled when the handler
     // returns.
     ctx.waitUntil(
-      runWeeklyMaintenance(env).catch((error: unknown) => {
-        console.error('Weekly maintenance failed', error);
+      runScheduledMaintenance(env).catch((error: unknown) => {
+        console.error('Scheduled maintenance failed', error);
       }),
     );
   },

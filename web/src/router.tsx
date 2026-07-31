@@ -4,10 +4,9 @@ import { platform } from './platform/index.js';
 /**
  * A router in fifty lines.
  *
- * React Router would work, but its whole job is wrapping the browser History
- * API — the exact thing the Zalo Mini App replaces with its own navigation.
- * Routing through `platform.navigation` keeps that swap to a single file, and
- * the app only has five screens.
+ * React Router would work, but for five screens it is a dependency (and, at the
+ * time of writing, an open advisory) to carry for very little. Routing through
+ * `platform.navigation` also keeps the History API out of the components.
  */
 
 export type Route =

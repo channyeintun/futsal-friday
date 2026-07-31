@@ -1,14 +1,15 @@
 /**
  * The platform seam.
  *
- * Everything the browser provides and the Zalo Mini App runtime does not — or
- * spells differently — is declared here and implemented in `web.ts`. Pages and
- * components import from this module and never touch `window`, `document`,
- * `localStorage`, `navigator` or `EventSource` directly.
+ * Every browser capability the app depends on is declared here and implemented
+ * in `web.ts`. Pages and components import from this module and never touch
+ * `window`, `document`, `localStorage`, `navigator`, `EventSource` or the Push
+ * API directly.
  *
- * Porting to ZMP then means writing a second implementation of `Platform`:
- * `zmp-sdk` supplies `setStorage`/`getStorage` for `storage`, `setClipboardData`
- * for `clipboard`, and its own router for `navigation`. The UI does not change.
+ * The payoff is not hypothetical portability — it is that all the parts with
+ * awkward platform behaviour (clipboard in webviews, iOS push only working once
+ * installed, image compression, idle detection) live in one file that can be
+ * reasoned about and stubbed, instead of being sprinkled through components.
  */
 
 export interface KeyValueStorage {
@@ -34,8 +35,8 @@ export interface Navigation {
 /**
  * A server-sent-events connection.
  *
- * Modelled on the parts of `EventSource` this app uses, so that the ZMP port
- * can back it with polling or a WebSocket without the caller noticing.
+ * Modelled on just the parts of `EventSource` this app uses, so it could be
+ * backed by a WebSocket instead without the caller noticing.
  */
 export interface EventStream {
   close(): void;
@@ -56,17 +57,48 @@ export interface Visibility {
   onInteraction(listener: () => void): () => void;
 }
 
+/** Push notification support, as far as the UI needs to know about it. */
+export interface Notifications {
+  /** False on browsers without the Push API, and in a non-installed iOS tab. */
+  supported(): boolean;
+  /**
+   * True when the app must be installed to the Home Screen before push will
+   * work at all — iOS Safari's rule. The UI shows install instructions instead
+   * of a permission button.
+   */
+  requiresInstall(): boolean;
+  permission(): 'default' | 'granted' | 'denied';
+  /** Prompts if needed. Resolves the resulting permission. */
+  requestPermission(): Promise<'default' | 'granted' | 'denied'>;
+  /** Subscribe this device. Returns the raw subscription for the API. */
+  subscribe(applicationServerKey: string): Promise<PushSubscriptionJson | null>;
+  /** Current subscription, if this device already has one. */
+  current(): Promise<PushSubscriptionJson | null>;
+  unsubscribe(): Promise<void>;
+  /** Fired when the push service rotates a subscription. */
+  onSubscriptionChange(listener: () => void): () => void;
+}
+
+/** Exactly the shape `PushSubscription.toJSON()` produces. */
+export interface PushSubscriptionJson {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+}
+
 export interface Platform {
   storage: KeyValueStorage;
   clipboard: Clipboard;
   navigation: Navigation;
   visibility: Visibility;
+  notifications: Notifications;
+  /** Registers the service worker. Resolves false where unsupported. */
+  registerServiceWorker(): Promise<boolean>;
   openExternal(url: string): void;
   openEventStream(url: string, handlers: EventStreamHandlers): EventStream;
   /**
    * Ask the user for a photo. Resolves null if they backed out.
-   * ZMP supplies its own picker (`chooseImage`), which is exactly why this is
-   * a platform capability rather than an `<input type="file">` in a component.
+   * A capability rather than an `<input type="file">` in a component, so the
+   * hidden-input dance and its cancel handling stay in one place.
    */
   pickImage(): Promise<Blob | null>;
   /** Resize + re-encode an image before upload. */
@@ -103,8 +135,5 @@ export interface CompressedImage {
 
 import { webPlatform } from './web.js';
 
-/**
- * The active platform. A ZMP build swaps this for `zmpPlatform` and nothing
- * else in the app changes.
- */
+/** The active platform implementation. */
 export const platform: Platform = webPlatform;

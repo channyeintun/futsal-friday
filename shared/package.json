@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Types, zod schemas and pure helpers shared between the Worker API and the web/ZMP frontend.",
+  "description": "Types, zod schemas and pure helpers shared between the Worker API and the web frontend.",
   "exports": {
     ".": "./src/index.ts",
     "./events": "./src/events.ts",

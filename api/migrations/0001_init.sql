@@ -15,8 +15,8 @@ CREATE TABLE members (
   name         TEXT NOT NULL,
   is_organizer INTEGER NOT NULL DEFAULT 0 CHECK (is_organizer IN (0, 1)),
   active       INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
-  -- Reserved for the Zalo Mini App port: the ZMP user id gets stored here so a
-  -- member keeps their history when identity moves from cookie to Zalo SDK.
+  -- Reserved hook for an external identity provider, so a member could keep
+  -- their history if sign-in ever moves off the shared invite code. Unused.
   external_id  TEXT,
   created_at   TEXT NOT NULL
 );

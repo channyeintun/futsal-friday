@@ -22,7 +22,9 @@ export type IconName =
   | 'camera'
   | 'logout'
   | 'person'
-  | 'clock';
+  | 'clock'
+  | 'bell'
+  | 'share';
 
 const PATHS: Record<IconName, React.ReactNode> = {
   ball: (
@@ -97,6 +99,20 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <circle cx="12" cy="8" r="3.75" />
       <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
+    </>
+  ),
+  bell: (
+    <>
+      <path d="M6 9a6 6 0 1 1 12 0c0 3.4.8 5.3 1.6 6.3.4.5 0 1.2-.6 1.2H5c-.6 0-1-.7-.6-1.2C5.2 14.3 6 12.4 6 9z" />
+      <path d="M10 20a2.2 2.2 0 0 0 4 0" />
+    </>
+  ),
+  // iOS share sheet glyph, used in the "Add to Home Screen" hint.
+  share: (
+    <>
+      <path d="M12 15V3.5" />
+      <path d="M8.5 7 12 3.5 15.5 7" />
+      <path d="M6 12.5v6A1.5 1.5 0 0 0 7.5 20h9a1.5 1.5 0 0 0 1.5-1.5v-6" />
     </>
   ),
 };

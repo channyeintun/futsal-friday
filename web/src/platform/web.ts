@@ -4,6 +4,7 @@ import type {
   EventStream,
   EventStreamHandlers,
   Platform,
+  PushSubscriptionJson,
 } from './index.js';
 
 /**
@@ -149,6 +150,107 @@ function openEventStream(url: string, handlers: EventStreamHandlers): EventStrea
   };
 }
 
+/* ----------------------------------------------------------- notifications */
+
+/**
+ * Standalone means "launched from the Home Screen" rather than in a tab.
+ * `display-mode: standalone` covers Android and desktop; `navigator.standalone`
+ * is the old iOS-only flag, which is still the reliable signal there.
+ */
+function isInstalled(): boolean {
+  return (
+    window.matchMedia?.('(display-mode: standalone)').matches === true ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
+}
+
+function isIos(): boolean {
+  // iPadOS reports as Mac, so the touch-point check is what catches it.
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+}
+
+const notifications: Platform['notifications'] = {
+  supported() {
+    return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  },
+
+  requiresInstall() {
+    // iOS 16.4+ only delivers Web Push to a Home Screen install — in a plain
+    // Safari tab the APIs may not even be defined.
+    return isIos() && !isInstalled();
+  },
+
+  permission() {
+    if (!('Notification' in window)) return 'denied';
+    return Notification.permission as 'default' | 'granted' | 'denied';
+  },
+
+  async requestPermission() {
+    if (!('Notification' in window)) return 'denied';
+    return (await Notification.requestPermission()) as 'default' | 'granted' | 'denied';
+  },
+
+  async subscribe(applicationServerKey) {
+    const registration = await navigator.serviceWorker.ready;
+
+    // Reuse an existing subscription rather than creating a second one for the
+    // same device; `applicationServerKey` cannot be changed on an existing sub.
+    const existing = await registration.pushManager.getSubscription();
+    if (existing) return existing.toJSON() as PushSubscriptionJson;
+
+    const subscription = await registration.pushManager.subscribe({
+      // Required to be true: silent push is not permitted on the open web.
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(applicationServerKey) as BufferSource,
+    });
+    return subscription.toJSON() as PushSubscriptionJson;
+  },
+
+  async current() {
+    if (!('serviceWorker' in navigator)) return null;
+    const registration = await navigator.serviceWorker.getRegistration();
+    const subscription = await registration?.pushManager.getSubscription();
+    return subscription ? (subscription.toJSON() as PushSubscriptionJson) : null;
+  },
+
+  async unsubscribe() {
+    const registration = await navigator.serviceWorker.getRegistration();
+    const subscription = await registration?.pushManager.getSubscription();
+    await subscription?.unsubscribe();
+  },
+
+  onSubscriptionChange(listener) {
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === 'push-subscription-change') listener();
+    };
+    navigator.serviceWorker?.addEventListener('message', handler);
+    return () => navigator.serviceWorker?.removeEventListener('message', handler);
+  },
+};
+
+/** `applicationServerKey` must be raw bytes, not the base64url string. */
+function urlBase64ToUint8Array(base64: string): Uint8Array {
+  const padded = base64.replaceAll('-', '+').replaceAll('_', '/');
+  const binary = atob(padded.padEnd(Math.ceil(padded.length / 4) * 4, '='));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function registerServiceWorker(): Promise<boolean> {
+  if (!('serviceWorker' in navigator)) return false;
+  try {
+    await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    return true;
+  } catch (error) {
+    console.warn('Service worker registration failed', error);
+    return false;
+  }
+}
+
 /* ---------------------------------------------------------- image handling */
 
 /**
@@ -266,6 +368,8 @@ export const webPlatform: Platform = {
   openExternal(url) {
     window.open(url, '_blank', 'noopener,noreferrer');
   },
+  notifications,
+  registerServiceWorker,
   openEventStream,
   pickImage,
   compressImage,

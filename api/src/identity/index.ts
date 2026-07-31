@@ -6,9 +6,9 @@ import { signToken, verifyToken } from './tokens.js';
  * The identity seam.
  *
  * Everything else in the Worker asks for an `Identity` and never learns how it
- * was obtained. Porting to the Zalo Mini App means writing a second
- * `IdentityProvider` that verifies a ZMP access token against Zalo's API and
- * maps it to `members.external_id` — no route, query or component changes.
+ * was obtained. Adding real authentication later — an OAuth provider, a magic
+ * link — means writing a second `IdentityProvider` and mapping it to
+ * `members.external_id`, with no route or query changes.
  */
 export interface IdentityProvider {
   readonly name: string;
@@ -42,11 +42,10 @@ const SSE_TICKET_TTL_SECONDS = 120;
 /**
  * Web provider: a signed bearer token, mirrored into an HttpOnly cookie.
  *
- * The bearer token is the primary credential because it is the one thing that
- * survives every deployment shape this app might take — cross-origin Pages +
- * Workers (where third-party cookies are blocked on Safari), and the ZMP
- * webview (where there is no cookie jar to speak of). The cookie is a bonus for
- * same-origin deployments: there it carries the credential out of reach of XSS.
+ * The bearer token is the primary credential because it survives the shape this
+ * app is actually deployed in: Pages and Workers on different origins, where
+ * Safari blocks third-party cookies outright. The cookie is a bonus for
+ * same-origin deployments — there it carries the credential out of reach of XSS.
  */
 export const tokenIdentityProvider: IdentityProvider = {
   name: 'token',

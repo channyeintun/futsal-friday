@@ -26,8 +26,11 @@ export interface MemberRow {
   name: string;
   is_organizer: number;
   active: number;
+  /** Reserved hook for an external identity provider. Unused today. */
   external_id: string | null;
   created_at: string;
+  notify_session: number;
+  notify_payment: number;
 }
 
 export interface VenueRow {
@@ -98,6 +101,9 @@ export const toMember = (row: MemberRow): Member => ({
   isOrganizer: row.is_organizer === 1,
   active: row.active === 1,
   createdAt: row.created_at,
+  // `?? 1` keeps rows written before migration 0002 behaving as opted-in.
+  notifySession: (row.notify_session ?? 1) === 1,
+  notifyPayment: (row.notify_payment ?? 1) === 1,
 });
 
 export const toVenue = (row: VenueRow): Venue => ({

@@ -2,20 +2,42 @@ import { LOBBY_CHANNEL, nextFridayKickoff, sessionChannel } from '@futsal/shared
 import { type SessionRow, getSessionRow } from './db.js';
 import type { Env } from './env.js';
 import { newId, nowIso } from './http.js';
+import { sendDueNotifications } from './notifications.js';
 import { createPubSub } from './realtime/index.js';
 
 /**
- * Weekly housekeeping, run daily.
+ * Scheduled housekeeping, run hourly.
  *
- * The trigger fires every morning at 08:00 ICT rather than once a week on
- * purpose: both steps are idempotent, so a daily run *repairs* a missed
- * trigger instead of leaving the group without a session for seven days. It
- * costs 365 invocations a year against a 100k/day allowance.
+ * Reminders are why this is hourly rather than daily: "three hours before
+ * kickoff" cannot be hit by a once-a-day job.
  *
- *   1. Close out sessions that have finished, which opens the payment flow.
- *   2. Make sure the upcoming Friday exists, inheriting last week's venue.
+ * The session bookkeeping runs on every tick too. It could be gated to once a
+ * day, but it is two indexed queries and entirely idempotent, so running it
+ * hourly costs nothing measurable and buys promptness: a finished game opens
+ * for payment within the hour, and a missing fixture is created within the hour
+ * rather than waiting for tomorrow morning. Gating it would also have made it
+ * untestable without mocking the clock.
+ *
+ *   1. Send any reminders that are due.
+ *   2. Close out finished sessions.
+ *   3. Make sure the upcoming Friday exists, inheriting last week's venue.
  */
-export async function runWeeklyMaintenance(env: Env, now: Date = new Date()): Promise<void> {
+export async function runScheduledMaintenance(env: Env, now: Date = new Date()): Promise<void> {
+  // Time-sensitive, so it goes first. Isolated so a push outage cannot stop
+  // the session bookkeeping below.
+  try {
+    const summary = await sendDueNotifications(env, now);
+    if (summary.sessionReminders || summary.paymentNudges || summary.removedSubscriptions) {
+      console.log('notifications', JSON.stringify(summary));
+    }
+  } catch (error) {
+    console.error('notification run failed', error);
+  }
+
+  await runSessionMaintenance(env, now);
+}
+
+export async function runSessionMaintenance(env: Env, now: Date = new Date()): Promise<void> {
   const pubsub = createPubSub(env);
 
   const completed = await completeFinishedSessions(env, now);

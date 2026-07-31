@@ -10,6 +10,16 @@
     <meta name="theme-color" content="#386a20" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#1a3700" media="(prefers-color-scheme: dark)" />
     <meta name="description" content="Weekly futsal sessions for the group — who's in, and who owes what." />
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+    <!-- iOS ignores the manifest; these are what make an installed app render
+         full-screen with the right status bar. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Futsal" />
     <!-- Inline so the app never makes a network request for a 16px icon. -->
     <link
       rel="icon"

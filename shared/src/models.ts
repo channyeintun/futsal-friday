@@ -20,6 +20,9 @@ export const memberSchema = z.object({
   isOrganizer: z.boolean(),
   active: z.boolean(),
   createdAt: isoSchema,
+  /** Reminder preferences; only meaningful once push is granted on a device. */
+  notifySession: z.boolean().default(true),
+  notifyPayment: z.boolean().default(true),
 });
 export type Member = z.infer<typeof memberSchema>;
 
@@ -35,6 +38,37 @@ export const updateMemberSchema = z.object({
   active: z.boolean().optional(),
 });
 export type UpdateMemberInput = z.infer<typeof updateMemberSchema>;
+
+/** A member may change only their own reminder preferences. */
+export const notificationPrefsSchema = z.object({
+  notifySession: z.boolean().optional(),
+  notifyPayment: z.boolean().optional(),
+});
+export type NotificationPrefsInput = z.infer<typeof notificationPrefsSchema>;
+
+/* --------------------------------------------------------------- web push */
+
+/** Exactly what `PushSubscription.toJSON()` produces in the browser. */
+export const pushSubscriptionSchema = z.object({
+  endpoint: z.url().max(500),
+  keys: z.object({
+    p256dh: z.string().min(1).max(200),
+    auth: z.string().min(1).max(100),
+  }),
+});
+export type PushSubscriptionInput = z.infer<typeof pushSubscriptionSchema>;
+
+export const pushStatusSchema = z.object({
+  /** False when the server has no VAPID keys; the UI hides the toggle. */
+  enabled: z.boolean(),
+  /** Application server key the browser needs to subscribe. */
+  publicKey: z.string().nullable(),
+  /** How many devices this member currently has reminders on. */
+  devices: z.number().int(),
+  notifySession: z.boolean(),
+  notifyPayment: z.boolean(),
+});
+export type PushStatus = z.infer<typeof pushStatusSchema>;
 
 /* ------------------------------------------------------------------- venue */
 

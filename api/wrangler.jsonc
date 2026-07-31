@@ -9,16 +9,12 @@
     "enabled": true
   },
 
-  // Daily at 01:00 UTC = 08:00 Asia/Ho_Chi_Minh.
-  //
-  // Deliberately daily rather than weekly even though sessions are weekly: the
-  // handler is idempotent (it only creates the upcoming Friday if it is
-  // missing), so a daily run self-heals a missed trigger instead of leaving the
-  // group without a session for a week. It also closes finished sessions so the
-  // payment flow opens on Saturday morning. 365 invocations/year is noise
+  // Hourly. Reminders are why: "three hours before kickoff" cannot be hit by a
+  // once-a-day job. The handler is idempotent, and the session bookkeeping
+  // inside it still only runs at 08:00 ICT. 8,760 invocations a year is noise
   // against the free tier's 100k requests/day.
   "triggers": {
-    "crons": ["0 1 * * *"]
+    "crons": ["0 * * * *"]
   },
 
   "d1_databases": [
@@ -46,7 +42,9 @@
     "APP_URL": "https://futsal-friday.pages.dev",
     // Cap on a single SSE stream before the server asks the client to
     // reconnect. Keeps connections (and their Redis keepalives) bounded.
-    "SSE_MAX_DURATION_SECS": "600"
+    "SSE_MAX_DURATION_SECS": "600",
+    // How long before kickoff the match reminder goes out.
+    "REMINDER_LEAD_HOURS": "3"
   }
 
   // Secrets — set with `wrangler secret put <NAME>`, never in this file:

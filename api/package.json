@@ -12,7 +12,10 @@
     "db:migrate:remote": "wrangler d1 migrations apply futsal-friday --remote",
     "db:seed:local": "wrangler d1 execute futsal-friday --local --file=./seed.sql",
     "cf-typegen": "wrangler types",
-    "test": "node test/smoke.mjs"
+    "test": "node test/smoke.mjs",
+    "test:push": "esbuild test/push-vectors.test.mjs --bundle --platform=node --format=esm --outfile=.push-vectors.mjs --log-level=error && node .push-vectors.mjs",
+    "push:keys": "node scripts/generate-vapid.mjs",
+    "test:push:flow": "node test/push-flow.mjs"
   },
   "dependencies": {
     "@futsal/shared": "*",

@@ -5,9 +5,9 @@ A small web app for a group of friends who play futsal every Friday at 19:30
 hand: posting the registration list in the group chat, and chasing everyone for
 their share of the pitch fee.
 
-Runs entirely on free tiers — Cloudflare Workers, D1, R2, Pages, and Upstash
-Redis — and is structured so the frontend can be lifted into a Zalo Mini App
-later without rewriting the UI.
+An installable PWA that runs entirely on free tiers — Cloudflare Workers, D1,
+R2, Pages, and Upstash Redis. Add it to your Home Screen and it sends a push
+reminder before kickoff, and a nudge when you still owe for the pitch.
 
 **Live deployment**
 
@@ -18,7 +18,8 @@ later without rewriting the UI.
 | D1 | `futsal-friday` (APAC) |
 | R2 | `futsal-friday-proofs` |
 | Upstash | `futsal-friday` (Singapore, free tier) |
-| Cron | `0 1 * * *` — 08:00 ICT daily |
+| Cron | `0 * * * *` — hourly |
+| Push | VAPID configured; reminders live |
 
 The group invite code is a secret and is not stored in this repo. Rotate it any
 time with `wrangler secret put GROUP_INVITE_CODE`.
@@ -43,6 +44,8 @@ time with `wrangler secret put GROUP_INVITE_CODE`.
   list or the payment status, formatted for pasting into the group chat.
 - **Realtime.** Registrations, withdrawals and payment updates appear on
   everyone's screen without a refresh, with automatic fallback to polling.
+- **Installable, with reminders.** A PWA that opens offline, plus push
+  notifications ~3h before kickoff and a weekly nudge while you still owe.
 
 ---
 
@@ -60,16 +63,20 @@ futsal-friday/
 │   ├── migrations/   versioned D1 SQL
 │   ├── identity/     the swappable auth seam
 │   ├── realtime/     the swappable pub/sub seam
+│   ├── push/         VAPID + RFC 8291 Web Push, on WebCrypto
 │   └── routes/
 └── web/         React + Vite + Material Design 3, on Cloudflare Pages
     ├── api/          every fetch call in the app
     ├── platform/     every browser-only API in the app
+    ├── public/       manifest, service worker, icons
     ├── components/
     └── pages/
 ```
 
-Two seams matter more than the rest, because they are what the Zalo port
-replaces — see [Porting to a Zalo Mini App](#porting-to-a-zalo-mini-app).
+`web/platform/` is where every browser-only API lives — storage, clipboard,
+navigation, the Push API, image capture. Components never touch `window` or
+`navigator` directly, which is what keeps the awkward parts (iOS push rules,
+clipboard in webviews, canvas compression) in one reviewable file.
 
 ---
 
@@ -181,6 +188,13 @@ npx wrangler secret put UPSTASH_REDIS_REST_TOKEN
 
 Leave them unset and the app polls instead. Nothing else changes.
 
+Optional, for push reminders — see
+[Setting it up](#setting-it-up) for the full flow:
+
+```bash
+npm run push:keys -w @futsal/api
+```
+
 ### 4. Deploy the Worker
 
 ```bash
@@ -194,10 +208,14 @@ Note the URL it prints (`https://futsal-friday-api.<subdomain>.workers.dev`).
 Point the frontend at that Worker and at its own public URL:
 
 ```bash
-cp web/.env.example web/.env.local
+cp web/.env.example web/.env.production
 ```
 
 Set `VITE_API_URL` to the Worker URL and `VITE_APP_URL` to the Pages URL, then:
+
+Use `.env.production`, not `.env.local` — Vite reads `.env.local` in *every*
+mode including `vite dev`, which would quietly point local development at the
+deployed API and make the local invite code stop working.
 
 ```bash
 npm run deploy:web
@@ -274,6 +292,16 @@ before upload (`web/src/platform/web.ts`), and the Worker hard-rejects anything
 over 1 MB. Fifteen players every week for a year is roughly 120 MB — about 1% of
 the bucket per year.
 
+### Web Push — free, but subrequest-bounded
+
+Push costs nothing: notifications go straight from the Worker to Google's,
+Mozilla's or Apple's push service. The limit that matters is **subrequests per
+Worker invocation** — one HTTP request per subscribed device. Fifteen players
+with two devices each is 30, well inside the cap, and the hourly cron only sends
+anything at all in the hour before a game or when somebody owes money. If the
+group ever grew past that, the fix is to send in batches across ticks rather
+than all in one.
+
 ### Pages — 500 builds/month
 
 Only relevant if you wire up CI to deploy on every push.
@@ -305,12 +333,16 @@ rebalances everyone else and running it twice gives the same answer.
 
 ### The cron
 
-`0 1 * * *` — 08:00 ICT, daily. Weekly sessions but a daily trigger, because
-both steps are idempotent: a daily run *repairs* a missed trigger instead of
-leaving the group without a fixture for a week. It completes finished sessions
-(which opens the payment flow on Saturday morning) and creates the upcoming
-Friday only if nothing is already scheduled — so an organizer who moved this
-week's game to Thursday does not get a duplicate underneath them.
+`0 * * * *` — hourly. Reminders are why: "three hours before kickoff" cannot be
+hit by a once-a-day job. Every step is idempotent, so extra runs are harmless
+and a missed run self-heals.
+
+The session bookkeeping inside it still only runs at 08:00 ICT: it completes
+finished sessions (which opens the payment flow on Saturday morning) and creates
+the upcoming Friday only if nothing is already scheduled — so an organizer who
+moved this week's game to Thursday does not get a duplicate underneath them.
+
+8,760 invocations a year is noise against 100k requests/day.
 
 Trigger it locally with:
 
@@ -329,7 +361,9 @@ deliberately small:
    mirrored into an `HttpOnly` cookie for same-origin deployments.
 
 Step 2 is on the honour system — anyone past the gate could claim to be anyone.
-That is the right trade here, and it is exactly the part the Zalo port removes.
+That is the right trade for a group this size — the invite code is the real
+boundary. `IdentityProvider` in `api/src/identity/` is where a provider with
+verified user ids would slot in if that ever stops being true.
 
 Worth knowing:
 
@@ -349,81 +383,106 @@ Worth knowing:
 
 ---
 
-## Porting to a Zalo Mini App
+## Installing it, and reminders
 
-The UI is meant to be reused as-is. Two files are the seam.
+The app is a PWA: installable to a Home Screen, opens offline, and can send
+push notifications.
 
-### The paperwork is the long pole, not the code
+### Installing
 
-Publishing a Mini App is a business process before it is an engineering one:
+- **Android / Chrome** — the browser offers "Install app" on its own.
+- **iPhone / Safari** — Share, then *Add to Home Screen*.
+- **Desktop** — the install icon in the address bar.
 
-1. Register a Zalo App at [developers.zalo.me](https://developers.zalo.me/), then
-   a Mini App at [mini.zalo.me/developers](https://mini.zalo.me/developers/).
-2. The registering Zalo account must pass **eKYC** identity verification.
-3. The Mini App itself must be verified — via a linked **Official Account** or by
-   submitting documents. Zalo asks for brand-proving evidence (business signage,
-   a website showing ownership, press links, an app-store listing, a domain
-   certificate). Official Account review is quoted at **~7 working days**.
+Once installed it launches without browser chrome, and the app shell is cached,
+so it opens instantly and still renders the last state with no signal. Data
+still needs the network; the service worker deliberately never caches API
+responses, because a stale registration list is worse than a spinner.
 
-For a fifteen-person kickabout that is a lot of ceremony, and it effectively
-requires a Vietnamese business identity. The Pages deployment needs none of it —
-treat ZMP as the option for when the group outgrows a link in a chat thread.
+### Reminders
 
-### Mapping the platform seam
+Two notifications, both sent by the hourly cron:
 
-`web/src/platform/index.ts` declares everything the browser provides. `web.ts`
-is the browser implementation and is the *only* file in the frontend that
-touches `window`, `document`, `localStorage`, `navigator` or `EventSource`.
-Write a `zmp.ts` beside it and change the one export at the bottom of
-`index.ts`. Verified against `zmp-sdk` **2.52.2**:
+| | When | Who |
+| --- | --- | --- |
+| **Match reminder** | ~3h before kickoff (`REMINDER_LEAD_HOURS`) | Everyone registered as playing — not the waitlist |
+| **Unpaid nudge** | Once a day has passed since a settled session, then at most weekly | Anyone whose payment is still `unpaid` |
 
-| Platform capability | Zalo Mini App |
-| --- | --- |
-| `storage` | `nativeStorage.getItem / setItem / removeItem` — synchronous, a direct 1:1 swap |
-| `pickImage` | `chooseImage` |
-| `openExternal` | `openWebview` (in-app) or `openOutApp` |
-| `navigation` | ZMP's own router; keep `router.tsx`'s `Route` type and reimplement `path/push/replace/subscribe` |
-| `clipboard` | **No clipboard API exists in the SDK.** Use `openShareSheet` to hand the summary text to a chat, or keep the `navigator.clipboard` fallback — ZMP is a webview, so it may still work. `openShareSheet` is the better fit anyway. |
-| `visibility`, `objectUrl`, `compressImage` | Standard web APIs; they work in the webview unchanged |
-| `openEventStream` | `EventSource` — the SDK wraps neither SSE nor WebSockets, so the web API is used directly |
+Members turn reminders on per device under **Setup**, and can switch each kind
+off independently. Enabling on a phone does not disable the laptop — they are
+separate subscriptions against one shared preference.
 
-Two corrections worth flagging, both found by reading the shipped SDK rather
-than the docs: there is **no `setClipboardData`**, and the permission API is
-`authorize` / `getSetting`, not `requestPermission`.
+Both are idempotent. Every send first claims a row in `notifications` with a
+unique `dedupe_key`; a cron that fires twice, or a retry after a partial
+failure, sends nothing extra. The key is what defines "the same notification":
+`session_reminder:<session_id>` fires once ever, while
+`payment_due:<session_id>:<ISO week>` recurs weekly so a debt becomes a gentle
+nag rather than a daily one.
 
-### Identity — the part that genuinely improves
+### The iPhone caveat
 
-`api/src/identity/index.ts` defines an `IdentityProvider`. The Zalo version:
+**iOS only delivers Web Push to an app installed on the Home Screen.** In a
+normal Safari tab the APIs are not even defined. The app detects this and shows
+Add-to-Home-Screen instructions instead of a permission toggle that could not
+work — but it is the thing to tell the group when reminders "don't work on my
+iPhone". Requires iOS 16.4 or newer.
 
-1. Client calls `login()`, then `getAccessToken()`.
-2. Client sends that token to the Worker.
-3. Worker verifies it server-side against Zalo's Graph API and reads the Zalo
-   user id.
-4. Worker maps that id to `members.external_id` — a column that has been in
-   migration 0001 from the start for exactly this.
+### How push is implemented
 
-That replaces the honour-system name picker with real identity, and the shared
-invite code can then be retired. No route, query or component changes.
+There is no `web-push` dependency: that package is Node-only. VAPID (RFC 8292)
+and the `aes128gcm` payload encryption (RFC 8291) are implemented directly on
+WebCrypto in `api/src/push/crypto.ts`, which is about 150 lines of
+well-specified key derivation.
 
-Request personal-data permission only at the point of use: `zmp-sdk` 2.31.1+
-requires an explicit grant before `getUserInfo` / `getAccessToken`.
+Correctness is not taken on trust. `npm run test:push -w @futsal/api` runs the
+worked example from RFC 8291 Appendix A — the specification's own fixed keys,
+salt and plaintext — through the encryptor and compares the entire body byte
+for byte, then checks that a generated VAPID JWT verifies under its advertised
+public key. A mistake in the key derivation fails there, rather than becoming
+notifications that silently never arrive.
 
-### What was built to make this easy
+Dead subscriptions clean themselves up: a `404` or `410` from the push service
+means the endpoint is gone for good and the row is deleted; softer failures
+increment a counter and are dropped after five.
 
-- **No React Router** — its whole job is wrapping the History API, which ZMP
-  replaces. `router.tsx` is ~50 lines behind `platform.navigation`.
-- **No webfonts, no icon font** — icons are inline SVG, so there is no external
-  request to whitelist.
-- **All realtime behind `PubSub`** — swappable for Durable Object WebSockets if
-  ZMP's SSE behaviour disappoints.
-- **`web/src/api/` is plain `fetch`** — if ZMP mandates its own request API,
-  `request()` in `client.ts` is the single function to rewrite.
+### Setting it up
 
-Expect to declare your Worker's domain in the Mini App's config before network
-calls are allowed; check the current console for the exact field, as this is one
-of the parts the public docs cover least well.
+```bash
+npm run push:keys -w @futsal/api
+```
+
+Put the private key and subject in the Worker, and the public key in the
+frontend build:
+
+```bash
+npx wrangler secret put VAPID_PRIVATE_KEY
+```
+
+```bash
+npx wrangler secret put VAPID_PUBLIC_KEY
+```
+
+```bash
+npx wrangler secret put VAPID_SUBJECT
+```
+
+That is all — the frontend fetches the application server key from
+`GET /push/status` rather than baking it in, so there is nothing to keep in sync
+and no frontend rebuild needed. Rotating the keypair invalidates every existing
+subscription, so do it once.
+
+Leave the keys unset and everything else still works — the UI simply shows
+"Reminders: not configured" rather than a dead toggle.
+
+### Regenerating the icons
+
+`web/scripts/icon.svg` is the source art. `npm run icons -w @futsal/web` renders
+it to the PNG sizes the manifest needs via headless Chrome, so there is no image
+library in the dependency tree. The PNGs are committed; this only needs running
+when the artwork changes.
 
 ---
+
 
 ## Testing
 
@@ -449,10 +508,33 @@ npm run dev:api
 npm run test:api
 ```
 
+### Push
+
+```bash
+npm run test:push -w @futsal/api
+```
+
+RFC conformance, no servers needed: the worked example from RFC 8291 Appendix A
+is encrypted with the specification's own fixed keys and salt and compared byte
+for byte, and a generated VAPID JWT is verified under its advertised public key.
+
+```bash
+npm run test:push:flow -w @futsal/api
+```
+
+The full flow against `wrangler dev`. It stands up a local HTTP server
+impersonating a push service, subscribes with a real generated P-256 keypair,
+and **decrypts what the Worker sends** back to the original JSON — so the
+ephemeral-key path is exercised, not just the fixed RFC vector. It then checks
+the reminder window, that a second cron run sends nothing, the unpaid nudge and
+its weekly dedupe, and that a `410` endpoint is deleted.
+
+Add VAPID keys to `api/.dev.vars` first, or it will tell you push is disabled.
+
 ### Browser tests
 
 These drive headless Chrome over the DevTools Protocol — no Playwright, no
-Puppeteer. They need both dev servers up, and put screenshots in `/tmp/ff-shots`.
+Puppeteer. They put screenshots in `/tmp/ff-shots`.
 
 ```bash
 npm run test:ui -w @futsal/web
@@ -461,6 +543,18 @@ npm run test:ui -w @futsal/web
 ```bash
 npm run test:payments -w @futsal/web
 ```
+
+Both need `npm run dev` running.
+
+```bash
+npm run test:pwa -w @futsal/web
+```
+
+Checks the manifest, service worker registration, shell caching, that the app
+still renders with the network cut, and that the worker can raise a
+notification. This one runs against `vite preview` on port 4173, not the dev
+server — offline needs the real built output, because the dev server serves
+unbundled modules the worker deliberately never caches.
 
 Set `CHROME_PATH` if Chrome is not at the macOS default location.
 
@@ -508,3 +602,9 @@ propagates in about 250 ms.
   need different start times.
 - **Deleting is always soft.** Members and venues are deactivated, never
   removed, so past registrations and payments keep their meaning.
+- **iOS needs the app installed** before it will deliver any push. There is no
+  way around this; the UI explains it rather than offering a toggle that cannot
+  work.
+- **Reminders are best-effort.** A phone that is off when the push service gives
+  up retrying (`TTL`) simply misses that reminder — deliberately, since a
+  "kickoff in 3h" notification arriving tomorrow is worse than none.

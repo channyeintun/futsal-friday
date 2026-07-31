@@ -15,9 +15,9 @@ import { requireMember } from '../middleware.js';
  *   2. `POST /join` — say which of those people you are, and get a token.
  *
  * Step 2 is on the honour system: anyone past the gate could claim to be
- * anyone. That is the right trade for ~15 friends splitting a pitch fee, and
- * it is exactly the assumption the Zalo port removes, since ZMP supplies a real
- * user id.
+ * anyone. That is the right trade for ~15 friends splitting a pitch fee — the
+ * invite code is the real boundary. Swapping in a provider that supplies a
+ * verified user id is a job for `IdentityProvider`, not for this route.
  */
 export const authRoutes = new Hono<AppContext>()
 

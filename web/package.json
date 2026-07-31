@@ -13,7 +13,9 @@
     "test:ui": "node test/ui.mjs",
     "test:payments": "node test/payments.mjs",
     "test:realtime": "node test/realtime.mjs",
-    "fake-upstash": "node test/fake-upstash.mjs"
+    "fake-upstash": "node test/fake-upstash.mjs",
+    "icons": "node scripts/generate-icons.mjs",
+    "test:pwa": "node test/pwa.mjs"
   },
   "dependencies": {
     "@futsal/shared": "*",

@@ -4,7 +4,10 @@ dist/
 .dev.vars
 .env
 .env.local
+.env.production
+.env.*.local
 *.log
 .DS_Store
 shared/dist/
 web/dist/
+.push-vectors.mjs
