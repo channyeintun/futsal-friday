@@ -9,6 +9,20 @@ Runs entirely on free tiers — Cloudflare Workers, D1, R2, Pages, and Upstash
 Redis — and is structured so the frontend can be lifted into a Zalo Mini App
 later without rewriting the UI.
 
+**Live deployment**
+
+| | |
+| --- | --- |
+| App | https://futsal-friday.pages.dev |
+| API | https://futsal-friday-api.chanyeintun.workers.dev |
+| D1 | `futsal-friday` (APAC) |
+| R2 | `futsal-friday-proofs` |
+| Upstash | `futsal-friday` (Singapore, free tier) |
+| Cron | `0 1 * * *` — 08:00 ICT daily |
+
+The group invite code is a secret and is not stored in this repo. Rotate it any
+time with `wrangler secret put GROUP_INVITE_CODE`.
+
 ---
 
 ## What it does

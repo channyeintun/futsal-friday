@@ -10,6 +10,9 @@ import { join } from 'node:path';
 const CHROME = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const PORT = 9333;
 const OUT_DIR = process.env.SHOTS_DIR ?? '/tmp/ff-shots';
+// Point at a deployment with APP_URL / INVITE_CODE; defaults to local dev.
+const APP_URL = (process.env.APP_URL ?? 'http://localhost:5173').replace(/\/$/, '');
+const INVITE_CODE = process.env.INVITE_CODE ?? 'futsal-dev';
 
 const profile = mkdtempSync(join(tmpdir(), 'ff-chrome-'));
 const chrome = spawn(CHROME, [
@@ -112,7 +115,7 @@ async function run() {
   };
 
   console.log('\nloading the app');
-  await send('Page.navigate', { url: 'http://localhost:5173/' });
+  await send('Page.navigate', { url: `${APP_URL}/` });
   await waitFor('!!document.querySelector("#root")?.children.length', 'app mounts');
   await sleep(600);
 
@@ -134,7 +137,7 @@ async function run() {
   console.log('\ncorrect code opens the name picker');
   await evalJs(`(() => {
     const f = document.querySelector('md-outlined-text-field');
-    f.value = 'futsal-dev';
+    f.value = ${JSON.stringify(INVITE_CODE)};
     f.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
   })()`);
   await sleep(250);

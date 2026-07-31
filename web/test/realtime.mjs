@@ -10,6 +10,9 @@ import { join } from 'node:path';
 
 const CHROME = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const OUT_DIR = process.env.SHOTS_DIR ?? '/tmp/ff-shots';
+// Point at a deployment with APP_URL / INVITE_CODE; defaults to local dev.
+const APP_URL = (process.env.APP_URL ?? 'http://localhost:5173').replace(/\/$/, '');
+const INVITE_CODE = process.env.INVITE_CODE ?? 'futsal-dev';
 mkdirSync(OUT_DIR, { recursive: true });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -75,9 +78,9 @@ async function launch(port) {
 }
 
 async function signIn(b, who) {
-  await b.send('Page.navigate', { url: 'http://localhost:5173/' });
+  await b.send('Page.navigate', { url: `${APP_URL}/` });
   await b.waitFor('document.body.innerText.includes("group code")', `${who}: gate renders`);
-  await b.js(`(() => { const f=document.querySelector('md-outlined-text-field'); f.value='futsal-dev';
+  await b.js(`(() => { const f=document.querySelector('md-outlined-text-field'); f.value=${JSON.stringify(INVITE_CODE)};
     f.dispatchEvent(new Event('input',{bubbles:true,composed:true})); })()`);
   await sleep(250);
   await b.js(`document.querySelector('md-filled-button').click()`);
