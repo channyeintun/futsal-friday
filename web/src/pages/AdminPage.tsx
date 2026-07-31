@@ -9,10 +9,13 @@ import { Button, Dialog, ErrorBanner, Spinner, Switch, TextField } from '../comp
 import { useAsync } from '../hooks/useAsync.js';
 import { navigate } from '../router.js';
 import { useApp } from '../state/app.js';
+import { useLocale, useMessages } from '../state/locale.js';
+import { LOCALES, LOCALE_LABELS } from '@futsal/shared';
 
 /** Organizer tools: the roster, the venue list, and a manual session escape hatch. */
 export function AdminPage() {
   const { identity, signOut } = useApp();
+  const m = useMessages();
 
   const members = useAsync((signal) => listMembers(signal), []);
   const venues = useAsync((signal) => listVenues(true, signal), []);
@@ -21,14 +24,15 @@ export function AdminPage() {
     return (
       <>
         {/* Reminders are everyone's setting, not an organizer tool. */}
+        <LanguageCard />
         <ReminderSettings />
         <div className="card">
-          <h2 className="card-title">Signed in as {identity.name}</h2>
-          <p className="card-sub">Only organizers can edit the roster and venues.</p>
+          <h2 className="card-title">{m.admin.signedInAs(identity.name)}</h2>
+          <p className="card-sub">{m.admin.organizersOnly}</p>
         </div>
         <Button variant="outlined" onClick={signOut}>
           <Icon name="logout" size={18} slot="icon" />
-          Sign out
+          {m.admin.signOut}
         </Button>
       </>
     );
@@ -36,6 +40,7 @@ export function AdminPage() {
 
   return (
     <>
+      <LanguageCard />
       <ReminderSettings />
       <MembersCard state={members} />
       <VenuesCard state={venues} />
@@ -43,7 +48,7 @@ export function AdminPage() {
 
       <Button variant="outlined" onClick={signOut}>
         <Icon name="logout" size={18} slot="icon" />
-        Sign out ({identity.name})
+        {m.admin.signOutAs(identity.name)}
       </Button>
     </>
   );
@@ -53,6 +58,7 @@ export function AdminPage() {
 
 function MembersCard({ state }: { state: ReturnType<typeof useAsync<Member[]>> }) {
   const { toast, refresh } = useApp();
+  const m = useMessages();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -64,12 +70,12 @@ function MembersCard({ state }: { state: ReturnType<typeof useAsync<Member[]>> }
     setError(null);
     try {
       await createMember({ name: name.trim(), isOrganizer: false });
-      toast(`${name.trim()} added`);
+      toast(m.toast.memberAdded(name.trim()));
       setName('');
       setAdding(false);
       state.reload();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not add that person');
+      setError(cause instanceof Error ? cause.message : m.admin.couldNotAdd);
     } finally {
       setBusy(false);
     }
@@ -82,27 +88,27 @@ function MembersCard({ state }: { state: ReturnType<typeof useAsync<Member[]>> }
       // The caller may have just changed their own role.
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not change that');
+      setError(cause instanceof Error ? cause.message : m.admin.couldNotChange);
     }
   };
 
   const remove = async (member: Member) => {
     try {
       await removeMember(member.id);
-      toast(`${member.name} removed`);
+      toast(m.toast.memberRemoved(member.name));
       state.reload();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not remove that person');
+      setError(cause instanceof Error ? cause.message : m.admin.couldNotRemove);
     }
   };
 
   return (
     <div className="card">
       <div className="row between">
-        <h2 className="card-title">Players ({state.data?.length ?? 0})</h2>
+        <h2 className="card-title">{m.admin.players(state.data?.length ?? 0)}</h2>
         <Button variant="text" onClick={() => setAdding(true)}>
           <Icon name="add" size={18} slot="icon" />
-          Add
+          {m.app.add}
         </Button>
       </div>
 
@@ -114,7 +120,7 @@ function MembersCard({ state }: { state: ReturnType<typeof useAsync<Member[]>> }
           <Icon name="person" size={18} />
           <span className="player-name truncate">{member.name}</span>
           <span className="muted" style={{ fontSize: '0.75rem' }}>
-            organizer
+            {m.app.organizerSuffix}
           </span>
           <Switch selected={member.isOrganizer} onChange={() => toggleOrganizer(member)} />
           <Button variant="text" onClick={() => remove(member)}>
@@ -124,26 +130,25 @@ function MembersCard({ state }: { state: ReturnType<typeof useAsync<Member[]>> }
       ))}
 
       <p className="muted" style={{ margin: 0 }}>
-        Removing someone keeps their past sessions and payments — they just stop appearing on the
-        sign-in list.
+        {m.admin.removeNote}
       </p>
 
       <Dialog
         open={adding}
         onClose={() => setAdding(false)}
-        headline="Add a player"
+        headline={m.admin.addPlayer}
         actions={
           <>
             <Button variant="text" onClick={() => setAdding(false)}>
-              Cancel
+              {m.app.cancel}
             </Button>
             <Button onClick={add} disabled={busy || !name.trim()}>
-              Add
+              {m.app.add}
             </Button>
           </>
         }
       >
-        <TextField label="Name" value={name} onChange={setName} autoFocus />
+        <TextField label={m.admin.name} value={name} onChange={setName} autoFocus />
       </Dialog>
     </div>
   );
@@ -153,6 +158,7 @@ function MembersCard({ state }: { state: ReturnType<typeof useAsync<Member[]>> }
 
 function VenuesCard({ state }: { state: ReturnType<typeof useAsync<Venue[]>> }) {
   const { toast } = useApp();
+  const m = useMessages();
   const [editing, setEditing] = useState<Venue | 'new' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -184,11 +190,11 @@ function VenuesCard({ state }: { state: ReturnType<typeof useAsync<Venue[]>> }) 
     try {
       if (editing === 'new') await createVenue(input);
       else if (editing) await updateVenue(editing.id, input);
-      toast('Venue saved');
+      toast(m.toast.venueSaved);
       setEditing(null);
       state.reload();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not save that venue');
+      setError(cause instanceof Error ? cause.message : m.admin.couldNotSaveVenue);
     } finally {
       setBusy(false);
     }
@@ -199,17 +205,17 @@ function VenuesCard({ state }: { state: ReturnType<typeof useAsync<Venue[]>> }) 
       await retireVenue(venue.id);
       state.reload();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not retire that venue');
+      setError(cause instanceof Error ? cause.message : m.admin.couldNotRetireVenue);
     }
   };
 
   return (
     <div className="card">
       <div className="row between">
-        <h2 className="card-title">Venues</h2>
+        <h2 className="card-title">{m.admin.venues}</h2>
         <Button variant="text" onClick={() => openEditor('new')}>
           <Icon name="add" size={18} slot="icon" />
-          Add
+          {m.app.add}
         </Button>
       </div>
 
@@ -221,7 +227,7 @@ function VenuesCard({ state }: { state: ReturnType<typeof useAsync<Venue[]>> }) 
           <span className="grow" style={{ minWidth: 0 }}>
             <span style={{ display: 'block', fontWeight: 500 }} className="truncate">
               {venue.name}
-              {!venue.active ? ' (retired)' : ''}
+              {!venue.active ? ` ${m.admin.retired}` : ''}
             </span>
             <span className="muted truncate" style={{ display: 'block' }}>
               {venue.address ?? '—'}
@@ -242,28 +248,54 @@ function VenuesCard({ state }: { state: ReturnType<typeof useAsync<Venue[]>> }) 
       <Dialog
         open={editing !== null}
         onClose={() => setEditing(null)}
-        headline={editing === 'new' ? 'New venue' : 'Edit venue'}
+        headline={editing === 'new' ? m.admin.newVenue : m.admin.editVenue}
         actions={
           <>
             <Button variant="text" onClick={() => setEditing(null)}>
-              Cancel
+              {m.app.cancel}
             </Button>
             <Button onClick={save} disabled={busy || !name.trim()}>
-              Save
+              {m.app.save}
             </Button>
           </>
         }
       >
-        <TextField label="Name" value={name} onChange={setName} autoFocus />
-        <TextField label="Address" value={address} onChange={setAddress} />
-        <TextField label="Map link" value={mapUrl} onChange={setMapUrl} type="url" />
+        <TextField label={m.admin.name} value={name} onChange={setName} autoFocus />
+        <TextField label={m.admin.address} value={address} onChange={setAddress} />
+        <TextField label={m.admin.mapLink} value={mapUrl} onChange={setMapUrl} type="url" />
         <TextField
-          label="Price note"
+          label={m.admin.priceNote}
           value={priceNote}
           onChange={setPriceNote}
-          supportingText="e.g. 600.000d/hour"
+          supportingText={m.admin.priceNoteHint}
         />
       </Dialog>
+    </div>
+  );
+}
+
+/* --------------------------------------------------------------- language */
+
+/** Available to everyone, not just organizers — it is a personal preference. */
+function LanguageCard() {
+  const { m, locale, setLocale } = useLocale();
+
+  return (
+    <div className="card">
+      <h2 className="card-title">{m.admin.language}</h2>
+      <p className="card-sub">{m.admin.languageBody}</p>
+      <div className="row" style={{ gap: 8 }}>
+        {LOCALES.map((code) => (
+          <div key={code} className="grow">
+            <Button
+              variant={code === locale ? 'filled' : 'outlined'}
+              onClick={() => setLocale(code)}
+            >
+              {LOCALE_LABELS[code]}
+            </Button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -276,6 +308,7 @@ function VenuesCard({ state }: { state: ReturnType<typeof useAsync<Venue[]>> }) 
  */
 function ManualSessionCard() {
   const { toast } = useApp();
+  const m = useMessages();
   const [open, setOpen] = useState(false);
   const [startsAt, setStartsAt] = useState(() => toDatetimeLocal(nextFridayKickoff()));
   const [busy, setBusy] = useState(false);
@@ -286,11 +319,11 @@ function ManualSessionCard() {
     setError(null);
     try {
       const result = await createSession({ startsAt: fromDatetimeLocal(startsAt).toISOString() });
-      toast('Session created');
+      toast(m.toast.sessionCreated);
       setOpen(false);
       navigate({ name: 'session', id: result.session.id });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not create that session');
+      setError(cause instanceof Error ? cause.message : m.admin.couldNotCreateSession);
     } finally {
       setBusy(false);
     }
@@ -298,39 +331,37 @@ function ManualSessionCard() {
 
   return (
     <div className="card">
-      <h2 className="card-title">Extra session</h2>
-      <p className="card-sub">
-        The next Friday at 19:30 is created automatically every week. Use this for a one-off.
-      </p>
+      <h2 className="card-title">{m.admin.extraSession}</h2>
+      <p className="card-sub">{m.admin.extraSessionBody}</p>
       <Button variant="outlined" onClick={() => setOpen(true)}>
         <Icon name="add" size={18} slot="icon" />
-        Create a session
+        {m.admin.createSession}
       </Button>
 
       <Dialog
         open={open}
         onClose={() => setOpen(false)}
-        headline="New session"
+        headline={m.admin.newSession}
         actions={
           <>
             <Button variant="text" onClick={() => setOpen(false)}>
-              Cancel
+              {m.app.cancel}
             </Button>
             <Button onClick={create} disabled={busy}>
-              Create
+              {m.app.create}
             </Button>
           </>
         }
       >
         {error ? <ErrorBanner>{error}</ErrorBanner> : null}
         <TextField
-          label="Kickoff (Ho Chi Minh time)"
+          label={m.admin.kickoffLabel}
           type="datetime-local"
           value={startsAt}
           onChange={setStartsAt}
         />
         <p className="muted" style={{ margin: 0 }}>
-          Venue, fee and cap can be set once it exists.
+          {m.admin.newSessionHint}
         </p>
       </Dialog>
     </div>

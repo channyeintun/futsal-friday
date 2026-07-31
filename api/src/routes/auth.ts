@@ -58,6 +58,7 @@ export const authRoutes = new Hono<AppContext>()
       memberId: member.id,
       name: member.name,
       isOrganizer: member.isOrganizer,
+      language: member.language,
     };
 
     const credential = await tokenIdentityProvider.issue(identity, c.env);

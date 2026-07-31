@@ -112,6 +112,13 @@ export interface Platform {
     create(blob: Blob): string;
     revoke(url: string): void;
   };
+  /**
+   * The device's preferred language tag, e.g. `my-MM`. Used only as the initial
+   * guess before the member has chosen one.
+   */
+  deviceLanguage(): string | null;
+  /** Reflects the active language onto the document, for font and hyphenation. */
+  setDocumentLanguage(tag: string): void;
   /** Base URL of the API. */
   apiBaseUrl: string;
   /** Public URL of this app, embedded in shareable summaries. */

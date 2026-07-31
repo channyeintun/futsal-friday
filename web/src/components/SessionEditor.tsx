@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { updateSession } from '../api/sessions.js';
 import { listVenues } from '../api/venues.js';
 import { useApp } from '../state/app.js';
+import { useMessages } from '../state/locale.js';
 import { Button, Dialog, ErrorBanner, Select, TextField } from './ui.js';
 
 /**
@@ -31,6 +32,7 @@ export function SessionEditor({
   onSaved(): void;
 }) {
   const { toast } = useApp();
+  const m = useMessages();
   const [venues, setVenues] = useState<Venue[]>([]);
   const [startsAt, setStartsAt] = useState(() => toDatetimeLocal(session.startsAt));
   const [venueId, setVenueId] = useState(session.venueId ?? '');
@@ -66,11 +68,11 @@ export function SessionEditor({
     setError(null);
     try {
       const parsedFee = fee.trim() ? parseVnd(fee) : null;
-      if (fee.trim() && parsedFee === null) throw new Error('Fee should be a number, e.g. 70k');
+      if (fee.trim() && parsedFee === null) throw new Error(m.editor.feeNotANumber);
 
       const parsedCap = maxPlayers.trim() ? Number.parseInt(maxPlayers, 10) : null;
       if (maxPlayers.trim() && (!Number.isFinite(parsedCap) || (parsedCap ?? 0) < 1)) {
-        throw new Error('Max players should be a whole number');
+        throw new Error(m.editor.capNotANumber);
       }
 
       await updateSession(session.id, {
@@ -80,11 +82,11 @@ export function SessionEditor({
         maxPlayers: parsedCap,
         notes: notes.trim() || null,
       });
-      toast('Session updated');
+      toast(m.toast.sessionUpdated);
       onSaved();
       onClose();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not save');
+      setError(cause instanceof Error ? cause.message : m.editor.couldNotSave);
     } finally {
       setBusy(false);
     }
@@ -94,14 +96,14 @@ export function SessionEditor({
     <Dialog
       open={open}
       onClose={onClose}
-      headline="Edit session"
+      headline={m.editor.title}
       actions={
         <>
           <Button variant="text" onClick={onClose}>
-            Cancel
+            {m.app.cancel}
           </Button>
           <Button onClick={save} disabled={busy}>
-            {busy ? 'Saving…' : 'Save'}
+            {busy ? m.app.saving : m.app.save}
           </Button>
         </>
       }
@@ -109,38 +111,41 @@ export function SessionEditor({
       {error ? <ErrorBanner>{error}</ErrorBanner> : null}
 
       <TextField
-        label="Kickoff (Ho Chi Minh time)"
+        label={m.admin.kickoffLabel}
         type="datetime-local"
         value={startsAt}
         onChange={setStartsAt}
       />
 
       <Select
-        label="Venue"
+        label={m.editor.venue}
         value={venueId}
         onChange={setVenueId}
-        options={[{ value: '', label: 'No venue yet' }, ...venues.map((v) => ({ value: v.id, label: v.name }))]}
+        options={[
+          { value: '', label: m.editor.noVenueOption },
+          ...venues.map((v) => ({ value: v.id, label: v.name })),
+        ]}
       />
 
       <TextField
-        label="Estimated fee per person"
+        label={m.editor.feeLabel}
         value={fee}
         onChange={setFee}
         inputMode="numeric"
         supportingText={
-          fee.trim() && parseVnd(fee) !== null ? formatVnd(parseVnd(fee) ?? 0) : 'e.g. 70k'
+          fee.trim() && parseVnd(fee) !== null ? formatVnd(parseVnd(fee) ?? 0) : m.editor.feeHint
         }
       />
 
       <TextField
-        label="Max players"
+        label={m.editor.maxPlayers}
         value={maxPlayers}
         onChange={setMaxPlayers}
         inputMode="numeric"
-        supportingText="Leave empty for no cap. Extra players go on a waitlist."
+        supportingText={m.editor.maxPlayersHint}
       />
 
-      <TextField label="Notes" type="textarea" value={notes} onChange={setNotes} />
+      <TextField label={m.editor.notes} type="textarea" value={notes} onChange={setNotes} />
     </Dialog>
   );
 }

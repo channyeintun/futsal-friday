@@ -150,6 +150,21 @@ function openEventStream(url: string, handlers: EventStreamHandlers): EventStrea
   };
 }
 
+/* -------------------------------------------------------------- language */
+
+function deviceLanguage(): string | null {
+  return navigator.languages?.[0] ?? navigator.language ?? null;
+}
+
+/**
+ * `<html lang>` is not cosmetic here: it is what tells the browser to pick a
+ * Myanmar font for Burmese text and to line-break a script that has no spaces
+ * between words.
+ */
+function setDocumentLanguage(tag: string): void {
+  document.documentElement.lang = tag;
+}
+
 /* ----------------------------------------------------------- notifications */
 
 /**
@@ -370,6 +385,8 @@ export const webPlatform: Platform = {
   },
   notifications,
   registerServiceWorker,
+  deviceLanguage,
+  setDocumentLanguage,
   openEventStream,
   pickImage,
   compressImage,

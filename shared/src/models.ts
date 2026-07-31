@@ -23,6 +23,8 @@ export const memberSchema = z.object({
   /** Reminder preferences; only meaningful once push is granted on a device. */
   notifySession: z.boolean().default(true),
   notifyPayment: z.boolean().default(true),
+  /** Drives the UI and, crucially, server-written push notifications. */
+  language: z.enum(['en', 'my']).default('en'),
 });
 export type Member = z.infer<typeof memberSchema>;
 
@@ -39,10 +41,11 @@ export const updateMemberSchema = z.object({
 });
 export type UpdateMemberInput = z.infer<typeof updateMemberSchema>;
 
-/** A member may change only their own reminder preferences. */
+/** A member may change only their own reminder preferences and language. */
 export const notificationPrefsSchema = z.object({
   notifySession: z.boolean().optional(),
   notifyPayment: z.boolean().optional(),
+  language: z.enum(['en', 'my']).optional(),
 });
 export type NotificationPrefsInput = z.infer<typeof notificationPrefsSchema>;
 
@@ -67,6 +70,7 @@ export const pushStatusSchema = z.object({
   devices: z.number().int(),
   notifySession: z.boolean(),
   notifyPayment: z.boolean(),
+  language: z.enum(['en', 'my']),
 });
 export type PushStatus = z.infer<typeof pushStatusSchema>;
 
@@ -252,6 +256,8 @@ export const identitySchema = z.object({
   memberId: idSchema,
   name: z.string(),
   isOrganizer: z.boolean(),
+  /** Follows the member across devices, so a new phone opens in their language. */
+  language: z.enum(['en', 'my']),
 });
 export type Identity = z.infer<typeof identitySchema>;
 

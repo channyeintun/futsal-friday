@@ -57,6 +57,7 @@ export function requireMember(): MiddlewareHandler<AppContext> {
       memberId: member.id,
       name: member.name,
       isOrganizer: member.isOrganizer,
+      language: member.language,
     });
     await next();
   };

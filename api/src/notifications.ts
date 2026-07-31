@@ -1,4 +1,12 @@
-import { formatKickoff, formatTime, formatVnd, toZonedParts } from '@futsal/shared';
+import {
+  type Locale,
+  formatKickoff,
+  formatTime,
+  formatVnd,
+  messagesFor,
+  normalizeLocale,
+  toZonedParts,
+} from '@futsal/shared';
 import { type Env, reminderLeadHours } from './env.js';
 import { newId, nowIso } from './http.js';
 import { type PushMessage, type PushTarget, createPushSender } from './push/index.js';
@@ -18,6 +26,8 @@ import { type PushMessage, type PushTarget, createPushSender } from './push/inde
 interface Recipient {
   memberId: string;
   memberName: string;
+  /** Notification text is written here, so each member gets their own language. */
+  locale: Locale;
 }
 
 /**
@@ -30,11 +40,13 @@ interface Recipient {
 interface RecipientRow {
   member_id: string;
   member_name: string;
+  language: string;
 }
 
 const toRecipient = (row: RecipientRow): Recipient => ({
   memberId: row.member_id,
   memberName: row.member_name,
+  locale: normalizeLocale(row.language),
 });
 
 export interface NotificationSummary {
@@ -111,7 +123,7 @@ async function sendSessionReminders(
 
   for (const session of sessions) {
     const { results: players } = await env.DB.prepare(
-      `SELECT m.id AS member_id, m.name AS member_name
+      `SELECT m.id AS member_id, m.name AS member_name, m.language
          FROM registrations r
          JOIN members m ON m.id = r.member_id
         WHERE r.session_id = ?1 AND r.status = 'in'
@@ -120,14 +132,19 @@ async function sendSessionReminders(
       .bind(session.id)
       .all<RecipientRow>();
 
-    const where = session.venue_name ? ` at ${session.venue_name}` : '';
-    const message: PushMessage = {
-      title: `Futsal today, ${formatTime(session.starts_at)}`,
-      body: `Kickoff in about ${Math.round(lead)}h${where}.`,
-      url: `/session/${session.id}`,
-      tag: `session-${session.id}`,
-      // Pointless to deliver after the game has finished.
-      ttl: Math.max(600, Math.floor(lead * 3600)),
+    const hours = Math.round(lead);
+    const message = (locale: Locale): PushMessage => {
+      const m = messagesFor(locale);
+      return {
+        title: m.push.matchTitle(formatTime(session.starts_at)),
+        body: session.venue_name
+          ? m.push.matchBodyAtVenue(hours, session.venue_name)
+          : m.push.matchBody(hours),
+        url: `/session/${session.id}`,
+        tag: `session-${session.id}`,
+        // Pointless to deliver after the game has finished.
+        ttl: Math.max(600, Math.floor(lead * 3600)),
+      };
     };
 
     sent += await deliver(
@@ -158,7 +175,7 @@ async function sendPaymentNudges(env: Env, now: Date, removed: Set<string>): Pro
 
   const { results: debts } = await env.DB.prepare(
     `SELECT p.session_id, p.amount_due, m.id AS member_id, m.name AS member_name,
-            s.starts_at
+            m.language, s.starts_at
        FROM payments p
        JOIN members m ON m.id = p.member_id
        JOIN sessions s ON s.id = p.session_id
@@ -175,23 +192,27 @@ async function sendPaymentNudges(env: Env, now: Date, removed: Set<string>): Pro
       amount_due: number;
       member_id: string;
       member_name: string;
+      language: string;
       starts_at: string;
     }>();
 
   let sent = 0;
 
   for (const debt of debts) {
-    const message: PushMessage = {
-      title: 'Still to settle up',
-      body: `${formatVnd(debt.amount_due)} for ${formatKickoff(debt.starts_at)}.`,
-      url: `/payments/${debt.session_id}`,
-      tag: `payment-${debt.session_id}`,
-      ttl: 3 * 24 * 3600,
+    const message = (locale: Locale): PushMessage => {
+      const m = messagesFor(locale);
+      return {
+        title: m.push.unpaidTitle,
+        body: m.push.unpaidBody(formatVnd(debt.amount_due), formatKickoff(debt.starts_at, locale)),
+        url: `/payments/${debt.session_id}`,
+        tag: `payment-${debt.session_id}`,
+        ttl: 3 * 24 * 3600,
+      };
     };
 
     sent += await deliver(
       env,
-      [{ memberId: debt.member_id, memberName: debt.member_name }],
+      [toRecipient(debt)],
       message,
       `payment_due:${debt.session_id}:${week}`,
       'payment_due',
@@ -215,7 +236,8 @@ async function sendPaymentNudges(env: Env, now: Date, removed: Set<string>): Pro
 async function deliver(
   env: Env,
   recipients: readonly Recipient[],
-  message: PushMessage,
+  /** Built per recipient, because the text is in their language. */
+  message: (locale: Locale) => PushMessage,
   dedupeKey: string,
   kind: 'session_reminder' | 'payment_due',
   removed: Set<string>,
@@ -244,7 +266,8 @@ async function deliver(
       keys: { p256dh: row.p256dh, auth: row.auth },
     }));
 
-    const outcomes = await Promise.all(targets.map((target) => sender.send(target, message)));
+    const text = message(recipient.locale);
+    const outcomes = await Promise.all(targets.map((target) => sender.send(target, text)));
 
     const gone = outcomes.filter((o) => o.status === 'gone');
     const failed = outcomes.filter((o) => o.status === 'failed');

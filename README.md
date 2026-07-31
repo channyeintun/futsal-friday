@@ -8,6 +8,7 @@ their share of the pitch fee.
 An installable PWA that runs entirely on free tiers — Cloudflare Workers, D1,
 R2, Pages, and Upstash Redis. Add it to your Home Screen and it sends a push
 reminder before kickoff, and a nudge when you still owe for the pitch.
+Available in English and Burmese (မြန်မာ).
 
 **Live deployment**
 
@@ -46,6 +47,8 @@ time with `wrangler secret put GROUP_INVITE_CODE`.
   everyone's screen without a refresh, with automatic fallback to polling.
 - **Installable, with reminders.** A PWA that opens offline, plus push
   notifications ~3h before kickoff and a weekly nudge while you still owe.
+- **English and Burmese.** Including the push notifications and the text you
+  copy into the group chat.
 
 ---
 
@@ -56,7 +59,8 @@ futsal-friday/
 ├── shared/      types, zod schemas, and pure helpers used by both sides
 │   ├── models.ts     domain models + request validation
 │   ├── events.ts     the six realtime events, defined once
-│   ├── time.ts       Asia/Ho_Chi_Minh arithmetic
+│   ├── i18n/         message catalogues; English is the source of truth
+│   ├── time.ts       Asia/Ho_Chi_Minh arithmetic, localised names
 │   ├── money.ts      integer-dong splitting
 │   └── summary.ts    the chat-pasteable text
 ├── api/         Hono on Cloudflare Workers
@@ -484,6 +488,65 @@ when the artwork changes.
 ---
 
 
+## Languages
+
+English and Burmese (မြန်မာ). The switcher is under **Setup**, and also on the
+sign-in screen — nobody should have to read a language they do not speak in
+order to find the language switch.
+
+### How the language is chosen
+
+In order:
+
+1. **An explicit choice on this device.** Always wins, and applies before any
+   network request.
+2. **The device's own language, when it is not English.** A phone set to
+   Burmese opens in Burmese.
+3. **The member's stored choice**, so switching on a phone carries over to a
+   laptop whose system language is English.
+4. English.
+
+Step 2 sits above step 3 on purpose. `members.language` defaults to `'en'` for
+a row the organizer created before that person ever opened the app, so the
+server cannot tell "chose English" apart from "never chose". Letting that
+default outrank device detection meant a Burmese phone opened in English — a
+bug this project shipped once and caught in production.
+
+The choice is stored on the device *and* sent to the server, because push
+notification text is written server-side: the browser that picked the language
+is asleep when the reminder goes out. Each member's reminders arrive in their
+own language, even within the same group.
+
+### How the catalogue works
+
+There is no i18n library. `shared/src/i18n/en.ts` is a plain nested object and
+every other locale is declared as `typeof en`, so a missing key is a build
+error. Strings that take values are functions rather than templates with
+placeholders — `m.session.playing(5, 14)` is checked by the compiler, whereas
+`t('session.playing', { count })` is not, and its parameter names rot silently.
+
+Two conventions in `my.ts` worth not "fixing":
+
+- **Unicode, not Zawgyi.** The two encodings share the Myanmar block and look
+  identical in an editor, but Zawgyi renders as garbage on any modern phone.
+  The test suite fails the build if Zawgyi-only codepoints appear.
+- **Arabic numerals.** Times, counts and money stay `19:30` and `120.000d`
+  rather than Myanmar digits — what Myanmar apps overwhelmingly do, and it
+  keeps amounts unambiguous next to the Vietnamese dong.
+
+Burmese also gets its own typography rules in `styles.css`. The script stacks
+diacritics above and below the baseline, so it needs a taller line height or
+they clip; and it is written without spaces between words, so a long string has
+no break opportunity and will push a flex row wider than the screen unless
+`overflow-wrap` is relaxed.
+
+> The Burmese here was not written by a native speaker. It passes the automated
+> checks and reads plausibly, but give it a review before the group relies on
+> it — `shared/src/i18n/my.ts` is a single file and easy to edit.
+
+---
+
+
 ## Testing
 
 ```bash
@@ -513,6 +576,11 @@ npm run test:api
 ```bash
 npm run test:push -w @futsal/api
 ```
+
+`npm test` also checks the catalogues: that Burmese has every English key, that
+no entry was left as the English string, that every translated string actually
+contains Myanmar script, that no Zawgyi codepoints crept in, and that
+interpolated values survive into the translated form.
 
 RFC conformance, no servers needed: the worked example from RFC 8291 Appendix A
 is encrypted with the specification's own fixed keys and salt and compared byte
@@ -549,6 +617,16 @@ Both need `npm run dev` running.
 ```bash
 npm run test:pwa -w @futsal/web
 ```
+
+```bash
+npm run test:burmese -w @futsal/web
+```
+
+Runs the app in a browser reporting a Burmese device language and checks what a
+catalogue test cannot: that auto-detection picks Burmese, that Myanmar script
+renders without clipping its stacked diacritics, that a script with no
+inter-word spaces does not overflow any container, and that switching language
+persists. Point it at a deployment with `APP_URL` and `INVITE_CODE`.
 
 Checks the manifest, service worker registration, shell caching, that the app
 still renders with the network cut, and that the worker can raise a
@@ -605,6 +683,7 @@ propagates in about 250 ms.
 - **iOS needs the app installed** before it will deliver any push. There is no
   way around this; the UI explains it rather than offering a toggle that cannot
   work.
+- **The Burmese is unreviewed by a native speaker.** See above.
 - **Reminders are best-effort.** A phone that is off when the push service gives
   up retrying (`TTL`) simply misses that reminder — deliberately, since a
   "kickoff in 3h" notification arriving tomorrow is worse than none.

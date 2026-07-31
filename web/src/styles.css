@@ -11,8 +11,16 @@
  */
 
 :root {
-  --md-ref-typeface-brand: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --md-ref-typeface-plain: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /*
+   * Myanmar fonts are listed after the Latin system stack, not instead of it:
+   * the browser falls through per-character, so Latin text still uses the
+   * system face while Burmese picks up a Myanmar font. Named explicitly
+   * because several platforms ship one that is not their default UI font.
+   */
+  --md-ref-typeface-brand: system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Myanmar Sangam MN', 'Noto Sans Myanmar', 'Padauk', 'Myanmar Text', sans-serif;
+  --md-ref-typeface-plain: system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Myanmar Sangam MN', 'Noto Sans Myanmar', 'Padauk', 'Myanmar Text', sans-serif;
 
   --md-sys-color-primary: #386a20;
   --md-sys-color-on-primary: #ffffff;
@@ -120,6 +128,68 @@ body {
   -webkit-font-smoothing: antialiased;
   /* Stops iOS from zooming the page when a text field is focused. */
   -webkit-text-size-adjust: 100%;
+}
+
+/* -------------------------------------------------------------- Burmese */
+
+/*
+ * Burmese stacks diacritics above and below the baseline, so the default line
+ * height clips them and adjacent lines collide. It also writes without spaces
+ * between words, which means the browser cannot find a break opportunity and a
+ * long string will push a flex row wider than the screen.
+ */
+:root:lang(my) body,
+:lang(my) {
+  line-height: 1.75;
+}
+
+:lang(my) .badge,
+:lang(my) .player-index,
+:lang(my) .muted {
+  line-height: 1.6;
+}
+
+/* Let long unbroken Burmese wrap instead of overflowing its container. */
+:lang(my) .card-sub,
+:lang(my) .muted,
+:lang(my) .empty,
+:lang(my) .error-banner,
+:lang(my) .install-hint,
+:lang(my) .player-name {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+/*
+ * `.truncate` uses `white-space: nowrap`, which for Burmese means a name is cut
+ * mid-syllable — including mid-diacritic, which can render as a stray mark.
+ * Wrapping to two lines reads better than an ambiguous ellipsis.
+ */
+:lang(my) .player-name.truncate {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Burmese words are longer than their English equivalents; give buttons room. */
+:lang(my) md-filled-button,
+:lang(my) md-outlined-button,
+:lang(my) md-filled-tonal-button,
+:lang(my) md-text-button {
+  --md-filled-button-label-text-line-height: 1.6rem;
+  --md-outlined-button-label-text-line-height: 1.6rem;
+  --md-filled-tonal-button-label-text-line-height: 1.6rem;
+  --md-text-button-label-text-line-height: 1.6rem;
+}
+
+:lang(my) .bottom-nav button {
+  font-size: 0.72rem;
+  line-height: 1.5;
 }
 
 /* ------------------------------------------------------------------ shell */

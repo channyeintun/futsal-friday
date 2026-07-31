@@ -5,6 +5,7 @@ import { ErrorBanner, Spinner } from '../components/ui.js';
 import { useAsync } from '../hooks/useAsync.js';
 import { navigate } from '../router.js';
 import { useApp } from '../state/app.js';
+import { useLocale } from '../state/locale.js';
 
 /**
  * Your record: what you played and what you still owe. Organizers additionally
@@ -12,6 +13,7 @@ import { useApp } from '../state/app.js';
  */
 export function HistoryPage() {
   const { identity } = useApp();
+  const { m, locale } = useLocale();
 
   const history = useAsync(
     (signal) => memberHistory(identity.memberId, signal),
@@ -35,12 +37,13 @@ export function HistoryPage() {
           <div>
             <h2 className="card-title">{identity.name}</h2>
             <p className="card-sub">
-              {(history.data ?? []).filter((e) => e.registrationStatus === 'in').length} sessions
-              played
+              {m.history.sessionsPlayed(
+                (history.data ?? []).filter((e) => e.registrationStatus === 'in').length,
+              )}
             </p>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div className="muted">You owe</div>
+            <div className="muted">{m.history.youOwe}</div>
             <div
               className="amount"
               style={{
@@ -55,11 +58,11 @@ export function HistoryPage() {
       </div>
 
       {history.error ? <ErrorBanner>{history.error}</ErrorBanner> : null}
-      {history.loading && !history.data ? <Spinner label="Loading history…" /> : null}
+      {history.loading && !history.data ? <Spinner label={m.history.loading} /> : null}
 
       {history.data && history.data.length > 0 ? (
         <div className="card">
-          <h2 className="card-title">Your sessions</h2>
+          <h2 className="card-title">{m.history.yourSessions}</h2>
           {history.data.map((entry) => (
             <button
               key={entry.session.id}
@@ -85,11 +88,11 @@ export function HistoryPage() {
             >
               <span className="grow">
                 <span style={{ display: 'block', fontWeight: 500 }}>
-                  {formatKickoff(entry.session.startsAt)}
+                  {formatKickoff(entry.session.startsAt, locale)}
                 </span>
                 <span className="muted">
-                  {entry.session.venue?.name ?? 'No venue'}
-                  {entry.registrationStatus === 'waitlist' ? ' · waitlisted' : ''}
+                  {entry.session.venue?.name ?? m.home.noVenue}
+                  {entry.registrationStatus === 'waitlist' ? ` · ${m.history.waitlisted}` : ''}
                 </span>
               </span>
               {entry.payment ? (
@@ -101,10 +104,10 @@ export function HistoryPage() {
                     }`}
                   >
                     {entry.payment.status === 'confirmed'
-                      ? 'paid'
+                      ? m.payments.statusPaid
                       : entry.payment.status === 'pending'
-                        ? 'checking'
-                        : 'unpaid'}
+                        ? m.payments.statusChecking
+                        : m.payments.statusUnpaid}
                   </span>
                 </>
               ) : null}
@@ -112,17 +115,17 @@ export function HistoryPage() {
           ))}
         </div>
       ) : history.data ? (
-        <p className="empty">You have not played a session yet.</p>
+        <p className="empty">{m.history.nonePlayed}</p>
       ) : null}
 
       {identity.isOrganizer ? (
         <div className="card">
           <h2 className="card-title">
-            <Icon name="money" size={18} /> Who owes what
+            <Icon name="money" size={18} /> {m.history.whoOwes}
           </h2>
           {balances.error ? <ErrorBanner>{balances.error}</ErrorBanner> : null}
           {(balances.data ?? []).length === 0 ? (
-            <p className="empty">No payments recorded yet.</p>
+            <p className="empty">{m.history.noPayments}</p>
           ) : (
             (balances.data ?? [])
               // Debtors first — that is the list the organizer is chasing.

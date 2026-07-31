@@ -11,6 +11,7 @@ import { cancelSession, registerForSession, withdrawFromSession } from '../api/s
 import { platform } from '../platform/index.js';
 import { navigate } from '../router.js';
 import { useApp } from '../state/app.js';
+import { useLocale, useMessages } from '../state/locale.js';
 import { CopyButton } from './CopyButton.js';
 import { Icon } from './Icon.js';
 import { SessionEditor } from './SessionEditor.js';
@@ -31,6 +32,7 @@ export function SessionView({
   onChanged(): void;
 }) {
   const { identity, toast } = useApp();
+  const { m, locale } = useLocale();
   const { session, registrations, counts, registrationOpen, me } = detail;
 
   const [busy, setBusy] = useState(false);
@@ -50,16 +52,18 @@ export function SessionView({
         const result = await withdrawFromSession(session.id);
         toast(
           result.promoted
-            ? `You're out — ${result.promoted.memberName} moves up`
-            : "You're out",
+            ? m.toast.youreOutPromoted(result.promoted.memberName)
+            : m.toast.youreOut,
         );
       } else {
         const result = await registerForSession(session.id);
-        toast(result.registration.status === 'waitlist' ? "You're on the waitlist" : "You're in");
+        toast(
+          result.registration.status === 'waitlist' ? m.toast.youreOnWaitlist : m.toast.youreIn,
+        );
       }
       onChanged();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'That did not work');
+      setError(cause instanceof Error ? cause.message : m.session.thatDidNotWork);
     } finally {
       setBusy(false);
     }
@@ -69,29 +73,29 @@ export function SessionView({
     setBusy(true);
     try {
       await cancelSession(session.id);
-      toast('Session cancelled');
+      toast(m.toast.sessionCancelled);
       setConfirmCancel(false);
       onChanged();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not cancel');
+      setError(cause instanceof Error ? cause.message : m.session.thatDidNotWork);
     } finally {
       setBusy(false);
     }
   };
 
-  const summary = registrationSummary(detail, { appUrl: platform.appUrl });
+  const summary = registrationSummary(detail, { appUrl: platform.appUrl, locale });
 
   return (
     <>
       <section className="hero">
         <span className="countdown">
           {session.status === 'cancelled'
-            ? 'Cancelled'
+            ? m.session.cancelled
             : session.status === 'completed'
-              ? 'Finished'
-              : relativeToNow(session.startsAt)}
+              ? m.session.finished
+              : relativeToNow(session.startsAt, new Date(), locale)}
         </span>
-        <span className="when">{formatKickoff(session.startsAt)}</span>
+        <span className="when">{formatKickoff(session.startsAt, locale)}</span>
 
         {session.venue ? (
           <span className="where row" style={{ gap: 6 }}>
@@ -99,25 +103,25 @@ export function SessionView({
             <span className="truncate">{session.venue.name}</span>
           </span>
         ) : (
-          <span className="where">Venue not decided yet</span>
+          <span className="where">{m.session.noVenue}</span>
         )}
 
         {session.feePerPerson != null ? (
-          <span className="where">~{formatVnd(session.feePerPerson)} each</span>
+          <span className="where">{m.session.perPerson(formatVnd(session.feePerPerson))}</span>
         ) : null}
       </section>
 
       {session.venue?.mapUrl ? (
         <Button variant="text" onClick={() => platform.openExternal(session.venue!.mapUrl!)}>
           <Icon name="place" size={18} slot="icon" />
-          Open map
+          {m.session.openMap}
         </Button>
       ) : null}
 
       {error ? <ErrorBanner>{error}</ErrorBanner> : null}
 
       {session.status === 'cancelled' ? (
-        <div className="error-banner">This session was cancelled.</div>
+        <div className="error-banner">{m.session.wasCancelled}</div>
       ) : registrationOpen ? (
         <Button
           variant={me ? 'outlined' : 'filled'}
@@ -125,30 +129,27 @@ export function SessionView({
           disabled={busy}
         >
           {busy
-            ? 'One sec…'
+            ? m.app.working
             : me
               ? me.status === 'waitlist'
-                ? 'Leave the waitlist'
-                : "Can't make it"
-              : "I'm in"}
+                ? m.session.leaveWaitlist
+                : m.session.cantMakeIt
+              : m.session.imIn}
         </Button>
       ) : (
         <div className="muted" style={{ textAlign: 'center' }}>
-          Registration is closed for this session.
+          {m.session.registrationClosed}
         </div>
       )}
 
       <div className="card">
         <div className="row between">
-          <h2 className="card-title">
-            Playing {counts.in}
-            {session.maxPlayers ? ` / ${session.maxPlayers}` : ''}
-          </h2>
+          <h2 className="card-title">{m.session.playing(counts.in, session.maxPlayers)}</h2>
           <ConnectionDot state={connection} />
         </div>
 
         {playing.length === 0 ? (
-          <p className="empty">Nobody yet. Be the first.</p>
+          <p className="empty">{m.session.nobodyYet}</p>
         ) : (
           <div>
             {playing.map((registration, index) => (
@@ -165,7 +166,7 @@ export function SessionView({
                 <span className="player-index">{index + 1}</span>
                 <span className="player-name truncate">{registration.memberName}</span>
                 {registration.memberId === identity.memberId ? (
-                  <span className="badge paid">you</span>
+                  <span className="badge paid">{m.session.you}</span>
                 ) : null}
               </div>
             ))}
@@ -175,7 +176,7 @@ export function SessionView({
         {waiting.length > 0 ? (
           <>
             <h3 className="card-sub" style={{ fontWeight: 600 }}>
-              Waitlist ({counts.waitlist})
+              {m.session.waitlistHeading(counts.waitlist)}
             </h3>
             <div>
               {waiting.map((registration, index) => (
@@ -191,7 +192,7 @@ export function SessionView({
                 >
                   <span className="player-index">{index + 1}</span>
                   <span className="player-name truncate">{registration.memberName}</span>
-                  <span className="badge waitlist">waiting</span>
+                  <span className="badge waitlist">{m.session.waiting}</span>
                 </div>
               ))}
             </div>
@@ -207,12 +208,12 @@ export function SessionView({
         </div>
       ) : null}
 
-      <CopyButton label="Copy list for chat" text={summary} />
+      <CopyButton label={m.session.copyList} text={summary} />
 
       {(session.status === 'completed' || session.totalCharge != null) ? (
         <Button variant="outlined" onClick={() => navigate({ name: 'payments', id: session.id })}>
           <Icon name="money" size={18} slot="icon" />
-          {session.totalCharge == null ? 'Split the bill' : 'Payments'}
+          {session.totalCharge == null ? m.session.splitTheBill : m.nav.payments}
         </Button>
       ) : null}
 
@@ -221,11 +222,11 @@ export function SessionView({
           <div className="grow">
             <Button variant="tonal" onClick={() => setEditing(true)}>
               <Icon name="edit" size={18} slot="icon" />
-              Edit
+              {m.session.edit}
             </Button>
           </div>
           <Button variant="text" onClick={() => setConfirmCancel(true)}>
-            Cancel session
+            {m.session.cancelSession}
           </Button>
         </div>
       ) : null}
@@ -242,21 +243,19 @@ export function SessionView({
       <Dialog
         open={confirmCancel}
         onClose={() => setConfirmCancel(false)}
-        headline="Cancel this session?"
+        headline={m.session.confirmCancelTitle}
         actions={
           <>
             <Button variant="text" onClick={() => setConfirmCancel(false)}>
-              Keep it
+              {m.session.keepIt}
             </Button>
             <Button variant="filled" onClick={doCancel} disabled={busy}>
-              Cancel session
+              {m.session.cancelSession}
             </Button>
           </>
         }
       >
-        <p style={{ margin: 0 }}>
-          Everyone registered will see it as cancelled. This cannot be undone from the app.
-        </p>
+        <p style={{ margin: 0 }}>{m.session.confirmCancelBody}</p>
       </Dialog>
     </>
   );
@@ -264,14 +263,15 @@ export function SessionView({
 
 /** Quiet indicator so people can tell "live" from "might be a bit behind". */
 function ConnectionDot({ state }: { state: ConnectionState }) {
+  const m = useMessages();
   const label =
     state === 'live'
-      ? 'Live'
+      ? m.connection.live
       : state === 'polling'
-        ? 'Updating every 30s'
+        ? m.connection.polling
         : state === 'connecting'
-          ? 'Connecting…'
-          : 'Paused';
+          ? m.connection.connecting
+          : m.connection.idle;
 
   return (
     <span className={`conn ${state}`} title={label}>

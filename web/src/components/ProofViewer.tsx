@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { loadProofUrl } from '../api/payments.js';
 import { platform } from '../platform/index.js';
+import { useMessages } from '../state/locale.js';
 import { Button, Dialog, ErrorBanner, Spinner } from './ui.js';
 
 /**
@@ -19,6 +20,7 @@ export function ProofViewer({
   memberName: string;
   onClose(): void;
 }) {
+  const m = useMessages();
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,7 +35,7 @@ export function ProofViewer({
       })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
-        setError(cause instanceof Error ? cause.message : 'Could not load that screenshot');
+        setError(cause instanceof Error ? cause.message : m.payments.couldNotLoadImage);
       });
 
     return () => {
@@ -46,15 +48,15 @@ export function ProofViewer({
     <Dialog
       open
       onClose={onClose}
-      headline={`${memberName}'s transfer`}
+      headline={m.payments.transferOf(memberName)}
       actions={
         <Button variant="text" onClick={onClose}>
-          Close
+          {m.app.close}
         </Button>
       }
     >
       {error ? <ErrorBanner>{error}</ErrorBanner> : null}
-      {!error && !url ? <Spinner label="Loading…" /> : null}
+      {!error && !url ? <Spinner label={m.home.loading} /> : null}
       {url ? <img className="proof-image" src={url} alt={`Payment from ${memberName}`} /> : null}
     </Dialog>
   );

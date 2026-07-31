@@ -90,6 +90,12 @@ async function run() {
   await send('Emulation.setDeviceMetricsOverride', {
     width: 390, height: 844, deviceScaleFactor: 2, mobile: true,
   });
+  // These suites assert English strings, so pin the device's locale choice
+  // before the app boots. A device choice outranks the member's stored
+  // preference, which is exactly the precedence the app documents.
+  await send('Page.addScriptToEvaluateOnNewDocument', {
+    source: `try { localStorage.setItem('futsal:locale', 'en'); } catch {}`,
+  });
 
   const evalJs = async (expression) => {
     const r = await send('Runtime.evaluate', {

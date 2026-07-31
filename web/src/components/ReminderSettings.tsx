@@ -10,6 +10,7 @@ import {
 import { useAsync } from '../hooks/useAsync.js';
 import { platform } from '../platform/index.js';
 import { useApp } from '../state/app.js';
+import { useMessages } from '../state/locale.js';
 import { Icon } from './Icon.js';
 import { Button, ErrorBanner, Switch } from './ui.js';
 
@@ -24,6 +25,7 @@ import { Button, ErrorBanner, Switch } from './ui.js';
  */
 export function ReminderSettings() {
   const { toast } = useApp();
+  const m = useMessages();
   const status = useAsync((signal) => pushStatus(signal), []);
 
   const [deviceOn, setDeviceOn] = useState(false);
@@ -56,25 +58,25 @@ export function ReminderSettings() {
           const result = await enableNotifications(publicKey);
           if (result.ok) {
             setDeviceOn(true);
-            toast('Reminders on for this device');
+            toast(m.toast.remindersOn);
             status.reload();
           } else {
             setDeviceOn(false);
-            setError(explain(result.reason));
+            setError(explain(result.reason, m));
           }
         } else {
           await disableNotifications();
           setDeviceOn(false);
-          toast('Reminders off for this device');
+          toast(m.toast.remindersOff);
           status.reload();
         }
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Could not change that');
+        setError(cause instanceof Error ? cause.message : m.reminders.couldNotChange);
       } finally {
         setBusy(false);
       }
     },
-    [publicKey, status, toast],
+    [publicKey, status, toast, m],
   );
 
   const setPref = async (key: 'notifySession' | 'notifyPayment', value: boolean) => {
@@ -82,7 +84,7 @@ export function ReminderSettings() {
       await updateNotificationPrefs({ [key]: value });
       status.reload();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not save that');
+      setError(cause instanceof Error ? cause.message : m.reminders.couldNotSave);
     }
   };
 
@@ -92,8 +94,8 @@ export function ReminderSettings() {
   if (!status.data.enabled) {
     return (
       <div className="card">
-        <h2 className="card-title">Reminders</h2>
-        <p className="card-sub">Not configured on this server yet.</p>
+        <h2 className="card-title">{m.reminders.title}</h2>
+        <p className="card-sub">{m.reminders.notConfigured}</p>
       </div>
     );
   }
@@ -104,32 +106,30 @@ export function ReminderSettings() {
 
   return (
     <div className="card">
-      <h2 className="card-title">Reminders</h2>
+      <h2 className="card-title">{m.reminders.title}</h2>
 
       {error ? <ErrorBanner>{error}</ErrorBanner> : null}
 
       {needsInstall ? (
         <div className="install-hint">
-          <strong>Add to Home Screen first.</strong>
+          <strong>{m.reminders.installFirst}</strong>
           <p style={{ margin: '6px 0 0' }}>
-            iPhone only delivers notifications to installed apps. Tap{' '}
-            <Icon name="share" size={15} /> Share, then <em>Add to Home Screen</em>, and open
-            Futsal Friday from there.
+            <Icon name="share" size={15} /> {m.reminders.installBody}
           </p>
         </div>
       ) : unsupported ? (
-        <p className="card-sub">This browser cannot do notifications.</p>
+        <p className="card-sub">{m.reminders.unsupported}</p>
       ) : (
         <>
           <div className="row between">
             <div className="grow">
-              <div style={{ fontWeight: 500 }}>This device</div>
+              <div style={{ fontWeight: 500 }}>{m.reminders.thisDevice}</div>
               <div className="muted">
                 {blocked
-                  ? 'Blocked in browser settings — allow notifications there first.'
+                  ? m.reminders.blocked
                   : deviceOn
-                    ? 'Notifications are on here.'
-                    : 'Get a nudge before kickoff and when you owe money.'}
+                    ? m.reminders.onHere
+                    : m.reminders.offHere}
               </div>
             </div>
             <Switch
@@ -141,7 +141,7 @@ export function ReminderSettings() {
 
           {status.data.devices > 1 ? (
             <p className="muted" style={{ margin: 0 }}>
-              Reminders are on for {status.data.devices} devices.
+              {m.reminders.deviceCount(status.data.devices)}
             </p>
           ) : null}
         </>
@@ -157,8 +157,8 @@ export function ReminderSettings() {
 
       <div className="row between">
         <div className="grow">
-          <div style={{ fontWeight: 500 }}>Before the match</div>
-          <div className="muted">About 3 hours before kickoff, if you're playing.</div>
+          <div style={{ fontWeight: 500 }}>{m.reminders.beforeMatch}</div>
+          <div className="muted">{m.reminders.beforeMatchBody}</div>
         </div>
         <Switch
           selected={status.data.notifySession}
@@ -168,8 +168,8 @@ export function ReminderSettings() {
 
       <div className="row between">
         <div className="grow">
-          <div style={{ fontWeight: 500 }}>Unpaid reminders</div>
-          <div className="muted">A weekly nudge while you still owe for a session.</div>
+          <div style={{ fontWeight: 500 }}>{m.reminders.unpaidTitle}</div>
+          <div className="muted">{m.reminders.unpaidBody}</div>
         </div>
         <Switch
           selected={status.data.notifyPayment}
@@ -184,34 +184,33 @@ export function ReminderSettings() {
           onClick={async () => {
             try {
               const result = await sendTestNotification();
-              toast(
-                result.sent > 0
-                  ? 'Sent — check your notifications'
-                  : 'No device could be reached',
-              );
+              toast(result.sent > 0 ? m.toast.testSent : m.toast.testNoDevice);
             } catch (cause) {
-              setError(cause instanceof Error ? cause.message : 'Could not send a test');
+              setError(cause instanceof Error ? cause.message : m.reminders.couldNotTest);
             }
           }}
         >
-          Send a test notification
+          {m.reminders.sendTest}
         </Button>
       ) : null}
     </div>
   );
 }
 
-function explain(reason: 'unsupported' | 'needs-install' | 'denied' | 'disabled' | 'failed'): string {
+function explain(
+  reason: 'unsupported' | 'needs-install' | 'denied' | 'disabled' | 'failed',
+  m: ReturnType<typeof useMessages>,
+): string {
   switch (reason) {
     case 'needs-install':
-      return 'Add the app to your Home Screen first, then turn this on from there.';
+      return m.reminders.needsInstall;
     case 'denied':
-      return 'Notifications were blocked. Allow them for this site in your browser settings.';
+      return m.reminders.denied;
     case 'unsupported':
-      return 'This browser cannot do notifications.';
+      return m.reminders.unsupported;
     case 'disabled':
-      return 'Reminders are not configured on this server.';
+      return m.reminders.disabled;
     default:
-      return 'Could not turn reminders on. Try again.';
+      return m.reminders.failed;
   }
 }

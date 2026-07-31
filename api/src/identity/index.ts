@@ -108,6 +108,8 @@ export async function verifySseTicket(env: Env, ticket: string | null): Promise<
     memberId: claims.sub,
     name: claims.name ?? '',
     isOrganizer: claims.org === true,
+    // Not carried in the ticket: the stream endpoint sends no prose.
+    language: 'en',
   };
 }
 

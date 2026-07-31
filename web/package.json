@@ -15,7 +15,8 @@
     "test:realtime": "node test/realtime.mjs",
     "fake-upstash": "node test/fake-upstash.mjs",
     "icons": "node scripts/generate-icons.mjs",
-    "test:pwa": "node test/pwa.mjs"
+    "test:pwa": "node test/pwa.mjs",
+    "test:burmese": "node test/burmese.mjs"
   },
   "dependencies": {
     "@futsal/shared": "*",

@@ -11,6 +11,8 @@
  * which are inherently local questions.
  */
 
+import type { Locale } from './i18n/index.js';
+
 export const TZ = 'Asia/Ho_Chi_Minh' as const;
 
 /** Fixed ICT offset. Vietnam has observed no DST since 1975. */
@@ -116,12 +118,40 @@ export function zonedDateKey(instant: Date | string | number): string {
   return `${p.year}-${pad(p.month)}-${pad(p.day)}`;
 }
 
-const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+/**
+ * Weekday and month names per locale.
+ *
+ * Hardcoded rather than left to `Intl`: the Worker and the browser must produce
+ * identical strings (a push notification and the screen it links to should not
+ * disagree), and ICU data for `my` is not guaranteed to be present in every
+ * runtime. Nineteen strings is a cheap price for that certainty.
+ */
+const WEEKDAY_NAMES: Record<Locale, readonly string[]> = {
+  en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+  my: ['တနင်္ဂနွေ', 'တနင်္လာ', 'အင်္ဂါ', 'ဗုဒ္ဓဟူး', 'ကြာသပတေး', 'သောကြာ', 'စနေ'],
+};
 
-/** e.g. "Fri 08 Aug, 19:30" — the format used across the UI and chat summaries. */
-export function formatKickoff(instant: Date | string | number): string {
+const MONTH_NAMES: Record<Locale, readonly string[]> = {
+  en: [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ],
+  my: [
+    'ဇန်နဝါရီ', 'ဖေဖော်ဝါရီ', 'မတ်', 'ဧပြီ', 'မေ', 'ဇွန်',
+    'ဇူလိုင်', 'ဩဂုတ်', 'စက်တင်ဘာ', 'အောက်တိုဘာ', 'နိုဝင်ဘာ', 'ဒီဇင်ဘာ',
+  ],
+};
+
+/** e.g. "Fri 08 Aug, 19:30" / "သောကြာ 08 ဩဂုတ်၊ 19:30". */
+export function formatKickoff(
+  instant: Date | string | number,
+  locale: Locale = 'en',
+): string {
   const p = toZonedParts(instant);
-  return `${WEEKDAY_NAMES[p.weekday]} ${pad(p.day)} ${MONTHS[p.month - 1]}, ${pad(p.hour)}:${pad(p.minute)}`;
+  const day = `${WEEKDAY_NAMES[locale][p.weekday]} ${pad(p.day)} ${MONTH_NAMES[locale][p.month - 1]}`;
+  const time = `${pad(p.hour)}:${pad(p.minute)}`;
+  // Burmese uses its own comma (U+104A); an ASCII one reads as a typo.
+  return locale === 'my' ? `${day}၊ ${time}` : `${day}, ${time}`;
 }
 
 /** e.g. "19:30" in ICT. */
@@ -131,9 +161,9 @@ export function formatTime(instant: Date | string | number): string {
 }
 
 /** e.g. "08 Aug 2026" in ICT. */
-export function formatDate(instant: Date | string | number): string {
+export function formatDate(instant: Date | string | number, locale: Locale = 'en'): string {
   const p = toZonedParts(instant);
-  return `${pad(p.day)} ${MONTHS[p.month - 1]} ${p.year}`;
+  return `${pad(p.day)} ${MONTH_NAMES[locale][p.month - 1]} ${p.year}`;
 }
 
 /**
@@ -158,8 +188,12 @@ export function fromDatetimeLocal(value: string): Date {
   });
 }
 
-/** Short human delta, e.g. "in 2 days", "in 3h", "started 40m ago". */
-export function relativeToNow(instant: Date | string | number, now: Date = new Date()): string {
+/** Short human delta, e.g. "in 2d 3h" / "3d 2h အကြာ". */
+export function relativeToNow(
+  instant: Date | string | number,
+  now: Date = new Date(),
+  locale: Locale = 'en',
+): string {
   const diffMs = asDate(instant).getTime() - now.getTime();
   const future = diffMs >= 0;
   const abs = Math.abs(diffMs);
@@ -168,34 +202,28 @@ export function relativeToNow(instant: Date | string | number, now: Date = new D
   const hours = Math.floor((abs % MS_PER_DAY) / 3_600_000);
   const minutes = Math.floor((abs % 3_600_000) / 60_000);
 
+  const unit = UNITS[locale];
   let value: string;
-  if (days > 0) value = `${days}d${hours > 0 ? ` ${hours}h` : ''}`;
-  else if (hours > 0) value = `${hours}h${minutes > 0 ? ` ${minutes}m` : ''}`;
-  else value = `${Math.max(minutes, 1)}m`;
+  if (days > 0) value = `${days}${unit.d}${hours > 0 ? ` ${hours}${unit.h}` : ''}`;
+  else if (hours > 0) value = `${hours}${unit.h}${minutes > 0 ? ` ${minutes}${unit.m}` : ''}`;
+  else value = `${Math.max(minutes, 1)}${unit.m}`;
 
+  // Burmese puts the relation after the amount in both directions, so the
+  // English "in X" prefix has no equivalent to mirror.
+  if (locale === 'my') return future ? `${value} အကြာ` : `${value} က`;
   return future ? `in ${value}` : `${value} ago`;
 }
+
+const UNITS: Record<Locale, { d: string; h: string; m: string }> = {
+  en: { d: 'd', h: 'h', m: 'm' },
+  my: { d: ' ရက်', h: ' နာရီ', m: ' မိနစ်' },
+};
 
 function asDate(value: Date | string | number): Date {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) throw new Error(`Invalid date: ${String(value)}`);
   return date;
 }
-
-const MONTHS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-] as const;
 
 function pad(n: number): string {
   return String(n).padStart(2, '0');

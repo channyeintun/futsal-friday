@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { platform } from '../platform/index.js';
 import { useApp } from '../state/app.js';
+import { useMessages } from '../state/locale.js';
 import { Button, Dialog } from './ui.js';
 import { Icon } from './Icon.js';
 
@@ -22,11 +23,12 @@ export function CopyButton({
   variant?: 'filled' | 'tonal' | 'outlined' | 'text';
 }) {
   const { toast } = useApp();
+  const m = useMessages();
   const [showFallback, setShowFallback] = useState(false);
 
   const copy = async () => {
     const ok = await platform.clipboard.write(text);
-    if (ok) toast('Copied — paste it in the group chat');
+    if (ok) toast(m.toast.copied);
     else setShowFallback(true);
   };
 
@@ -40,15 +42,15 @@ export function CopyButton({
       <Dialog
         open={showFallback}
         onClose={() => setShowFallback(false)}
-        headline="Copy this"
+        headline={m.copy.fallbackTitle}
         actions={
           <Button variant="text" onClick={() => setShowFallback(false)}>
-            Done
+            {m.app.done}
           </Button>
         }
       >
         <p className="muted" style={{ margin: 0 }}>
-          Your browser blocked the clipboard. Select the text below and copy it by hand.
+          {m.copy.fallbackBody}
         </p>
         <pre className="summary-preview">{text}</pre>
       </Dialog>

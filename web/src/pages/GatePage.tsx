@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { join, openGate } from '../api/auth.js';
 import { Button, ErrorBanner, TextField } from '../components/ui.js';
 import { Icon } from '../components/Icon.js';
+import { useLocale } from '../state/locale.js';
+import { LOCALES, LOCALE_LABELS } from '@futsal/shared';
 
 /**
  * The way in.
@@ -13,6 +15,7 @@ import { Icon } from '../components/Icon.js';
  * ceremony for fifteen friends splitting a pitch fee.
  */
 export function GatePage({ onSignedIn }: { onSignedIn(identity: Identity): void }) {
+  const { m, locale, setLocale } = useLocale();
   const [code, setCode] = useState('');
   const [gateToken, setGateToken] = useState<string | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -28,7 +31,7 @@ export function GatePage({ onSignedIn }: { onSignedIn(identity: Identity): void 
       setGateToken(result.gateToken);
       setMembers(result.members);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not check that code');
+      setError(cause instanceof Error ? cause.message : m.gate.couldNotCheck);
     } finally {
       setBusy(false);
     }
@@ -41,7 +44,7 @@ export function GatePage({ onSignedIn }: { onSignedIn(identity: Identity): void 
     try {
       onSignedIn(await join(gateToken, member.id));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not sign you in');
+      setError(cause instanceof Error ? cause.message : m.gate.couldNotSignIn);
       // A rejected gate token means the 15-minute window lapsed; start over.
       setGateToken(null);
       setBusy(false);
@@ -53,9 +56,9 @@ export function GatePage({ onSignedIn }: { onSignedIn(identity: Identity): void 
       <div className="content" style={{ justifyContent: 'center', gap: 20 }}>
         <div className="stack" style={{ alignItems: 'center', textAlign: 'center', gap: 4 }}>
           <Icon name="ball" size={48} />
-          <h1 style={{ margin: 0, fontSize: '1.6rem' }}>Futsal Friday</h1>
+          <h1 style={{ margin: 0, fontSize: '1.6rem' }}>{m.app.name}</h1>
           <p className="muted" style={{ margin: 0 }}>
-            {gateToken ? 'Which one are you?' : 'Enter the group code to get in'}
+            {gateToken ? m.gate.whichOne : m.gate.tagline}
           </p>
         </div>
 
@@ -64,28 +67,26 @@ export function GatePage({ onSignedIn }: { onSignedIn(identity: Identity): void 
         {!gateToken ? (
           <div className="card">
             <TextField
-              label="Invite code"
+              label={m.gate.inviteCode}
               value={code}
               onChange={setCode}
               autoFocus
-              supportingText="Ask whoever organises the games"
+              supportingText={m.gate.inviteHint}
             />
             <Button onClick={submitCode} disabled={busy || code.trim().length === 0}>
-              {busy ? 'Checking…' : 'Continue'}
+              {busy ? m.gate.checking : m.gate.continue}
             </Button>
           </div>
         ) : (
           <div className="card">
             {members.length === 0 ? (
-              <p className="empty">
-                Nobody is on the list yet. The organizer needs to add players first.
-              </p>
+              <p className="empty">{m.gate.emptyRoster}</p>
             ) : (
               <div className="stack">
                 {members.map((member) => (
                   <Button key={member.id} variant="outlined" onClick={() => pickName(member)}>
                     {member.name}
-                    {member.isOrganizer ? ' · organizer' : ''}
+                    {member.isOrganizer ? ` · ${m.app.organizerSuffix}` : ''}
                   </Button>
                 ))}
               </div>
@@ -97,10 +98,23 @@ export function GatePage({ onSignedIn }: { onSignedIn(identity: Identity): void 
                 setMembers([]);
               }}
             >
-              Back
+              {m.app.back}
             </Button>
           </div>
         )}
+        {/* Offered before sign-in too, so a Burmese speaker is never made to
+            read an English screen to find the language switch. */}
+        <div className="row" style={{ justifyContent: 'center', gap: 4 }}>
+          {LOCALES.map((code) => (
+            <Button
+              key={code}
+              variant={code === locale ? 'tonal' : 'text'}
+              onClick={() => setLocale(code)}
+            >
+              {LOCALE_LABELS[code]}
+            </Button>
+          ))}
+        </div>
       </div>
     </div>
   );

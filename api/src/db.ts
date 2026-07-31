@@ -1,3 +1,4 @@
+import { normalizeLocale } from '@futsal/shared';
 import type {
   Member,
   MemberBalance,
@@ -31,6 +32,7 @@ export interface MemberRow {
   created_at: string;
   notify_session: number;
   notify_payment: number;
+  language: string;
 }
 
 export interface VenueRow {
@@ -104,6 +106,7 @@ export const toMember = (row: MemberRow): Member => ({
   // `?? 1` keeps rows written before migration 0002 behaving as opted-in.
   notifySession: (row.notify_session ?? 1) === 1,
   notifyPayment: (row.notify_payment ?? 1) === 1,
+  language: normalizeLocale(row.language),
 });
 
 export const toVenue = (row: VenueRow): Venue => ({

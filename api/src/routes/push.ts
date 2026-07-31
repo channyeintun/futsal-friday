@@ -1,5 +1,7 @@
 import {
   type PushStatus,
+  messagesFor,
+  normalizeLocale,
   notificationPrefsSchema,
   pushSubscriptionSchema,
 } from '@futsal/shared';
@@ -39,6 +41,7 @@ export const pushRoutes = new Hono<AppContext>()
       devices: count?.n ?? 0,
       notifySession: member?.notifySession ?? true,
       notifyPayment: member?.notifyPayment ?? true,
+      language: member?.language ?? 'en',
     };
     return c.json(status);
   })
@@ -116,17 +119,19 @@ export const pushRoutes = new Hono<AppContext>()
     const next = {
       session: input.notifySession === undefined ? row.notify_session : input.notifySession ? 1 : 0,
       payment: input.notifyPayment === undefined ? row.notify_payment : input.notifyPayment ? 1 : 0,
+      language: input.language ?? normalizeLocale(row.language),
     };
 
     await c.env.DB.prepare(
-      `UPDATE members SET notify_session = ?2, notify_payment = ?3 WHERE id = ?1`,
+      `UPDATE members SET notify_session = ?2, notify_payment = ?3, language = ?4 WHERE id = ?1`,
     )
-      .bind(identity.memberId, next.session, next.payment)
+      .bind(identity.memberId, next.session, next.payment, next.language)
       .run();
 
     return c.json({
       notifySession: next.session === 1,
       notifyPayment: next.payment === 1,
+      language: next.language,
     });
   })
 
@@ -144,6 +149,11 @@ export const pushRoutes = new Hono<AppContext>()
 
     if (results.length === 0) throw conflict('No devices are subscribed yet');
 
+    const member = await c.env.DB.prepare(`SELECT language FROM members WHERE id = ?1`)
+      .bind(identity.memberId)
+      .first<{ language: string }>();
+    const messages = messagesFor(normalizeLocale(member?.language));
+
     const outcomes = await Promise.all(
       results.map((row) =>
         sender.send(
@@ -153,8 +163,8 @@ export const pushRoutes = new Hono<AppContext>()
             keys: { p256dh: row.p256dh, auth: row.auth },
           },
           {
-            title: 'Futsal Friday',
-            body: `Reminders are working, ${identity.name}.`,
+            title: messages.push.testTitle,
+            body: messages.push.testBody(identity.name),
             tag: 'test',
             url: '/',
           },

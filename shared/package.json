@@ -13,7 +13,7 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node test/logic.test.ts"
+    "test": "node test/logic.test.ts && esbuild test/i18n.test.ts --bundle --platform=node --format=esm --outfile=.i18n-test.mjs --log-level=error && node .i18n-test.mjs"
   },
   "dependencies": {
     "zod": "^4.1.5"

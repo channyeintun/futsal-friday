@@ -47,6 +47,9 @@ export const memberRoutes = new Hono<AppContext>()
       // actually grants push permission on a device.
       notify_session: 1,
       notify_payment: 1,
+      // The organizer adds people before they ever open the app, so their real
+      // language is unknown until they pick one.
+      language: 'en',
     };
 
     try {

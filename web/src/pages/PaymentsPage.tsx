@@ -25,6 +25,7 @@ import { useAsync } from '../hooks/useAsync.js';
 import { useLive } from '../hooks/useLive.js';
 import { platform } from '../platform/index.js';
 import { useApp } from '../state/app.js';
+import { useLocale, useMessages } from '../state/locale.js';
 
 /**
  * The money screen.
@@ -36,6 +37,7 @@ import { useApp } from '../state/app.js';
  */
 export function PaymentsPage({ sessionId }: { sessionId: string }) {
   const { identity, toast } = useApp();
+  const { m, locale } = useLocale();
 
   const sessionState = useAsync((signal) => getSession(sessionId, signal), [sessionId]);
   const paymentsState = useAsync((signal) => getPayments(sessionId, signal), [sessionId]);
@@ -88,7 +90,7 @@ export function PaymentsPage({ sessionId }: { sessionId: string }) {
     if (sessionState.error || paymentsState.error) {
       return <ErrorBanner>{sessionState.error ?? paymentsState.error}</ErrorBanner>;
     }
-    return <Spinner label="Loading payments…" />;
+    return <Spinner label={m.payments.loading} />;
   }
 
   const mine = summary.payments.find((p) => p.memberId === identity.memberId) ?? null;
@@ -106,27 +108,25 @@ export function PaymentsPage({ sessionId }: { sessionId: string }) {
           />
         ) : (
           <div className="card">
-            <h2 className="card-title">Not split yet</h2>
-            <p className="card-sub">
-              The organizer has not entered the field charge for this session yet.
-            </p>
+            <h2 className="card-title">{m.payments.notSplitYet}</h2>
+            <p className="card-sub">{m.payments.notSplitYetBody}</p>
           </div>
         )
       ) : (
         <>
           <div className="card">
             <div className="row between">
-              <h2 className="card-title">Field total</h2>
+              <h2 className="card-title">{m.payments.fieldTotal}</h2>
               <span className="amount">{formatVnd(summary.totalCharge ?? 0)}</span>
             </div>
             <div className="row between">
-              <span className="muted">Collected</span>
+              <span className="muted">{m.payments.collected}</span>
               <span className="amount" style={{ color: 'var(--ff-paid)' }}>
                 {formatVnd(summary.collected)}
               </span>
             </div>
             <div className="row between">
-              <span className="muted">Still owed</span>
+              <span className="muted">{m.payments.stillOwed}</span>
               <span className="amount" style={{ color: 'var(--md-sys-color-error)' }}>
                 {formatVnd(summary.outstanding)}
               </span>
@@ -156,15 +156,19 @@ export function PaymentsPage({ sessionId }: { sessionId: string }) {
 
       <div className="card">
         <div className="row between">
-          <h2 className="card-title">Everyone ({summary.payments.length})</h2>
+          <h2 className="card-title">{m.payments.everyone(summary.payments.length)}</h2>
           <span className={`conn ${connection}`}>
             <span className="dot" />
-            {connection === 'live' ? 'Live' : connection === 'polling' ? '30s' : 'Paused'}
+            {connection === 'live'
+              ? m.connection.live
+              : connection === 'polling'
+                ? m.connection.pollingShort
+                : m.connection.idle}
           </span>
         </div>
 
         {summary.payments.length === 0 ? (
-          <p className="empty">Nothing to split yet.</p>
+          <p className="empty">{m.payments.nothingToSplit}</p>
         ) : (
           summary.payments.map((payment) => (
             <PaymentRow
@@ -178,8 +182,8 @@ export function PaymentsPage({ sessionId }: { sessionId: string }) {
       </div>
 
       <CopyButton
-        label="Copy status for chat"
-        text={paymentsSummary(session, summary, { appUrl: platform.appUrl })}
+        label={m.payments.copyStatus}
+        text={paymentsSummary(session, summary, { appUrl: platform.appUrl, locale })}
       />
     </>
   );
@@ -195,6 +199,7 @@ function SettleCard({
   onSettled(): void;
 }) {
   const { toast } = useApp();
+  const m = useMessages();
   const [total, setTotal] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -203,17 +208,17 @@ function SettleCard({
 
   const submit = async () => {
     if (parsed === null) {
-      setError('Enter the amount the pitch cost, e.g. 560k');
+      setError(m.payments.enterAmount);
       return;
     }
     setBusy(true);
     setError(null);
     try {
       await settleSession(sessionId, { totalCharge: parsed });
-      toast('Split between everyone who played');
+      toast(m.toast.splitDone);
       onSettled();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not split that');
+      setError(cause instanceof Error ? cause.message : m.payments.couldNotSplit);
     } finally {
       setBusy(false);
     }
@@ -221,21 +226,18 @@ function SettleCard({
 
   return (
     <div className="card">
-      <h2 className="card-title">Split the bill</h2>
-      <p className="card-sub">
-        Enter what the pitch cost in total. It is divided between everyone who was in — not the
-        waitlist — and rounded to the nearest 1.000d.
-      </p>
+      <h2 className="card-title">{m.payments.splitTitle}</h2>
+      <p className="card-sub">{m.payments.splitBody}</p>
       {error ? <ErrorBanner>{error}</ErrorBanner> : null}
       <TextField
-        label="Total field charge"
+        label={m.payments.totalCharge}
         value={total}
         onChange={setTotal}
         inputMode="numeric"
-        supportingText={parsed !== null ? formatVnd(parsed) : 'e.g. 560k'}
+        supportingText={parsed !== null ? formatVnd(parsed) : m.payments.enterAmount}
       />
       <Button onClick={submit} disabled={busy}>
-        {busy ? 'Splitting…' : 'Split it'}
+        {busy ? m.payments.splitting : m.payments.splitIt}
       </Button>
     </div>
   );
@@ -251,6 +253,7 @@ function ReSettleButton({
   onSettled(): void;
 }) {
   const { toast } = useApp();
+  const m = useMessages();
   const [open, setOpen] = useState(false);
   const [total, setTotal] = useState(String(current));
   const [busy, setBusy] = useState(false);
@@ -262,7 +265,7 @@ function ReSettleButton({
     setBusy(true);
     try {
       await settleSession(sessionId, { totalCharge: parsed });
-      toast('Amounts recalculated');
+      toast(m.toast.amountsRecalculated);
       setOpen(false);
       onSettled();
     } finally {
@@ -273,33 +276,32 @@ function ReSettleButton({
   return (
     <>
       <Button variant="text" onClick={() => setOpen(true)}>
-        Change total
+        {m.payments.changeTotal}
       </Button>
       <Dialog
         open={open}
         onClose={() => setOpen(false)}
-        headline="Change the total"
+        headline={m.payments.changeTotalTitle}
         actions={
           <>
             <Button variant="text" onClick={() => setOpen(false)}>
-              Cancel
+              {m.app.cancel}
             </Button>
             <Button onClick={submit} disabled={busy || parsed === null}>
-              Save
+              {m.app.save}
             </Button>
           </>
         }
       >
         <p className="muted" style={{ margin: 0 }}>
-          Everyone's share is recalculated. Amounts you pinned by hand stay pinned, and payments
-          already confirmed stay confirmed.
+          {m.payments.changeTotalBody}
         </p>
         <TextField
-          label="Total field charge"
+          label={m.payments.totalCharge}
           value={total}
           onChange={setTotal}
           inputMode="numeric"
-          supportingText={parsed !== null ? formatVnd(parsed) : 'e.g. 560k'}
+          supportingText={parsed !== null ? formatVnd(parsed) : m.payments.enterAmount}
         />
       </Dialog>
     </>
@@ -319,6 +321,7 @@ function MyPayment({
   onChanged(): void;
   onToast(message: string): void;
 }) {
+  const m = useMessages();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -336,10 +339,10 @@ function MyPayment({
         proofKey = await uploadProof(sessionId, file);
       }
       await claimPayment(sessionId, { proofKey });
-      onToast('Marked as paid — waiting for confirmation');
+      onToast(m.toast.markedPaid);
       onChanged();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not mark that');
+      setError(cause instanceof Error ? cause.message : m.payments.couldNotMark);
     } finally {
       setBusy(false);
     }
@@ -351,7 +354,7 @@ function MyPayment({
       await unclaimPayment(sessionId);
       onChanged();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not undo that');
+      setError(cause instanceof Error ? cause.message : m.payments.couldNotUndo);
     } finally {
       setBusy(false);
     }
@@ -360,40 +363,40 @@ function MyPayment({
   return (
     <div className="card">
       <div className="row between">
-        <h2 className="card-title">You owe</h2>
+        <h2 className="card-title">{m.payments.youOwe}</h2>
         <span className="amount" style={{ fontSize: '1.3rem' }}>
           {formatVnd(payment.amountDue)}
         </span>
       </div>
 
       {payment.rejectReason ? (
-        <ErrorBanner>Rejected: {payment.rejectReason}</ErrorBanner>
+        <ErrorBanner>{m.payments.rejectedWithReason(payment.rejectReason)}</ErrorBanner>
       ) : null}
       {error ? <ErrorBanner>{error}</ErrorBanner> : null}
 
       {payment.status === 'confirmed' ? (
         <div className="row" style={{ gap: 8, color: 'var(--ff-paid)' }}>
           <Icon name="check" size={20} />
-          <strong>Paid and confirmed. Thanks.</strong>
+          <strong>{m.payments.paidConfirmed}</strong>
         </div>
       ) : payment.status === 'pending' ? (
         <>
           <div className="row" style={{ gap: 8 }}>
             <Icon name="clock" size={20} />
-            <span>Waiting for the organizer to confirm.</span>
+            <span>{m.payments.waitingConfirm}</span>
           </div>
           <Button variant="text" onClick={undo} disabled={busy}>
-            That was a mistake — undo
+            {m.payments.undoClaim}
           </Button>
         </>
       ) : (
         <div className="stack">
           <Button onClick={() => claim(true)} disabled={busy}>
             <Icon name="camera" size={18} slot="icon" />
-            {busy ? 'Working…' : 'I paid — attach screenshot'}
+            {busy ? m.app.working : m.payments.paidWithShot}
           </Button>
           <Button variant="outlined" onClick={() => claim(false)} disabled={busy}>
-            I paid, no screenshot
+            {m.payments.paidNoShot}
           </Button>
         </div>
       )}
@@ -413,6 +416,7 @@ function PaymentRow({
   onChanged(): void;
 }) {
   const { toast } = useApp();
+  const m = useMessages();
   const [busy, setBusy] = useState(false);
   const [showProof, setShowProof] = useState(false);
   const [editingAmount, setEditingAmount] = useState(false);
@@ -421,9 +425,13 @@ function PaymentRow({
   const review = async (decision: 'confirm' | 'reject') => {
     setBusy(true);
     try {
-      const reason = decision === 'reject' ? 'Amount did not match' : undefined;
+      const reason = decision === 'reject' ? m.payments.rejectReason : undefined;
       await reviewPayment(payment.id, { decision, reason });
-      toast(decision === 'confirm' ? `${payment.memberName} confirmed` : `${payment.memberName} rejected`);
+      toast(
+        decision === 'confirm'
+          ? m.toast.confirmed(payment.memberName)
+          : m.toast.rejected(payment.memberName),
+      );
       onChanged();
     } finally {
       setBusy(false);
@@ -434,7 +442,7 @@ function PaymentRow({
     setBusy(true);
     try {
       await overridePayment(payment.id, value);
-      toast('Amounts rebalanced');
+      toast(m.toast.amountsRebalanced);
       setEditingAmount(false);
       onChanged();
     } finally {
@@ -447,30 +455,36 @@ function PaymentRow({
       <span className="player-name truncate">{payment.memberName}</span>
 
       <span className="amount">{formatVnd(payment.amountDue)}</span>
-      {payment.amountOverride != null ? <span className="badge waitlist">fixed</span> : null}
+      {payment.amountOverride != null ? (
+        <span className="badge waitlist">{m.payments.fixed}</span>
+      ) : null}
 
       <span className={`badge ${payment.status === 'confirmed' ? 'paid' : payment.status}`}>
-        {payment.status === 'confirmed' ? 'paid' : payment.status === 'pending' ? 'checking' : 'unpaid'}
+        {payment.status === 'confirmed'
+          ? m.payments.statusPaid
+          : payment.status === 'pending'
+            ? m.payments.statusChecking
+            : m.payments.statusUnpaid}
       </span>
 
       {canReview ? (
         <div className="row wrap" style={{ width: '100%', gap: 4, justifyContent: 'flex-end' }}>
           {payment.hasProof ? (
             <Button variant="text" onClick={() => setShowProof(true)}>
-              Screenshot
+              {m.payments.screenshot}
             </Button>
           ) : null}
           <Button variant="text" onClick={() => setEditingAmount(true)}>
-            Amount
+            {m.payments.amount}
           </Button>
           {payment.status !== 'confirmed' ? (
             <Button variant="tonal" onClick={() => review('confirm')} disabled={busy}>
-              Confirm
+              {m.payments.confirm}
             </Button>
           ) : null}
           {payment.status === 'pending' ? (
             <Button variant="text" onClick={() => review('reject')} disabled={busy}>
-              Reject
+              {m.payments.reject}
             </Button>
           ) : null}
         </div>
@@ -487,11 +501,11 @@ function PaymentRow({
       <Dialog
         open={editingAmount}
         onClose={() => setEditingAmount(false)}
-        headline={`${payment.memberName}'s share`}
+        headline={m.payments.shareTitle(payment.memberName)}
         actions={
           <>
             <Button variant="text" onClick={() => saveOverride(null)} disabled={busy}>
-              Back to equal split
+              {m.payments.backToEqual}
             </Button>
             <Button
               onClick={() => {
@@ -500,15 +514,15 @@ function PaymentRow({
               }}
               disabled={busy}
             >
-              Save
+              {m.app.save}
             </Button>
           </>
         }
       >
         <p className="muted" style={{ margin: 0 }}>
-          Pin an amount for {payment.memberName}. Everyone else splits what is left.
+          {m.payments.shareBody(payment.memberName)}
         </p>
-        <TextField label="Amount" value={amount} onChange={setAmount} inputMode="numeric" />
+        <TextField label={m.payments.amount} value={amount} onChange={setAmount} inputMode="numeric" />
       </Dialog>
     </div>
   );

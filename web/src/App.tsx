@@ -12,6 +12,7 @@ import { PaymentsPage } from './pages/PaymentsPage.js';
 import { SessionPage } from './pages/SessionPage.js';
 import { type Route, navigate, replace, useRoute } from './router.js';
 import { AppProvider, useApp } from './state/app.js';
+import { LocaleProvider, useMessages } from './state/locale.js';
 
 export function App() {
   const [identity, setIdentity] = useState<Identity | null>(null);
@@ -39,24 +40,44 @@ export function App() {
 
   if (checking) {
     return (
-      <div className="app">
-        <Spinner label="Just a moment…" />
-      </div>
+      <LocaleProvider>
+        <Booting />
+      </LocaleProvider>
     );
   }
 
-  if (!identity) return <GatePage onSignedIn={setIdentity} />;
+  if (!identity) {
+    return (
+      <LocaleProvider>
+        <GatePage onSignedIn={setIdentity} />
+      </LocaleProvider>
+    );
+  }
 
   return (
-    <AppProvider identity={identity} onSignOut={signOut}>
-      <Shell />
-    </AppProvider>
+    // The member's stored language seeds the provider, but only when this
+    // device has not already chosen one for itself.
+    <LocaleProvider serverLocale={identity.language}>
+      <AppProvider identity={identity} onSignOut={signOut}>
+        <Shell />
+      </AppProvider>
+    </LocaleProvider>
+  );
+}
+
+function Booting() {
+  const m = useMessages();
+  return (
+    <div className="app">
+      <Spinner label={m.app.loading} />
+    </div>
   );
 }
 
 function Shell() {
   const route = useRoute();
   const { identity, toastMessage } = useApp();
+  const m = useMessages();
 
   return (
     <div className="app">
@@ -64,7 +85,7 @@ function Shell() {
         {route.name !== 'home' ? (
           <button
             type="button"
-            aria-label="Back"
+            aria-label={m.app.back}
             onClick={() => navigate({ name: 'home' })}
             style={{
               background: 'none',
@@ -81,10 +102,10 @@ function Shell() {
           <Icon name="ball" size={26} />
         )}
         <h1>
-          {titleFor(route)}
+          {titleFor(route, m)}
           <span className="topbar-sub">
             {identity.name}
-            {identity.isOrganizer ? ' · organizer' : ''}
+            {identity.isOrganizer ? ` · ${m.app.organizerSuffix}` : ''}
           </span>
         </h1>
       </header>
@@ -94,9 +115,9 @@ function Shell() {
       </main>
 
       <nav className="bottom-nav">
-        <NavButton route={{ name: 'home' }} current={route} icon="ball" label="Session" />
-        <NavButton route={{ name: 'history' }} current={route} icon="history" label="History" />
-        <NavButton route={{ name: 'admin' }} current={route} icon="tune" label="Setup" />
+        <NavButton route={{ name: 'home' }} current={route} icon="ball" label={m.nav.session} />
+        <NavButton route={{ name: 'history' }} current={route} icon="history" label={m.nav.history} />
+        <NavButton route={{ name: 'admin' }} current={route} icon="tune" label={m.nav.setup} />
       </nav>
 
       {toastMessage ? (
@@ -123,18 +144,18 @@ function Page({ route }: { route: Route }) {
   }
 }
 
-function titleFor(route: Route): string {
+function titleFor(route: Route, m: ReturnType<typeof useMessages>): string {
   switch (route.name) {
     case 'home':
-      return 'Futsal Friday';
+      return m.app.name;
     case 'session':
-      return 'Session';
+      return m.nav.sessionTitle;
     case 'payments':
-      return 'Payments';
+      return m.nav.payments;
     case 'history':
-      return 'History';
+      return m.nav.history;
     case 'admin':
-      return 'Setup';
+      return m.nav.setup;
   }
 }
 

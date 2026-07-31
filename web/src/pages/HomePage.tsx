@@ -7,6 +7,7 @@ import { useAsync } from '../hooks/useAsync.js';
 import { useLiveSession } from '../hooks/useLiveSession.js';
 import { navigate } from '../router.js';
 import { useApp } from '../state/app.js';
+import { useLocale } from '../state/locale.js';
 
 /**
  * Home is the upcoming session — that is what people open the app for. Past
@@ -14,12 +15,13 @@ import { useApp } from '../state/app.js';
  */
 export function HomePage() {
   const { identity } = useApp();
+  const { m, locale } = useLocale();
   const overview = useAsync((signal) => listSessions(signal), []);
 
   const upcomingId = overview.data?.upcoming?.id ?? null;
   const live = useLiveSession(upcomingId, identity.memberId);
 
-  if (overview.loading && !overview.data) return <Spinner label="Loading…" />;
+  if (overview.loading && !overview.data) return <Spinner label={m.home.loading} />;
 
   return (
     <>
@@ -36,20 +38,19 @@ export function HomePage() {
           }}
         />
       ) : upcomingId ? (
-        <Spinner label="Loading session…" />
+        <Spinner label={m.session.loading} />
       ) : (
         <div className="card">
-          <h2 className="card-title">No session scheduled</h2>
+          <h2 className="card-title">{m.home.noSession}</h2>
           <p className="card-sub">
-            The next Friday game is created automatically every week. If one is missing,
-            {identity.isOrganizer ? ' add it from the admin screen.' : ' nudge the organizer.'}
+            {identity.isOrganizer ? m.home.noSessionOrganizer : m.home.noSessionMember}
           </p>
         </div>
       )}
 
       {overview.data && overview.data.recent.length > 0 ? (
         <div className="card">
-          <h2 className="card-title">Previously</h2>
+          <h2 className="card-title">{m.home.previously}</h2>
           <div>
             {overview.data.recent.map((session) => (
               <button
@@ -71,17 +72,17 @@ export function HomePage() {
                 <Icon name={session.status === 'cancelled' ? 'close' : 'ball'} size={18} />
                 <span className="grow">
                   <span className="truncate" style={{ display: 'block', fontWeight: 500 }}>
-                    {formatKickoff(session.startsAt)}
+                    {formatKickoff(session.startsAt, locale)}
                   </span>
                   <span className="muted">
-                    {session.venue?.name ?? 'No venue'}
+                    {session.venue?.name ?? m.home.noVenue}
                     {session.totalCharge != null ? ` · ${formatVnd(session.totalCharge)}` : ''}
                   </span>
                 </span>
                 {session.status === 'cancelled' ? (
-                  <span className="badge unpaid">cancelled</span>
+                  <span className="badge unpaid">{m.home.badgeCancelled}</span>
                 ) : session.totalCharge == null ? (
-                  <span className="badge pending">not split</span>
+                  <span className="badge pending">{m.home.badgeNotSplit}</span>
                 ) : null}
               </button>
             ))}

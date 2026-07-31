@@ -58,6 +58,11 @@ async function run() {
   await ready;
   await send('Page.enable'); await send('Runtime.enable'); await send('Log.enable');
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+  // Pin the device locale: these suites assert English strings, and a device
+  // choice outranks the member's stored preference.
+  await send('Page.addScriptToEvaluateOnNewDocument', {
+    source: `try { localStorage.setItem('futsal:locale', 'en'); } catch {}`,
+  });
 
   const js = async (expr) => {
     const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true });
