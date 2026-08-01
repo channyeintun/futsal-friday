@@ -1,9 +1,9 @@
 import type { Identity, JoinableMember } from '@futsal/shared';
 import { LOCALES, LOCALE_LABELS } from '@futsal/shared';
 import { useEffect, useState } from 'react';
-import { groupClaim, groupRoster } from '../api/auth.js';
+import { groupClaim, groupRoster, groupSelfAdd } from '../api/auth.js';
 import { Icon } from '../components/Icon.js';
-import { Button, ErrorBanner, Spinner } from '../components/ui.js';
+import { Button, Dialog, ErrorBanner, Spinner, TextField } from '../components/ui.js';
 import { platform } from '../platform/index.js';
 import { useLocale } from '../state/locale.js';
 
@@ -20,6 +20,8 @@ export function JoinPage({ onSignedIn }: { onSignedIn(identity: Identity): void 
   const [members, setMembers] = useState<JoinableMember[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [ownName, setOwnName] = useState('');
 
   useEffect(() => {
     if (!nonce) {
@@ -56,6 +58,24 @@ export function JoinPage({ onSignedIn }: { onSignedIn(identity: Identity): void 
     }
   };
 
+  const addSelf = async () => {
+    const name = ownName.trim();
+    if (!name) return;
+    setBusy('self');
+    setError(null);
+    try {
+      const identity = await groupSelfAdd(nonce, name);
+      platform.navigation.replace('/');
+      onSignedIn(identity);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : m.join.couldNotAdd);
+      setBusy(null);
+      // The name may be one already on the list, in which case the refreshed
+      // roster is where they should be tapping.
+      groupRoster(nonce).then(setMembers).catch(() => {});
+    }
+  };
+
   return (
     <div className="app">
       <div className="content" style={{ justifyContent: 'center', gap: 20 }}>
@@ -71,16 +91,17 @@ export function JoinPage({ onSignedIn }: { onSignedIn(identity: Identity): void 
 
         {members === null ? (
           <Spinner label={m.join.loading} />
-        ) : members.length === 0 ? (
-          <div className="card">
-            <p className="card-sub" style={{ margin: 0 }}>
-              {error ? m.claim.askOrganizer : m.join.allTaken}
-            </p>
-          </div>
         ) : (
           <div className="card">
             <p className="card-sub" style={{ margin: 0 }}>
-              {m.join.tapYourName}
+              {/* An empty list means one of two very different things, and
+                  saying "everyone has joined" to the first person through the
+                  door is nonsense. Only a dead link produces `error`. */}
+              {error
+                ? m.claim.askOrganizer
+                : members.length === 0
+                  ? m.join.nobodyListed
+                  : m.join.tapYourName}
             </p>
             <div className="stack">
               {members.map((member) => (
@@ -94,8 +115,37 @@ export function JoinPage({ onSignedIn }: { onSignedIn(identity: Identity): void 
                 </Button>
               ))}
             </div>
+            {/* Offered whether or not the list has anything on it: the roster
+                no longer has to be typed out before the link is worth
+                sending. Hidden only when the link itself is dead. */}
+            {!error ? (
+              <Button variant="text" onClick={() => setAdding(true)} disabled={busy !== null}>
+                {m.join.notListed}
+              </Button>
+            ) : null}
           </div>
         )}
+
+        <Dialog
+          open={adding}
+          onClose={() => setAdding(false)}
+          headline={m.join.addYourName}
+          actions={
+            <>
+              <Button variant="text" onClick={() => setAdding(false)}>
+                {m.app.cancel}
+              </Button>
+              <Button onClick={addSelf} disabled={busy !== null || !ownName.trim()}>
+                {m.join.addYourName}
+              </Button>
+            </>
+          }
+        >
+          <p className="muted" style={{ margin: 0 }}>
+            {m.join.addYourNameBody}
+          </p>
+          <TextField label={m.join.yourName} value={ownName} onChange={setOwnName} autoFocus />
+        </Dialog>
 
         <div className="row" style={{ justifyContent: 'center', gap: 4 }}>
           {LOCALES.map((code) => (

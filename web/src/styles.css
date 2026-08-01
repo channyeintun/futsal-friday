@@ -718,3 +718,10 @@ body {
      visual line height. */
   min-height: 32px;
 }
+
+/* The waiting room. Tinted rather than plain: it appears unannounced at the
+   top of a screen the organizer opened for something else, and it is the one
+   card there that somebody is actively blocked on. */
+.pending-card {
+  border: 1px solid var(--md-sys-color-primary);
+}

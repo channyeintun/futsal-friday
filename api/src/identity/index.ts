@@ -136,6 +136,10 @@ export async function verifySseTicket(env: Env, ticket: string | null): Promise<
     isOrganizer: claims.org === true,
     // Not carried in the ticket: the stream endpoint sends no prose.
     language: 'en',
+    // A ticket is only ever minted for an approved member, and the stream
+    // route re-checks nothing else; carrying the flag would only let a stale
+    // ticket assert it.
+    approved: true,
   };
 }
 

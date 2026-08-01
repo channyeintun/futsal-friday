@@ -34,6 +34,12 @@ export const memberSchema = z.object({
    * key stays server-side; this is what the client caches the image against.
    */
   avatarUpdatedAt: isoSchema.nullable().default(null),
+  /**
+   * When an organizer let them in. Null means they added themselves from the
+   * group link and are still waiting — a different thing from `active`, which
+   * is the soft delete for people who have left.
+   */
+  approvedAt: isoSchema.nullable().default(null),
 });
 export type Member = z.infer<typeof memberSchema>;
 
@@ -284,6 +290,11 @@ export const identitySchema = z.object({
   memberId: idSchema,
   name: z.string(),
   isOrganizer: z.boolean(),
+  /**
+   * False while the organizer has not let them in yet. The client shows a
+   * waiting screen; the server refuses everything but this check.
+   */
+  approved: z.boolean().default(true),
   /** Follows the member across devices, so a new phone opens in their language. */
   language: z.enum(['en', 'my']),
 });
@@ -312,6 +323,18 @@ export const groupJoinSchema = z.object({
   nonce: z.string().min(20).max(100),
 });
 export type GroupJoinInput = z.infer<typeof groupJoinSchema>;
+
+/**
+ * Putting your own name forward from the group link.
+ *
+ * Same nonce as the name picker, so only somebody holding the link can do it,
+ * and the result is a member the organizer still has to approve.
+ */
+export const groupSelfAddSchema = z.object({
+  nonce: z.string().min(20),
+  name: z.string().trim().min(1, 'Name is required').max(40),
+});
+export type GroupSelfAddInput = z.infer<typeof groupSelfAddSchema>;
 
 export const groupClaimSchema = z.object({
   nonce: z.string().min(20).max(100),

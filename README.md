@@ -427,27 +427,41 @@ one.
 
 ### Who can get in
 
-There is no password and no shared code. Two ways in, both links:
+There is no password and no shared code. The organizer pastes **one link** into
+the group chat and everyone gets in through it.
 
-**The group link** is the normal one. The organizer opens **Setup → Group invite
-link**, copies it once, and pastes it into the group chat. Each person taps it,
-sees a list of names, and taps their own. That name then locks to their phone.
+Tapping the link shows the names that are still free. You tap yours and it locks
+to your phone. If you are not on the list — which is the normal case, because the
+roster no longer has to be typed out in advance — you tap **"My name isn't
+here"**, put your name in, and land in a waiting room until an organizer lets
+you in. They get a push notification, and letting somebody in is one tap in
+**Setup**.
 
-**A personal link** covers the rest: organizers, a second device, or re-inviting
-somebody after their access was removed. Setup mints one next to any name.
+A **personal link** still exists for the cases that need one: organizers, a
+second device, or re-inviting somebody after their access was removed. Setup
+mints one next to any name.
 
-Three limits are what make a link that lives in a group chat safe to leave
-there:
+Four limits are what make a link that lives in a group chat safe to leave there:
 
 1. **A name can only be taken once.** After that it disappears from the list,
    and a second tap gets "somebody already took that name" — enforced by a
    conditional `UPDATE`, so two people racing the same name cannot both win.
 2. **Organizers are never listed, and never claimable through it.** The same
    `WHERE` clause that builds the list guards the claim, so a stale page cannot
-   be used to grab one. Organizers get a personal link.
-3. **It expires and can be replaced.** 30 days by default, and *Replace link*
-   kills the copy sitting in the chat. Once everybody has claimed a name the
-   link can claim nothing anyway.
+   be used to grab one.
+3. **Somebody who adds themselves is not in the group yet.** Until an organizer
+   approves them they cannot read the roster, see a fixture, register, or touch
+   a payment — `requireApproved()` refuses everything but `/auth/me`, so the
+   gate is the server's and not a screen the client politely shows. They do not
+   appear in the roster, the session lists or any count either.
+4. **It expires and can be replaced.** 30 days by default, and *Replace link*
+   kills the copy sitting in the chat.
+
+Turning somebody away **deletes** their row rather than deactivating it, unlike
+removing a member who has been playing. They created it themselves, nothing
+references it — a pending member cannot register or owe money — and the name
+has to go back on the list so its real owner can ask for it. Soft-deleting
+would hold the name hostage forever.
 
 This replaced a shared invite code plus a "pick who you are" screen. That was
 too weak in a way that only looks small until you think about money: anyone
@@ -456,7 +470,10 @@ on the roster, including an organizer's, and inherit the ability to settle
 bills, confirm payments and remove members. Two taps to full admin.
 
 It also replaced per-person links as the *only* way in, which was secure but
-made onboarding fifteen people fifteen separate messages.
+made onboarding fifteen people fifteen separate messages. And then the waiting
+room replaced typing the roster out first, which was the work that survived
+that change: one link is no use if the organizer still has to enumerate a
+thirty-person chat before sending it.
 
 Worth knowing:
 
@@ -673,7 +690,7 @@ ICT date arithmetic (including the UTC-vs-ICT boundary cases where a Thursday
 evening in UTC is already Friday in Ho Chi Minh City) and the money split
 (exact-sum invariants, overrides, rounding).
 
-The API integration suite is 123 checks against real local D1 and R2 — the invite
+The API integration suite is 147 checks against real local D1 and R2 — the invite
 gate, the waitlist and its auto-promotion, the split, the payment state machine,
 proof upload and access control, and the cron. It needs `wrangler dev` running
 and writes to the local database, so run it in a second terminal:

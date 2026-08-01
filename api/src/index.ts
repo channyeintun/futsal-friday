@@ -2,7 +2,12 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { runScheduledMaintenance } from './cron.js';
 import type { AppContext, Env } from './env.js';
-import { corsMiddleware, pubsubMiddleware, requireMember } from './middleware.js';
+import {
+  corsMiddleware,
+  pubsubMiddleware,
+  requireApproved,
+  requireMember,
+} from './middleware.js';
 import { authRoutes } from './routes/auth.js';
 import { claimRoutes, groupInviteRoutes, groupJoinRoutes } from './routes/claims.js';
 import { memberRoutes } from './routes/members.js';
@@ -20,6 +25,10 @@ import { venueRoutes } from './routes/venues.js';
  */
 const protectedRoutes = new Hono<AppContext>()
   .use('*', requireMember())
+  // A member who added themselves from the group link gets no further than
+  // `/auth/me` until an organizer approves them. That route is mounted
+  // outside this router precisely so they can be told they are waiting.
+  .use('*', requireApproved())
   .route('/members', memberRoutes)
   .route('/venues', venueRoutes)
   .route('/sessions', sessionRoutes)

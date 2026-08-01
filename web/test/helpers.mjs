@@ -70,8 +70,11 @@ export function localUnclaimedMember(name) {
   execFileSync(
     'npx',
     ['wrangler', 'd1', 'execute', 'futsal-friday', '--local', '--command',
-     `INSERT INTO members (id, name, is_organizer, active, created_at)
-        VALUES ('${id}', '${name.replace(/'/g, "''")}', 0, 1, '${new Date().toISOString()}');`],
+     // approved_at set: this stands in for a member the organizer typed in,
+     // not somebody who added themselves and is waiting to be let in.
+     `INSERT INTO members (id, name, is_organizer, active, created_at, approved_at)
+        VALUES ('${id}', '${name.replace(/'/g, "''")}', 0, 1,
+                '${new Date().toISOString()}', '${new Date().toISOString()}');`],
     { cwd: API_DIR, encoding: 'utf8', stdio: 'pipe' },
   );
   return id;
@@ -82,7 +85,25 @@ export function clearTestMembers() {
   execFileSync(
     'npx',
     ['wrangler', 'd1', 'execute', 'futsal-friday', '--local', '--command',
-     `DELETE FROM members WHERE id LIKE 'mem_test_%';`],
+     // Anything a suite invented. The suffix convention is what keeps this
+     // from touching a real roster if it is ever pointed at one.
+     `DELETE FROM members WHERE id LIKE 'mem_test_%' OR name LIKE '%-Test';`],
+    { cwd: API_DIR, encoding: 'utf8', stdio: 'pipe' },
+  );
+}
+
+/**
+ * Let everybody in the waiting room through, straight in the database.
+ *
+ * The browser suite has no organizer session to approve with — the point of
+ * that suite is the *other* side of the flow — so it approves the same way the
+ * endpoint does and checks that the pending client notices.
+ */
+export function approveEveryonePending() {
+  execFileSync(
+    'npx',
+    ['wrangler', 'd1', 'execute', 'futsal-friday', '--local', '--command',
+     `UPDATE members SET approved_at = '${new Date().toISOString()}' WHERE approved_at IS NULL;`],
     { cwd: API_DIR, encoding: 'utf8', stdio: 'pipe' },
   );
 }

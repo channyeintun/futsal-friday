@@ -6,6 +6,7 @@ import { createVenue, listVenues, retireVenue, updateVenue } from '../api/venues
 import { Avatar } from '../components/Avatar.js';
 import { Icon } from '../components/Icon.js';
 import { GroupInviteCard, MemberInviteControls, MyDeviceCard } from '../components/InviteLink.js';
+import { PendingApprovals } from '../components/PendingApprovals.js';
 import { ReminderSettings } from '../components/ReminderSettings.js';
 import { Button, Dialog, ErrorBanner, Spinner, Switch, TextField } from '../components/ui.js';
 import { useAsync } from '../hooks/useAsync.js';
@@ -43,6 +44,9 @@ export function AdminPage() {
 
   return (
     <>
+      {/* First on the screen when it has anything to show: somebody is stuck
+          on a waiting screen until this gets a tap. */}
+      <PendingApprovals onChanged={() => members.reload()} />
       <LanguageCard />
       <MyDeviceCard />
       <ReminderSettings />

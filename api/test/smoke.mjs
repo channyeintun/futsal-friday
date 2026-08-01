@@ -482,6 +482,94 @@ const run = async () => {
     JSON.stringify(reopened.body.members.map((x) => x.name)));
   void erin;
 
+  section('self-add and the waiting room');
+  const selfAdd = await call('POST', '/auth/group/self-add', {
+    body: { nonce: nonceOf(rotated.body.invite.url), name: `Walkin ${stamp}` },
+  });
+  check('anyone with the group link can put a name forward', selfAdd.status === 201,
+    JSON.stringify(selfAdd.body).slice(0, 150));
+  check('and is signed in straight away', typeof selfAdd.body?.token === 'string');
+  check('but NOT approved', selfAdd.body?.identity?.approved === false,
+    JSON.stringify(selfAdd.body?.identity));
+
+  const walkin = selfAdd.body.token;
+  const walkinId = selfAdd.body.identity.memberId;
+
+  // The gate is the server's, not the screen's.
+  check('a pending member can find out they are waiting',
+    (await call('GET', '/auth/me', { token: walkin })).status === 200);
+  const pendingReads = await call('GET', '/sessions', { token: walkin });
+  check('but cannot read the sessions', pendingReads.status === 403, pendingReads.status);
+  const pendingRoster = await call('GET', '/members', { token: walkin });
+  check('nor the roster', pendingRoster.status === 403, pendingRoster.status);
+  const pendingProfile = await call('GET', `/members/${walkinId}/profile`, { token: walkin });
+  check('nor anybody\'s profile', pendingProfile.status === 403, pendingProfile.status);
+
+  const upcomingId = (await call('GET', '/sessions', { token: organizer })).body?.upcoming?.session?.id;
+  const pendingJoin = await call('POST', `/sessions/${upcomingId}/register`, { token: walkin });
+  check('AND CANNOT REGISTER FOR A MATCH', pendingJoin.status === 403, pendingJoin.status);
+
+  // Nor do they show up anywhere as though they were in the group.
+  const rosterDuring = await call('GET', '/members', { token: organizer });
+  check('a pending member is not in the roster',
+    !rosterDuring.body.members.some((x) => x.id === walkinId),
+    rosterDuring.body.members.map((x) => x.name).join(','));
+
+  const queue = await call('GET', '/members/pending', { token: organizer });
+  check('but is in the organizer\'s queue', queue.body.members.some((x) => x.id === walkinId),
+    JSON.stringify(queue.body.members?.map((x) => x.name)));
+  const queueDenied = await call('GET', '/members/pending', { token: alice.token });
+  check('which members cannot read', queueDenied.status === 403, queueDenied.status);
+
+  const dupe = await call('POST', '/auth/group/self-add', {
+    body: { nonce: nonceOf(rotated.body.invite.url), name: `Walkin ${stamp}` },
+  });
+  check('the same name cannot be added twice', dupe.status === 409, dupe.body);
+  const noNonce = await call('POST', '/auth/group/self-add', {
+    body: { nonce: 'q'.repeat(43), name: `Nobody ${stamp}` },
+  });
+  check('and not at all without the group link', noNonce.status === 401, noNonce.status);
+
+  const notMine = await call('POST', `/members/${walkinId}/approve`, { token: alice.token });
+  check('members cannot approve anyone', notMine.status === 403, notMine.status);
+
+  const approved = await call('POST', `/members/${walkinId}/approve`, { token: organizer });
+  check('the organizer lets them in', approved.status === 200 &&
+    approved.body.member.approvedAt !== null, JSON.stringify(approved.body).slice(0, 120));
+  check('approving twice is not an error',
+    (await call('POST', `/members/${walkinId}/approve`, { token: organizer })).status === 200);
+
+  // The token they were given at self-add must start working, without a new
+  // one: approval is re-read per request, like membership and role.
+  const nowIn = await call('GET', '/sessions', { token: walkin });
+  check('THEIR EXISTING TOKEN NOW WORKS', nowIn.status === 200, nowIn.status);
+  check('and /auth/me says approved',
+    (await call('GET', '/auth/me', { token: walkin })).body?.identity?.approved === true);
+  const rosterAfter = await call('GET', '/members', { token: organizer });
+  check('they are in the roster now', rosterAfter.body.members.some((x) => x.id === walkinId));
+  check('and out of the queue',
+    !(await call('GET', '/members/pending', { token: organizer })).body.members
+      .some((x) => x.id === walkinId));
+
+  // Turning somebody away frees the name for the person it belongs to.
+  const turnAway = await call('POST', '/auth/group/self-add', {
+    body: { nonce: nonceOf(rotated.body.invite.url), name: `Reject ${stamp}` },
+  });
+  const rejectId = turnAway.body.identity.memberId;
+  const rejected = await call('DELETE', `/members/${rejectId}/approve`, { token: organizer });
+  check('the organizer can turn somebody away', rejected.status === 200, rejected.body);
+  const afterReject = await call('GET', '/auth/me', { token: turnAway.body.token });
+  check('their token stops working entirely', afterReject.status === 401, afterReject.status);
+  const nameFreed = await call('POST', '/auth/group/self-add', {
+    body: { nonce: nonceOf(rotated.body.invite.url), name: `Reject ${stamp}` },
+  });
+  check('and the name is free again', nameFreed.status === 201, nameFreed.status);
+  await call('DELETE', `/members/${nameFreed.body.identity.memberId}/approve`, { token: organizer });
+
+  const rejectApproved = await call('DELETE', `/members/${walkinId}/approve`, { token: organizer });
+  check('an approved member cannot be turned away this way', rejectApproved.status === 409,
+    rejectApproved.status);
+
   section('profiles, streaks and pictures');
   const aliceProfile = await call('GET', `/members/${alice.id}/profile`, { token: alice.token });
   check('a member can read their own profile', aliceProfile.status === 200, aliceProfile.body);

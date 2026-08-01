@@ -29,6 +29,16 @@ export const updateMember = (id: string, input: UpdateMemberInput) =>
 /** Deactivates rather than deletes — payment history has to survive. */
 export const removeMember = (id: string) => del<{ ok: true }>(`/members/${id}`);
 
+/** The waiting room: people who added themselves and need a decision. */
+export const pendingMembers = (signal?: AbortSignal) =>
+  get<{ members: Member[] }>('/members/pending', signal).then((r) => r.members);
+
+export const approveMember = (id: string) =>
+  post<{ member: Member }>(`/members/${id}/approve`, {}).then((r) => r.member);
+
+/** Turns them away and frees the name, unlike removing a settled member. */
+export const rejectMember = (id: string) => del<{ ok: true }>(`/members/${id}/approve`);
+
 export const memberProfile = (memberId: string, signal?: AbortSignal) =>
   get<{ profile: MemberProfile }>(`/members/${memberId}/profile`, signal).then((r) => r.profile);
 

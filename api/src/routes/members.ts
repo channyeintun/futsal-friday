@@ -23,10 +23,64 @@ const MAX_AVATAR_BYTES = 200_000;
 export const memberRoutes = new Hono<AppContext>()
 
   .get('/', async (c) => {
+    // Approved only. Somebody in the waiting room is not a member of the group
+    // yet, and leaking them here would put them in the roster, the session
+    // lists and every count in the app.
     const { results } = await c.env.DB.prepare(
-      `SELECT * FROM members WHERE active = 1 ORDER BY name COLLATE NOCASE ASC`,
+      `SELECT * FROM members
+        WHERE active = 1 AND approved_at IS NOT NULL
+        ORDER BY name COLLATE NOCASE ASC`,
     ).all<MemberRow>();
     return c.json({ members: results.map(toMember) });
+  })
+
+  /** The waiting room. Organizers only — it is a queue of decisions for them. */
+  .get('/pending', requireOrganizer(), async (c) => {
+    const { results } = await c.env.DB.prepare(
+      `SELECT * FROM members
+        WHERE active = 1 AND approved_at IS NULL
+        ORDER BY created_at ASC`,
+    ).all<MemberRow>();
+    return c.json({ members: results.map(toMember) });
+  })
+
+  /** Let somebody in. Idempotent: approving twice is not an error. */
+  .post('/:id/approve', requireOrganizer(), async (c) => {
+    const id = c.req.param('id');
+    const existing = await c.env.DB.prepare(`SELECT * FROM members WHERE id = ?1`)
+      .bind(id)
+      .first<MemberRow>();
+    if (!existing) throw notFound('No such member');
+
+    const approvedAt = existing.approved_at ?? nowIso();
+    await c.env.DB.prepare(`UPDATE members SET approved_at = ?2 WHERE id = ?1`)
+      .bind(id, approvedAt)
+      .run();
+
+    return c.json({ member: toMember({ ...existing, approved_at: approvedAt }) });
+  })
+
+  /**
+   * Turn somebody away.
+   *
+   * A hard delete, unlike removing a member who has been playing — this row
+   * was created by the person themselves, has no registrations or payments
+   * behind it (a pending member cannot make any), and the name needs to go
+   * back on the list so the real owner can ask for it. Soft-deleting would
+   * hold the name hostage forever.
+   */
+  .delete('/:id/approve', requireOrganizer(), async (c) => {
+    const id = c.req.param('id');
+    const gone = await c.env.DB.prepare(
+      `DELETE FROM members WHERE id = ?1 AND approved_at IS NULL`,
+    )
+      .bind(id)
+      .run();
+
+    if (gone.meta.changes === 0) {
+      throw conflict('That member is already in — remove them from the roster instead');
+    }
+    return c.json({ ok: true });
   })
 
   /** Organizer dashboard: who owes what, across every session. */
@@ -145,11 +199,15 @@ export const memberRoutes = new Hono<AppContext>()
     const id = newId('mem');
 
     try {
+      const timestamp = nowIso();
       await c.env.DB.prepare(
-        `INSERT INTO members (id, name, is_organizer, active, created_at)
-         VALUES (?1, ?2, ?3, 1, ?4)`,
+        // Approved on the spot: an organizer typing a name in *is* the
+        // approval. The waiting room is only for people who added themselves
+        // from the group link.
+        `INSERT INTO members (id, name, is_organizer, active, created_at, approved_at)
+         VALUES (?1, ?2, ?3, 1, ?4, ?4)`,
       )
-        .bind(id, input.name, input.isOrganizer ? 1 : 0, nowIso())
+        .bind(id, input.name, input.isOrganizer ? 1 : 0, timestamp)
         .run();
     } catch (error) {
       // Names have to be unambiguous — they are how the organizer picks who a

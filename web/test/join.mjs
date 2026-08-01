@@ -11,7 +11,12 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { clearTestMembers, localGroupJoinPath, localUnclaimedMember } from './helpers.mjs';
+import {
+  approveEveryonePending,
+  clearTestMembers,
+  localGroupJoinPath,
+  localUnclaimedMember,
+} from './helpers.mjs';
 
 const CHROME = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 // A port derived from the pid, so a suite left running by an interrupted run
@@ -203,6 +208,59 @@ async function run() {
   check('and the list refreshes without the taken name',
     !(await d.evalJs(nameOfButtons)).includes('Chi Join-Test'),
     JSON.stringify(await d.evalJs(nameOfButtons)));
+
+  console.log('\nadding yourself when your name is not listed');
+  const walkin = await newVisitor();
+  await walkin.send('Page.navigate', { url: `${APP_URL}${joinPath}` });
+  await walkin.waitFor('document.body.innerText.includes("Which one are you")', 'the picker loads');
+  await sleep(400);
+  check('the picker offers a way in for people not on the list',
+    await walkin.evalJs(`[...document.querySelectorAll('md-text-button')].some(b => b.textContent.includes("My name isn't here"))`));
+
+  await walkin.evalJs(`(() => {
+    [...document.querySelectorAll('md-text-button')].find(b => b.textContent.includes("My name isn't here")).click();
+  })()`);
+  await walkin.waitFor('document.body.innerText.includes("Add your name")', 'the name dialog opens');
+  await sleep(300);
+  await walkin.evalJs(`(() => {
+    const f = document.querySelector('md-dialog[open] md-outlined-text-field');
+    f.value = 'Walkin Join-Test';
+    f.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+  })()`);
+  await sleep(250);
+  await walkin.evalJs(`(() => {
+    [...document.querySelectorAll('md-dialog[open] md-filled-button')]
+      .find(b => b.textContent.includes('Add your name')).click();
+  })()`);
+
+  await walkin.waitFor('document.body.innerText.includes("Almost in")', 'they land in the waiting room');
+  await sleep(400);
+  await walkin.shoot('14-waiting');
+  check('the waiting screen names them',
+    await walkin.evalJs(`document.body.innerText.includes('Walkin Join-Test')`),
+    (await walkin.evalJs('document.body.innerText.slice(0, 160)')).replace(/\n/g, ' | '));
+  // The whole point of the waiting room: a forwarded link reveals nothing.
+  check('AND SHOWS NOTHING ABOUT THE GROUP',
+    !(await walkin.evalJs(`!!document.querySelector('.bottom-nav')`)) &&
+      !(await walkin.evalJs(`document.body.innerText.includes('Dave Join-Test')`)),
+    (await walkin.evalJs('document.body.innerText.slice(0, 200)')).replace(/\n/g, ' | '));
+
+  await walkin.evalJs(`(() => {
+    [...document.querySelectorAll('md-outlined-button')].find(b => b.textContent.includes('Check again')).click();
+  })()`);
+  await walkin.waitFor('document.body.innerText.includes("Not yet")', 'checking again says not yet');
+
+  approveEveryonePending();
+
+  await walkin.evalJs(`(() => {
+    [...document.querySelectorAll('md-outlined-button')].find(b => b.textContent.includes('Check again')).click();
+  })()`);
+  await walkin.waitFor('!!document.querySelector(".bottom-nav")', 'approval lets them into the app');
+  check('and the existing session becomes usable',
+    await walkin.evalJs(`document.body.innerText.includes('Playing')`),
+    (await walkin.evalJs('document.body.innerText.slice(0, 160)')).replace(/\n/g, ' | '));
+  await sleep(400);
+  await walkin.shoot('15-let-in');
 
   void bao;
   clearTestMembers();

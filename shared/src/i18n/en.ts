@@ -23,6 +23,27 @@ export const en = {
     remove: 'Remove',
   },
 
+  waiting: {
+    title: 'Almost in',
+    body: (name: string) =>
+      `You're on the list as ${name}. An organizer has to let you in — you'll get a nudge when they do.`,
+    check: 'Check again',
+    stillWaiting: 'Not yet. Give them a moment.',
+    wrongName: 'Wrong name? Ask the organizer to fix it.',
+  },
+
+  approvals: {
+    heading: (count: number) => (count === 1 ? '1 waiting to join' : `${count} waiting to join`),
+    body: 'They added themselves from the group link. Let them in, or turn them away.',
+    approve: 'Let in',
+    reject: 'Turn away',
+    approved: (name: string) => `${name} is in`,
+    rejected: (name: string) => `Turned ${name} away`,
+    confirmReject: (name: string) => `Turn ${name} away?`,
+    confirmRejectBody: 'Their name goes back on the list, so they — or somebody else — can ask again.',
+    couldNotApprove: 'Could not let them in',
+  },
+
   profile: {
     title: 'Profile',
     currentStreak: 'Streak',
@@ -63,9 +84,17 @@ export const en = {
     tapYourName: 'Tap your name. It locks to this phone, so nobody else can pick it.',
     loading: 'Loading the list…',
     allTaken: 'Everyone on the list has already joined. Ask the organizer to add you.',
+    nobodyListed: 'Nobody has been added to this group yet. Put your name in below.',
     expired: 'That group link is not valid any more. Ask the organizer for the new one.',
     taken: 'Somebody already took that name. Pick another, or ask the organizer.',
     failed: 'Could not sign you in',
+    notListed: "My name isn't here",
+    addYourName: 'Add your name',
+    addYourNameBody:
+      'The organizer will get a nudge and has to let you in. Use the name they know you by.',
+    yourName: 'Your name',
+    requestSent: 'Sent. Waiting for the organizer.',
+    couldNotAdd: 'Could not add your name',
   },
 
   invite: {
@@ -390,6 +419,8 @@ export const en = {
     unpaidBody: (amount: string, when: string) => `${amount} for ${when}.`,
     testTitle: 'Futsal Friday',
     testBody: (name: string) => `Reminders are working, ${name}.`,
+    joinRequestTitle: 'Someone wants to join',
+    joinRequestBody: (name: string) => `${name} is waiting to be let in.`,
   },
 
   errors: {

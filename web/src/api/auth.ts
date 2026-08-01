@@ -65,3 +65,15 @@ export async function logout(): Promise<void> {
     clearToken();
   }
 }
+
+/**
+ * "My name isn't here" — creates the member and signs them in, but pending.
+ * The organizer has to let them in before anything else works.
+ */
+export const groupSelfAdd = (nonce: string, name: string) =>
+  post<{ token: string; identity: Identity }>('/auth/group/self-add', { nonce, name }).then(
+    (result) => {
+      setToken(result.token);
+      return result.identity;
+    },
+  );

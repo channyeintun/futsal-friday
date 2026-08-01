@@ -42,6 +42,7 @@ export interface MemberRow {
   token_version: number;
   avatar_key: string | null;
   avatar_updated_at: string | null;
+  approved_at: string | null;
 }
 
 export interface VenueRow {
@@ -124,6 +125,7 @@ export const toMember = (row: MemberRow): Member => ({
   // Likewise the R2 key: the client gets a timestamp to cache against and
   // reads the picture through an authorized route.
   avatarUpdatedAt: row.avatar_updated_at ?? null,
+  approvedAt: row.approved_at ?? null,
 });
 
 export const toVenue = (row: VenueRow): Venue => ({

@@ -251,59 +251,107 @@ async function deliver(
     const claimed = await claim(env, recipient.memberId, kind, dedupeKey);
     if (!claimed) continue;
 
-    const { results: subscriptions } = await env.DB.prepare(
-      `SELECT id, endpoint, p256dh, auth FROM push_subscriptions
-        WHERE member_id = ?1 AND failure_count < 5`,
-    )
-      .bind(recipient.memberId)
-      .all<{ id: string; endpoint: string; p256dh: string; auth: string }>();
-
-    if (subscriptions.length === 0) continue;
-
-    const targets: PushTarget[] = subscriptions.map((row) => ({
-      subscriptionId: row.id,
-      endpoint: row.endpoint,
-      keys: { p256dh: row.p256dh, auth: row.auth },
-    }));
-
-    const text = message(recipient.locale);
-    const outcomes = await Promise.all(targets.map((target) => sender.send(target, text)));
-
-    const gone = outcomes.filter((o) => o.status === 'gone');
-    const failed = outcomes.filter((o) => o.status === 'failed');
-    const ok = outcomes.filter((o) => o.status === 'sent');
-    if (ok.length > 0) sent++;
-
-    const statements: D1PreparedStatement[] = [];
-
-    for (const outcome of gone) {
-      removed.add(outcome.subscriptionId);
-      statements.push(
-        env.DB.prepare(`DELETE FROM push_subscriptions WHERE id = ?1`).bind(
-          outcome.subscriptionId,
-        ),
-      );
+    if (await pushToMember(env, sender, recipient.memberId, message(recipient.locale), removed)) {
+      sent++;
     }
-    for (const outcome of failed) {
-      console.error(`push failed for ${outcome.subscriptionId}: ${outcome.reason}`);
-      statements.push(
-        env.DB.prepare(
-          `UPDATE push_subscriptions SET failure_count = failure_count + 1 WHERE id = ?1`,
-        ).bind(outcome.subscriptionId),
-      );
-    }
-    for (const outcome of ok) {
-      statements.push(
-        env.DB.prepare(
-          `UPDATE push_subscriptions SET failure_count = 0, last_success_at = ?2 WHERE id = ?1`,
-        ).bind(outcome.subscriptionId, nowIso()),
-      );
-    }
-
-    if (statements.length > 0) await env.DB.batch(statements);
   }
 
   return sent;
+}
+
+/**
+ * Push to every live subscription one member has, and keep the table honest:
+ * a `410 Gone` endpoint is deleted, a failure is counted towards the cut-off,
+ * a success clears the count.
+ *
+ * Separate from {@link deliver} because not everything that notifies somebody
+ * is a scheduled reminder — a join request happens once, in a request handler,
+ * with nothing to deduplicate against.
+ */
+async function pushToMember(
+  env: Env,
+  sender: ReturnType<typeof createPushSender>,
+  memberId: string,
+  text: PushMessage,
+  removed: Set<string>,
+): Promise<boolean> {
+  const { results: subscriptions } = await env.DB.prepare(
+    `SELECT id, endpoint, p256dh, auth FROM push_subscriptions
+      WHERE member_id = ?1 AND failure_count < 5`,
+  )
+    .bind(memberId)
+    .all<{ id: string; endpoint: string; p256dh: string; auth: string }>();
+
+  if (subscriptions.length === 0) return false;
+
+  const targets: PushTarget[] = subscriptions.map((row) => ({
+    subscriptionId: row.id,
+    endpoint: row.endpoint,
+    keys: { p256dh: row.p256dh, auth: row.auth },
+  }));
+
+  const outcomes = await Promise.all(targets.map((target) => sender.send(target, text)));
+
+  const gone = outcomes.filter((o) => o.status === 'gone');
+  const failed = outcomes.filter((o) => o.status === 'failed');
+  const ok = outcomes.filter((o) => o.status === 'sent');
+
+  const statements: D1PreparedStatement[] = [];
+
+  for (const outcome of gone) {
+    removed.add(outcome.subscriptionId);
+    statements.push(
+      env.DB.prepare(`DELETE FROM push_subscriptions WHERE id = ?1`).bind(outcome.subscriptionId),
+    );
+  }
+  for (const outcome of failed) {
+    console.error(`push failed for ${outcome.subscriptionId}: ${outcome.reason}`);
+    statements.push(
+      env.DB.prepare(
+        `UPDATE push_subscriptions SET failure_count = failure_count + 1 WHERE id = ?1`,
+      ).bind(outcome.subscriptionId),
+    );
+  }
+  for (const outcome of ok) {
+    statements.push(
+      env.DB.prepare(
+        `UPDATE push_subscriptions SET failure_count = 0, last_success_at = ?2 WHERE id = ?1`,
+      ).bind(outcome.subscriptionId, nowIso()),
+    );
+  }
+
+  if (statements.length > 0) await env.DB.batch(statements);
+
+  return ok.length > 0;
+}
+
+/**
+ * Tell the organizers that somebody is in the waiting room.
+ *
+ * Not deduplicated and not scheduled: each request is its own event, and there
+ * is no cron re-run to guard against. Written in each organizer's own
+ * language, like every other notification this app sends.
+ */
+export async function notifyOrganizersOfRequest(env: Env, name: string): Promise<void> {
+  const { results } = await env.DB.prepare(
+    `SELECT id AS member_id, language FROM members
+      WHERE is_organizer = 1 AND active = 1 AND approved_at IS NOT NULL`,
+  ).all<{ member_id: string; language: string | null }>();
+  if (results.length === 0) return;
+
+  const sender = createPushSender(env);
+  const removed = new Set<string>();
+
+  for (const row of results) {
+    const m = messagesFor(normalizeLocale(row.language));
+    await pushToMember(
+      env,
+      sender,
+      row.member_id,
+      { title: m.push.joinRequestTitle, body: m.push.joinRequestBody(name), url: '/admin' },
+      removed,
+    );
+  }
 }
 
 /** Returns false when this notification has already been sent to this member. */

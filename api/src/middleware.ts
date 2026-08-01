@@ -69,7 +69,28 @@ export function requireMember(): MiddlewareHandler<AppContext> {
       name: member.name,
       isOrganizer: member.isOrganizer,
       language: member.language,
+      approved: member.approvedAt !== null,
     });
+    await next();
+  };
+}
+
+/**
+ * Everything except finding out that you are still waiting.
+ *
+ * Somebody who added themselves from the group link holds a real token — they
+ * have to, or they could not be told anything — so the waiting room is a
+ * server-side gate, not a screen the client politely shows. Re-read on every
+ * request like membership and role, so approving somebody takes effect at once
+ * and so does changing your mind before they have done anything.
+ *
+ * Must run after {@link requireMember}.
+ */
+export function requireApproved(): MiddlewareHandler<AppContext> {
+  return async (c, next) => {
+    if (!c.get('identity')?.approved) {
+      throw forbidden('The organizer has not let you in yet.');
+    }
     await next();
   };
 }

@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { localClaimPath, localOrganizerId } from './helpers.mjs';
+import { clearTestMembers, localClaimPath, localOrganizerId } from './helpers.mjs';
 
 const CHROME = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 // Derived from the pid, never fixed. A run that dies without cleaning up (a
@@ -229,6 +229,62 @@ async function run() {
   check('admin lists venues', await evalJs('document.body.innerText.includes("Venues")'));
   check('admin offers extra session', await evalJs('document.body.innerText.includes("Extra session")'));
 
+  console.log('\nthe approval queue');
+  // A previous run left this person approved and on the roster, which would
+  // make the self-add below a 409 and leave the queue empty — the section
+  // would then pass by testing nothing.
+  clearTestMembers();
+  // Somebody self-adds through the real endpoint, then the organizer's Setup
+  // screen must surface them and be able to let them in.
+  const requested = await evalJs(`(async () => {
+    const nonce = document.body.innerText.match(/\\/join#([A-Za-z0-9_-]+)/)?.[1];
+    if (!nonce) return 'no-link';
+    const res = await fetch('/api/auth/group/self-add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nonce, name: 'Walkin UI-Test' }),
+    });
+    return res.status;
+  })()`);
+  if (requested === 'no-link') {
+    await clickByText('Create group link');
+    await waitFor('/\\/join#/.test(document.body.innerText)', 'group link exists for the self-add');
+  }
+  check('somebody can add themselves from the link', requested === 201, requested);
+
+  await send('Page.reload');
+  await waitFor('document.body.innerText.includes("waiting to join")', 'the queue appears in Setup');
+  await sleep(500);
+  check('it names who is waiting',
+    await evalJs(`document.body.innerText.includes('Walkin UI-Test')`),
+    await evalJs(`document.querySelector('.pending-card')?.innerText?.slice(0, 160)`));
+  check('and offers both decisions',
+    await evalJs(`(() => {
+      const t = document.querySelector('.pending-card')?.innerText ?? '';
+      return t.includes('Let in') && t.includes('Turn away');
+    })()`));
+  await evalJs(`document.querySelector('.pending-card').scrollIntoView({ block: 'center' })`);
+  await sleep(300);
+  await shoot('16-approvals');
+
+  // A pending member must not be in the roster while they wait.
+  check('they are not in the roster yet',
+    await evalJs(`(() => {
+      const rows = [...document.querySelectorAll('.member-row')]
+        .filter((r) => !r.closest('.pending-card'));
+      return !rows.some((r) => r.textContent.includes('Walkin UI-Test'));
+    })()`));
+
+  await evalJs(`(() => {
+    [...document.querySelectorAll('.pending-card md-filled-button')]
+      .find((b) => b.textContent.includes('Let in')).click();
+  })()`);
+  await waitFor('!document.querySelector(".pending-card")', 'the queue empties once approved');
+  await sleep(600);
+  check('and they land in the roster',
+    await evalJs(`document.body.innerText.includes('Walkin UI-Test')`),
+    await evalJs(`document.body.innerText.slice(0, 300)`));
+
   console.log('\nthe group invite card');
   check('the group link card is on the setup screen',
     await evalJs('document.body.innerText.includes("Group invite link")'));
@@ -354,13 +410,23 @@ async function run() {
     if (b) { b.click(); return true; }
     return false;
   })()`;
+  // Whatever the dev database's upcoming session happens to be — it is not
+  // always the seeded Friday — the announcement has to carry *its* kickoff.
+  // Pinning a literal time here was really asserting the fixtures.
+  const kickoffOnScreen = await evalJs(
+    `document.querySelector('.hero')?.innerText.match(/\\d{1,2}:\\d{2}/)?.[0] ?? ''`,
+  );
+  check('the session screen shows a kickoff to compare against', kickoffOnScreen !== '',
+    await evalJs(`document.querySelector('.hero')?.innerText`));
+
   check('the session screen offers an announcement', await evalJs(openAnnounce));
   await waitFor('document.body.innerText.includes("Hype the group")', 'the announcement dialog opens');
   await sleep(400);
 
   const announced = () => evalJs(`document.querySelector('md-dialog[open] .summary-preview')?.textContent ?? ''`);
   const first = await announced();
-  check('it carries the real kickoff time', first.includes('19:30'), first.slice(0, 200));
+  check('it carries the real kickoff time', first.includes(kickoffOnScreen),
+    `${kickoffOnScreen} not in: ${first.slice(0, 120)}`);
   check('it carries the venue', /Pitch/.test(first), first.slice(0, 200));
   check('and a link back to the app', first.includes('http'), first.slice(0, 200));
   await shoot('10-announce');

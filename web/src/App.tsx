@@ -13,6 +13,7 @@ import { HomePage } from './pages/HomePage.js';
 import { PaymentsPage } from './pages/PaymentsPage.js';
 import { ProfilePage } from './pages/ProfilePage.js';
 import { SessionPage } from './pages/SessionPage.js';
+import { WaitingPage } from './pages/WaitingPage.js';
 import { platform } from './platform/index.js';
 import { type Route, navigate, parseRoute, replace, useRoute } from './router.js';
 import { AppProvider, useApp } from './state/app.js';
@@ -82,6 +83,18 @@ export function App() {
         ) : (
           <SignInNeeded />
         )}
+      </LocaleProvider>
+    );
+  }
+
+  // Added themselves from the group link and not let in yet. The server
+  // refuses everything but `/auth/me`, so there is no app to show them —
+  // and nothing about the group should be shown to somebody who might have
+  // been forwarded the link from outside it.
+  if (!identity.approved) {
+    return (
+      <LocaleProvider serverLocale={identity.language}>
+        <WaitingPage identity={identity} onApproved={setIdentity} />
       </LocaleProvider>
     );
   }

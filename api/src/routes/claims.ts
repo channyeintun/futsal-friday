@@ -1,9 +1,9 @@
 import type { ClaimLink, GroupInvite, JoinableMember } from '@futsal/shared';
-import { groupClaimSchema, groupJoinSchema } from '@futsal/shared';
+import { groupClaimSchema, groupJoinSchema, groupSelfAddSchema } from '@futsal/shared';
 import { Hono } from 'hono';
 import { type MemberRow, toMember } from '../db.js';
 import type { AppContext } from '../env.js';
-import { conflict, notFound, nowIso, parseBody, unauthorized } from '../http.js';
+import { conflict, newId, notFound, nowIso, parseBody, unauthorized } from '../http.js';
 import {
   CLAIM_TTL_MS,
   GROUP_INVITE_TTL_MS,
@@ -11,6 +11,8 @@ import {
   tokenIdentityProvider,
 } from '../identity/index.js';
 import { requireOrganizer } from '../middleware.js';
+import { notifyOrganizersOfRequest } from '../notifications.js';
+import { isUniqueViolation } from './members.js';
 
 /**
  * Issuing and revoking claim links.
@@ -185,12 +187,77 @@ export const groupJoinRoutes = new Hono<AppContext>()
       name: member.name,
       isOrganizer: member.isOrganizer,
       language: member.language,
+      approved: member.approvedAt !== null,
     };
 
     const credential = await tokenIdentityProvider.issue(identity, row.token_version, c.env);
     if (credential.setCookie) c.header('Set-Cookie', credential.setCookie);
 
     return c.json({ token: credential.token, identity });
+  })
+
+  /**
+   * "My name isn't here."
+   *
+   * The roster used to have to be typed out in full before the link was worth
+   * sending, which is the work the one-link design was supposed to remove. So
+   * somebody holding the link can put their own name forward instead — and
+   * lands in the waiting room rather than in the group, because a link pasted
+   * into a chat can be forwarded out of it.
+   */
+  .post('/auth/group/self-add', async (c) => {
+    const { nonce, name } = await parseBody(c.req.raw, groupSelfAddSchema);
+    await requireValidGroupNonce(c.env.DB, nonce);
+
+    const timestamp = nowIso();
+    const id = newId('mem');
+
+    try {
+      await c.env.DB.prepare(
+        // `approved_at` stays NULL: they are asking, not joining. Claimed
+        // immediately, though — the name belongs to this device from the
+        // moment it is requested, so nobody can take it while they wait.
+        `INSERT INTO members (id, name, is_organizer, active, created_at, claimed_at, approved_at)
+         VALUES (?1, ?2, 0, 1, ?3, ?3, NULL)`,
+      )
+        .bind(id, name, timestamp)
+        .run();
+    } catch (error) {
+      // The name may be one the organizer already typed in, in which case the
+      // list is where they should have tapped.
+      if (isUniqueViolation(error)) {
+        throw conflict(`${name} is already on the list — tap that name instead.`);
+      }
+      throw error;
+    }
+
+    const row = await c.env.DB.prepare(`SELECT * FROM members WHERE id = ?1`)
+      .bind(id)
+      .first<MemberRow>();
+    if (!row) throw conflict('Could not add you — try again');
+
+    const member = toMember(row);
+    const identity = {
+      memberId: member.id,
+      name: member.name,
+      isOrganizer: false,
+      language: member.language,
+      approved: false,
+    };
+
+    const credential = await tokenIdentityProvider.issue(identity, row.token_version, c.env);
+    if (credential.setCookie) c.header('Set-Cookie', credential.setCookie);
+
+    // Somebody waiting on a screen that says "ask the organizer" is only a
+    // feature if the organizer finds out. Never fatal: they are in the roster
+    // either way, and failing the request would strand them for no reason.
+    c.executionCtx.waitUntil(
+      notifyOrganizersOfRequest(c.env, member.name).catch((error: unknown) => {
+        console.error('Could not tell the organizers about a join request', error);
+      }),
+    );
+
+    return c.json({ token: credential.token, identity }, 201);
   });
 
 /**
