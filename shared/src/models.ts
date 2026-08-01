@@ -277,6 +277,33 @@ export const claimSchema = z.object({
 });
 export type ClaimInput = z.infer<typeof claimSchema>;
 
+/** A name offered on the group join screen. Nothing else about them leaks. */
+export const joinableMemberSchema = z.object({
+  id: idSchema,
+  name: z.string(),
+});
+export type JoinableMember = z.infer<typeof joinableMemberSchema>;
+
+export const groupJoinSchema = z.object({
+  nonce: z.string().min(20).max(100),
+});
+export type GroupJoinInput = z.infer<typeof groupJoinSchema>;
+
+export const groupClaimSchema = z.object({
+  nonce: z.string().min(20).max(100),
+  memberId: idSchema,
+});
+export type GroupClaimInput = z.infer<typeof groupClaimSchema>;
+
+/** The one link the organizer pastes into the group chat. */
+export const groupInviteSchema = z.object({
+  url: z.string(),
+  expiresAt: isoSchema,
+  /** How many people still have a name to claim through it. */
+  unclaimed: z.number().int(),
+});
+export type GroupInvite = z.infer<typeof groupInviteSchema>;
+
 export const claimLinkSchema = z.object({
   /** Full URL to send to the person. Contains the only copy of the nonce. */
   url: z.string(),

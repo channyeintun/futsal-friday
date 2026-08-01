@@ -19,7 +19,7 @@ const res=[]; const check=(l,ok,d)=>{res.push(ok);console.log(`  ${ok?'ok  ':'FA
 const profile=mkdtempSync(join(tmpdir(),'ff-my-'));
 // Unique port + unconditional cleanup: a leftover browser from an aborted run
 // would otherwise serve an already-signed-in profile and fail confusingly.
-const PORT = 9390 + (process.pid % 200);
+const PORT = 9500 + (process.pid % 30);
 const chrome=spawn(CHROME,['--headless=new',`--remote-debugging-port=${PORT}`,`--user-data-dir=${profile}`,'--no-first-run','--disable-gpu','--hide-scrollbars','--lang=my-MM','about:blank'],{stdio:'ignore'});
 const killChrome = () => { try { chrome.kill(); } catch {} };
 for (const sig of ['exit', 'SIGINT', 'SIGTERM']) process.on(sig, killChrome);

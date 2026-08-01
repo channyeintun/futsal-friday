@@ -22,7 +22,8 @@ Available in English and Burmese (မြန်မာ).
 | Cron | `0 * * * *` — hourly |
 | Push | VAPID configured; reminders live |
 
-Getting in is by personal invite link — see [Who can get in](#who-can-get-in).
+Getting in is by invite link — one for the whole group, or one per person.
+See [Who can get in](#who-can-get-in).
 
 ---
 
@@ -362,12 +363,27 @@ curl "http://localhost:8787/cdn-cgi/local/scheduled"
 
 ### Who can get in
 
-The only way in is a **single-use link**, sent to one person.
+There is no password and no shared code. Two ways in, both links:
 
-The organizer opens **Setup**, taps *Copy link* next to a name, and sends it to
-that person directly. Opening it signs them in as that member and spends the
-link; forwarding it afterwards does nothing. Nobody has a password, and the app
-never shows a list of who is in the group to anyone who is not already in it.
+**The group link** is the normal one. The organizer opens **Setup → Group invite
+link**, copies it once, and pastes it into the group chat. Each person taps it,
+sees a list of names, and taps their own. That name then locks to their phone.
+
+**A personal link** covers the rest: organizers, a second device, or re-inviting
+somebody after their access was removed. Setup mints one next to any name.
+
+Three limits are what make a link that lives in a group chat safe to leave
+there:
+
+1. **A name can only be taken once.** After that it disappears from the list,
+   and a second tap gets "somebody already took that name" — enforced by a
+   conditional `UPDATE`, so two people racing the same name cannot both win.
+2. **Organizers are never listed, and never claimable through it.** The same
+   `WHERE` clause that builds the list guards the claim, so a stale page cannot
+   be used to grab one. Organizers get a personal link.
+3. **It expires and can be replaced.** 30 days by default, and *Replace link*
+   kills the copy sitting in the chat. Once everybody has claimed a name the
+   link can claim nothing anyway.
 
 This replaced a shared invite code plus a "pick who you are" screen. That was
 too weak in a way that only looks small until you think about money: anyone
@@ -375,17 +391,24 @@ holding the code — which lives in a group chat forever — could pick *any* na
 on the roster, including an organizer's, and inherit the ability to settle
 bills, confirm payments and remove members. Two taps to full admin.
 
+It also replaced per-person links as the *only* way in, which was secure but
+made onboarding fifteen people fifteen separate messages.
+
 Worth knowing:
 
-- **A link is a bearer credential.** Whoever opens it first becomes that person,
-  so send it one-to-one, not to the group. It expires after 7 days, and issuing
-  a new one for the same member invalidates the old one.
-- **The secret travels in the URL fragment** (`/claim#…`), which browsers never
-  send to the server — so it stays out of access logs, proxy logs and `Referer`
-  headers. The page reads it, posts it once, and strips it from the address bar.
-- **It is a random 256-bit value looked up in the database**, not a signed
-  token. That makes single-use a delete rather than a revocation list, and lets
+- **A personal link is a bearer credential.** Whoever opens it first becomes
+  that person, so send it one-to-one. It expires after 7 days, and issuing a
+  new one for the same member invalidates the old one.
+- **The secret travels in the URL fragment** (`/join#…`, `/claim#…`), which
+  browsers never send to the server — so it stays out of access logs, proxy
+  logs and `Referer` headers. A personal link is stripped from the address bar
+  the moment it is spent; the group link is stripped once a name is taken, but
+  not before, because it is meant to survive a reload.
+- **They are random 256-bit values looked up in the database**, not signed
+  tokens. That makes single-use a delete rather than a revocation list, and lets
   the bootstrap path mint one with a single SQL statement and no secrets.
+- **Tapped the wrong name?** The organizer clears it from the roster (the `×`
+  next to a joined member), and it goes back on the list for them to try again.
 - **Lost phone?** *Sign out their devices* on the roster bumps that member's
   `token_version`, which invalidates every session token they hold — session
   tokens are stateless and otherwise last 90 days. Then send a new link.
@@ -586,7 +609,7 @@ ICT date arithmetic (including the UTC-vs-ICT boundary cases where a Thursday
 evening in UTC is already Friday in Ho Chi Minh City) and the money split
 (exact-sum invariants, overrides, rounding).
 
-The API integration suite is 62 checks against real local D1 and R2 — the invite
+The API integration suite is 98 checks against real local D1 and R2 — the invite
 gate, the waitlist and its auto-promotion, the split, the payment state machine,
 proof upload and access control, and the cron. It needs `wrangler dev` running
 and writes to the local database, so run it in a second terminal:
@@ -636,15 +659,25 @@ Puppeteer. They put screenshots in `/tmp/ff-shots`.
 npm run test:ui -w @futsal/web
 ```
 
+Sign-in, the session screen, registering and un-registering, navigation, the
+organizer's group-link card, and dark mode.
+
 ```bash
 npm run test:payments -w @futsal/web
 ```
 
-Both need `npm run dev` running.
+Splitting a bill, overrides, a screenshot upload, and confirm/reject.
 
 ```bash
-npm run test:pwa -w @futsal/web
+npm run test:join -w @futsal/web
 ```
+
+The group link, from the point of view of somebody who has never opened the
+app. Each visitor gets its own browser context rather than another tab, because
+tabs share `localStorage` and would all be signed in as the first one. It
+checks that organizers are never offered, that a taken name disappears, that a
+dead link says so, and that when two people race for the same name the loser is
+told rather than quietly signed in as somebody else.
 
 ```bash
 npm run test:burmese -w @futsal/web
@@ -654,7 +687,14 @@ Runs the app in a browser reporting a Burmese device language and checks what a
 catalogue test cannot: that auto-detection picks Burmese, that Myanmar script
 renders without clipping its stacked diacritics, that a script with no
 inter-word spaces does not overflow any container, and that switching language
-persists. Point it at a deployment with `APP_URL` and `INVITE_CODE`.
+persists.
+
+Those four need `npm run dev` running. Point any of them at a deployment with
+`APP_URL`.
+
+```bash
+npm run test:pwa -w @futsal/web
+```
 
 Checks the manifest, service worker registration, shell caching, that the app
 still renders with the network cut, and that the worker can raise a
@@ -696,7 +736,7 @@ propagates in about 250 ms.
 
 ## Known limitations
 
-- **A claim link is a bearer credential.** Anyone who sees it before its
+- **A personal claim link is a bearer credential.** Anyone who sees it before its
   intended recipient can use it. Send links one-to-one, never to the group.
 - **The realtime keepalive is the library's, not ours.** If Upstash usage ever
   becomes a problem, the client's idle timeout is the first knob and the

@@ -1,7 +1,13 @@
-import type { ClaimLink, Member } from '@futsal/shared';
+import type { ClaimLink, GroupInvite, Member } from '@futsal/shared';
 import { formatKickoff } from '@futsal/shared';
-import { useState } from 'react';
-import { memberClaimLink, myDeviceLink, revokeMemberClaim } from '../api/auth.js';
+import { useEffect, useState } from 'react';
+import {
+  currentGroupInvite,
+  memberClaimLink,
+  myDeviceLink,
+  revokeMemberClaim,
+  rotateGroupInvite,
+} from '../api/auth.js';
 import { platform } from '../platform/index.js';
 import { useApp } from '../state/app.js';
 import { useLocale } from '../state/locale.js';
@@ -181,6 +187,87 @@ export function MyDeviceCard() {
         {m.invite.myDevice}
       </Button>
       <InviteLinkDialog link={link} onClose={() => setLink(null)} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- group link */
+
+/**
+ * The one link the organizer shares with the whole group.
+ *
+ * Per-person links still exist for the cases that need them — organizers, a
+ * second device, re-inviting somebody after a revocation — but the bulk case
+ * is one message, not fifteen.
+ */
+export function GroupInviteCard() {
+  const { toast } = useApp();
+  const { m, locale } = useLocale();
+  const [invite, setInvite] = useState<GroupInvite | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    currentGroupInvite()
+      .then(setInvite)
+      .catch(() => setInvite(null))
+      .finally(() => setLoaded(true));
+  }, []);
+
+  const rotate = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      setInvite(await rotateGroupInvite());
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : m.invite.couldNotRotate);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = async () => {
+    if (!invite) return;
+    const ok = await platform.clipboard.write(invite.url);
+    if (ok) toast(m.invite.groupLinkCopied);
+    else setError(m.copy.fallbackBody);
+  };
+
+  if (!loaded) return null;
+
+  return (
+    <div className="card">
+      <h2 className="card-title">{m.invite.groupLink}</h2>
+      <p className="card-sub">{m.invite.groupLinkBody}</p>
+
+      {error ? <ErrorBanner>{error}</ErrorBanner> : null}
+
+      {invite ? (
+        <>
+          {/* Shown in full so it can be copied by hand where the clipboard
+              API is blocked, which chat webviews often do. */}
+          <pre className="summary-preview">{invite.url}</pre>
+          <p className="muted" style={{ margin: 0 }}>
+            {invite.unclaimed > 0
+              ? m.invite.waitingToJoin(invite.unclaimed)
+              : m.invite.everyoneJoined}
+            {' · '}
+            {m.invite.expires(formatKickoff(invite.expiresAt, locale))}
+          </p>
+          <Button onClick={copy}>{m.invite.copyGroupLink}</Button>
+          <Button variant="text" onClick={rotate} disabled={busy}>
+            {m.invite.rotateGroupLink}
+          </Button>
+          <p className="muted" style={{ margin: 0 }}>
+            {m.invite.rotateWarning}
+          </p>
+        </>
+      ) : (
+        <Button variant="outlined" onClick={rotate} disabled={busy}>
+          {m.invite.createGroupLink}
+        </Button>
+      )}
     </div>
   );
 }

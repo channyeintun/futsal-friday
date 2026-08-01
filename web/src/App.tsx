@@ -6,6 +6,7 @@ import { Icon, type IconName } from './components/Icon.js';
 import { Spinner } from './components/ui.js';
 import { AdminPage } from './pages/AdminPage.js';
 import { ClaimPage, SignInNeeded } from './pages/ClaimPage.js';
+import { JoinPage } from './pages/JoinPage.js';
 import { HistoryPage } from './pages/HistoryPage.js';
 import { HomePage } from './pages/HomePage.js';
 import { PaymentsPage } from './pages/PaymentsPage.js';
@@ -53,11 +54,18 @@ export function App() {
   }
 
   if (!identity) {
-    // /claim redeems a link; everywhere else just explains that you need one.
-    const onClaimRoute = parseRoute(platform.navigation.path()).name === 'claim';
+    // Two ways in: /join is the one link the whole group gets, /claim is a
+    // personal link. Anywhere else just explains that you need one.
+    const route = parseRoute(platform.navigation.path()).name;
     return (
       <LocaleProvider>
-        {onClaimRoute ? <ClaimPage onSignedIn={setIdentity} /> : <SignInNeeded />}
+        {route === 'join' ? (
+          <JoinPage onSignedIn={setIdentity} />
+        ) : route === 'claim' ? (
+          <ClaimPage onSignedIn={setIdentity} />
+        ) : (
+          <SignInNeeded />
+        )}
       </LocaleProvider>
     );
   }
@@ -144,6 +152,7 @@ function Page({ route }: { route: Route }) {
     // Reached only when an already-signed-in device opens a link; the shell is
     // already up, so just show them the app.
     case 'claim':
+    case 'join':
       return <HomePage />;
     case 'session':
       return <SessionPage sessionId={route.id} />;
@@ -160,6 +169,7 @@ function titleFor(route: Route, m: ReturnType<typeof useMessages>): string {
   switch (route.name) {
     case 'home':
     case 'claim':
+    case 'join':
       return m.app.name;
     case 'session':
       return m.nav.sessionTitle;

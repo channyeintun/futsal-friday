@@ -44,6 +44,14 @@ const SSE_TICKET_TTL_SECONDS = 120;
 export const CLAIM_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
+ * The group link lives in a chat thread, so it needs to still work for the
+ * friend who reads the message a fortnight late. Longer is tolerable because
+ * of what it can do rather than how long it lasts: once everybody has claimed
+ * a name it can claim nothing, and the organizer can rotate it at any time.
+ */
+export const GROUP_INVITE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
  * Web provider: a signed bearer token, mirrored into an HttpOnly cookie.
  *
  * The bearer token is the primary credential because it survives the shape this

@@ -9,7 +9,11 @@ import { join } from 'node:path';
 import { localClaimPath, localOrganizerId } from './helpers.mjs';
 
 const CHROME = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const PORT = 9333;
+// Derived from the pid, never fixed. A run that dies without cleaning up (a
+// crash, a `head`-truncated pipe) leaves headless Chrome holding the port, and
+// a later run's `/json/new` would then open tabs in that *already signed-in*
+// profile — which silently invalidates everything the suite thinks it proves.
+const PORT = 9300 + (process.pid % 30);
 const OUT_DIR = process.env.SHOTS_DIR ?? '/tmp/ff-shots';
 // Point at a deployment with APP_URL / INVITE_CODE; defaults to local dev.
 const APP_URL = (process.env.APP_URL ?? 'http://localhost:5173').replace(/\/$/, '');
@@ -222,6 +226,31 @@ async function run() {
   await shoot('07-admin');
   check('admin lists venues', await evalJs('document.body.innerText.includes("Venues")'));
   check('admin offers extra session', await evalJs('document.body.innerText.includes("Extra session")'));
+
+  console.log('\nthe group invite card');
+  check('the group link card is on the setup screen',
+    await evalJs('document.body.innerText.includes("Group invite link")'));
+  // One button either way — create it if there is none, then it must show the
+  // real URL, because that is the thing the organizer pastes into the chat.
+  const hadLink = await evalJs('/\\/join#/.test(document.body.innerText)');
+  if (!hadLink) {
+    await clickByText('Create group link');
+    await waitFor('/\\/join#/.test(document.body.innerText)', 'creating the group link shows it');
+  }
+  check('the link points at /join', await evalJs(`/\\/join#[A-Za-z0-9_-]{40,}/.test(document.body.innerText)`),
+    await evalJs(`document.body.innerText.match(/http\\S*join\\S*/)?.[0]`));
+  check('it says how many are still to join',
+    await evalJs('/still to join|Everyone has joined/.test(document.body.innerText)'),
+    await evalJs('document.body.innerText.slice(0, 400)'));
+  check('it warns what replacing the link does',
+    await evalJs('document.body.innerText.includes("already in the chat from working")'),
+    await evalJs('document.body.innerText.slice(0, 500)'));
+  // Scroll it into view: a screenshot of a card below the fold proves nothing.
+  await evalJs(`[...document.querySelectorAll('.card-title')]
+    .find(h => h.textContent.includes('Group invite link'))
+    ?.closest('.card').scrollIntoView({ block: 'center' })`);
+  await sleep(400);
+  await shoot('09-group-link');
 
   console.log('\ndark mode');
   await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }] });

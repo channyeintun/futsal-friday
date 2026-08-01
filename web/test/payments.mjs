@@ -6,7 +6,11 @@ import { join } from 'node:path';
 import { localClaimPath, localOrganizerId } from './helpers.mjs';
 
 const CHROME = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const PORT = 9334;
+// Derived from the pid, never fixed. A run that dies without cleaning up (a
+// crash, a `head`-truncated pipe) leaves headless Chrome holding the port, and
+// a later run's `/json/new` would then open tabs in that *already signed-in*
+// profile — which silently invalidates everything the suite thinks it proves.
+const PORT = 9340 + (process.pid % 30);
 const OUT_DIR = process.env.SHOTS_DIR ?? '/tmp/ff-shots';
 // Point at a deployment with APP_URL; defaults to local dev.
 const APP_URL = (process.env.APP_URL ?? 'http://localhost:5173').replace(/\/$/, '');

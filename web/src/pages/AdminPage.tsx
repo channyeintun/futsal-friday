@@ -4,7 +4,7 @@ import { createMember, listMembers, removeMember, updateMember } from '../api/me
 import { createSession } from '../api/sessions.js';
 import { createVenue, listVenues, retireVenue, updateVenue } from '../api/venues.js';
 import { Icon } from '../components/Icon.js';
-import { MemberInviteControls, MyDeviceCard } from '../components/InviteLink.js';
+import { GroupInviteCard, MemberInviteControls, MyDeviceCard } from '../components/InviteLink.js';
 import { ReminderSettings } from '../components/ReminderSettings.js';
 import { Button, Dialog, ErrorBanner, Spinner, Switch, TextField } from '../components/ui.js';
 import { useAsync } from '../hooks/useAsync.js';
@@ -45,6 +45,9 @@ export function AdminPage() {
       <LanguageCard />
       <MyDeviceCard />
       <ReminderSettings />
+      {/* Above the roster: sharing one link is the normal way to onboard, and
+          the per-person controls below are for the exceptions. */}
+      <GroupInviteCard />
       <MembersCard state={members} />
       <VenuesCard state={venues} />
       <ManualSessionCard />

@@ -357,6 +357,87 @@ const run = async () => {
   check('a re-invited member gets back in', bobBack.status === 200, bobBack.body);
   bob.token = bobBack.body.token;
 
+  section('group invite link');
+  // Not "is it null?" — the local database persists between runs, so that only
+  // held the first time. What must always be true is that the GET is an
+  // organizer tool and that it reports whatever link is currently live.
+  const beforeInvite = await call('GET', '/group-invite', { token: organizer });
+  check('the current group link is readable', beforeInvite.status === 200 &&
+    'invite' in beforeInvite.body, JSON.stringify(beforeInvite.body).slice(0, 120));
+
+  const memberReads = await call('GET', '/group-invite', { token: alice.token });
+  check('members cannot read the group link', memberReads.status === 403, memberReads.body);
+
+  const memberTriesToMint = await call('POST', '/group-invite', { token: alice.token });
+  check('members cannot mint the group link', memberTriesToMint.status === 403, memberTriesToMint.body);
+
+  const groupLink = await call('POST', '/group-invite', { token: organizer });
+  check('organizer creates the group link', groupLink.status === 200 && !!groupLink.body?.invite?.url,
+    JSON.stringify(groupLink.body).slice(0, 120));
+  check('it points at /join with the nonce in the fragment',
+    /\/join#[A-Za-z0-9_-]{40,}$/.test(groupLink.body?.invite?.url ?? ''), groupLink.body?.invite?.url);
+  const groupNonce = nonceOf(groupLink.body.invite.url);
+
+  const afterCreate = await call('GET', '/group-invite', { token: organizer });
+  check('and the GET now returns exactly that link',
+    nonceOf(afterCreate.body?.invite?.url ?? '') === groupNonce, afterCreate.body?.invite?.url);
+
+  // Somebody who has never signed in uses it.
+  const dave = await call('POST', '/members', { token: organizer, body: { name: `Dave ${stamp}` } });
+  const erin = await call('POST', '/members', { token: organizer, body: { name: `Erin ${stamp}` } });
+
+  const joinRoster = await call('POST', '/auth/group/roster', { body: { nonce: groupNonce } });
+  check('the roster needs no credentials', joinRoster.status === 200, roster.status);
+  const offered = joinRoster.body.members.map((x) => x.name);
+  check('unclaimed members are offered', offered.includes(`Dave ${stamp}`) && offered.includes(`Erin ${stamp}`),
+    JSON.stringify(offered));
+  check('already-claimed members are not offered', !offered.includes(alice.name), JSON.stringify(offered));
+  check('ORGANIZERS ARE NEVER OFFERED', !offered.includes('Organizer'), JSON.stringify(offered));
+  check('the roster leaks nothing but id and name',
+    Object.keys(joinRoster.body.members[0] ?? {}).sort().join(',') === 'id,name',
+    JSON.stringify(joinRoster.body.members[0]));
+
+  const badNonce = await call('POST', '/auth/group/roster', { body: { nonce: 'q'.repeat(40) } });
+  check('a wrong group nonce is refused', badNonce.status === 401, badNonce.body);
+
+  const daveJoins = await call('POST', '/auth/group/claim', {
+    body: { nonce: groupNonce, memberId: dave.body.member.id },
+  });
+  check('taking a name signs you in', daveJoins.status === 200 && !!daveJoins.body.token,
+    JSON.stringify(daveJoins.body).slice(0, 120));
+  check('as the right person', daveJoins.body?.identity?.name === `Dave ${stamp}`, daveJoins.body?.identity);
+
+  const daveAgain = await call('POST', '/auth/group/claim', {
+    body: { nonce: groupNonce, memberId: dave.body.member.id },
+  });
+  check('a taken name cannot be taken again', daveAgain.status === 409, daveAgain.body);
+
+  const afterDave = await call('POST', '/auth/group/roster', { body: { nonce: groupNonce } });
+  check('and drops off the list', !afterDave.body.members.some((x) => x.name === `Dave ${stamp}`),
+    JSON.stringify(afterDave.body.members.map((x) => x.name)));
+
+  // The whole point of the design: admin cannot be grabbed from the group link.
+  const grabAdmin = await call('POST', '/auth/group/claim', {
+    body: { nonce: groupNonce, memberId: organizerId },
+  });
+  check('AN ORGANIZER CANNOT BE CLAIMED THROUGH THE GROUP LINK', grabAdmin.status === 409, grabAdmin.body);
+
+  const rotated = await call('POST', '/group-invite', { token: organizer });
+  check('rotating produces a different link', nonceOf(rotated.body.invite.url) !== groupNonce);
+  const staleGroup = await call('POST', '/auth/group/roster', { body: { nonce: groupNonce } });
+  check('the old group link stops working', stale.status === 401, stale.body);
+  const freshGroup = await call('POST', '/auth/group/roster', { body: { nonce: nonceOf(rotated.body.invite.url) } });
+  check('the new one works', freshGroup.status === 200, freshGroup.status);
+  check('it reports who is still to join', rotated.body.invite.unclaimed >= 1,
+    String(rotated.body.invite.unclaimed));
+
+  // Un-claiming puts a name back on the list, which is how a mis-tap is fixed.
+  await call('DELETE', `/members/${dave.body.member.id}/claim`, { token: organizer });
+  const reopened = await call('POST', '/auth/group/roster', { body: { nonce: nonceOf(rotated.body.invite.url) } });
+  check('un-claiming puts the name back', reopened.body.members.some((x) => x.name === `Dave ${stamp}`),
+    JSON.stringify(reopened.body.members.map((x) => x.name)));
+  void erin;
+
   section('realtime plumbing');
   const ticket = await call('POST', '/realtime/ticket', { token: alice.token });
   check('member gets a stream ticket', ticket.status === 200 && !!ticket.body.ticket, ticket.body);

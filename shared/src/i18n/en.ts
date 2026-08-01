@@ -39,8 +39,30 @@ export const en = {
       'Ask the organizer to send you your personal link. It signs you in as you — no password to remember.',
   },
 
+  join: {
+    whichOne: 'Which one are you?',
+    tapYourName: 'Tap your name. It locks to this phone, so nobody else can pick it.',
+    loading: 'Loading the list…',
+    allTaken: 'Everyone on the list has already joined. Ask the organizer to add you.',
+    expired: 'That group link is not valid any more. Ask the organizer for the new one.',
+    taken: 'Somebody already took that name. Pick another, or ask the organizer.',
+    failed: 'Could not sign you in',
+  },
+
   invite: {
     title: 'Invite links',
+    groupLink: 'Group invite link',
+    groupLinkBody:
+      'Paste this once into the group chat. Each person taps their own name, and it locks to their phone. Organizers are never listed — send them a personal link instead.',
+    createGroupLink: 'Create group link',
+    copyGroupLink: 'Copy group link',
+    rotateGroupLink: 'Replace link',
+    groupLinkCopied: 'Group link copied — paste it in the chat',
+    waitingToJoin: (count: number) =>
+      count === 1 ? '1 person still to join' : `${count} people still to join`,
+    everyoneJoined: 'Everyone has joined.',
+    rotateWarning: 'Replacing it stops the copy already in the chat from working.',
+    couldNotRotate: 'Could not replace the link',
     copyLink: 'Copy link',
     reissue: 'New link',
     claimed: 'joined',

@@ -1,4 +1,4 @@
-import type { ClaimLink, Identity } from '@futsal/shared';
+import type { ClaimLink, GroupInvite, Identity, JoinableMember } from '@futsal/shared';
 import { clearToken, del, get, post, setToken } from './client.js';
 
 /**
@@ -22,6 +22,30 @@ export async function currentIdentity(): Promise<Identity | null> {
     return null;
   }
 }
+
+/* ------------------------------------------------------------ group link */
+
+/** Names still available behind the group link. */
+export const groupRoster = (nonce: string) =>
+  post<{ members: JoinableMember[] }>('/auth/group/roster', { nonce }).then((r) => r.members);
+
+/** Take one of them. Locks that name to this device. */
+export async function groupClaim(nonce: string, memberId: string): Promise<Identity> {
+  const result = await post<{ token: string; identity: Identity }>('/auth/group/claim', {
+    nonce,
+    memberId,
+  });
+  setToken(result.token);
+  return result.identity;
+}
+
+/** Organizer: the current group link, or null if there is none. */
+export const currentGroupInvite = () =>
+  get<{ invite: GroupInvite | null }>('/group-invite').then((r) => r.invite);
+
+/** Organizer: create it, or replace the one already in the chat. */
+export const rotateGroupInvite = () =>
+  post<{ invite: GroupInvite }>('/group-invite').then((r) => r.invite);
 
 /** A link for one of your own other devices. */
 export const myDeviceLink = () => post<ClaimLink>('/auth/my-device-link');

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Futsal Friday frontend — React + Vite + Material Design 3, deployed on Cloudflare Pages.",
+  "description": "Futsal Friday frontend \u2014 React + Vite + Material Design 3, deployed on Cloudflare Pages.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -16,7 +16,8 @@
     "fake-upstash": "node test/fake-upstash.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "test:pwa": "node test/pwa.mjs",
-    "test:burmese": "node test/burmese.mjs"
+    "test:burmese": "node test/burmese.mjs",
+    "test:join": "node test/join.mjs"
   },
   "dependencies": {
     "@futsal/shared": "*",

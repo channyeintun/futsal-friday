@@ -4,7 +4,7 @@ import { runScheduledMaintenance } from './cron.js';
 import type { AppContext, Env } from './env.js';
 import { corsMiddleware, pubsubMiddleware, requireMember } from './middleware.js';
 import { authRoutes } from './routes/auth.js';
-import { claimRoutes } from './routes/claims.js';
+import { claimRoutes, groupInviteRoutes, groupJoinRoutes } from './routes/claims.js';
 import { memberRoutes } from './routes/members.js';
 import { paymentRoutes } from './routes/payments.js';
 import { pushRoutes } from './routes/push.js';
@@ -29,7 +29,8 @@ const protectedRoutes = new Hono<AppContext>()
   .route('/uploads', uploadRoutes)
   .route('/push', pushRoutes)
   // Declares full paths (`/members/:id/claim-link`, `/auth/my-device-link`).
-  .route('/', claimRoutes);
+  .route('/', claimRoutes)
+  .route('/', groupInviteRoutes);
 
 const app = new Hono<AppContext>()
   .use('*', corsMiddleware())
@@ -43,6 +44,9 @@ const app = new Hono<AppContext>()
   .route('/auth', authRoutes)
   // Ticket-authenticated: `EventSource` cannot send an Authorization header.
   .route('/realtime', realtimeRoutes)
+  // Unauthenticated by necessity: the group join link is how people get a
+  // credential in the first place. Every restriction is enforced in its SQL.
+  .route('/', groupJoinRoutes)
   .route('/', protectedRoutes)
 
   .notFound((c) =>

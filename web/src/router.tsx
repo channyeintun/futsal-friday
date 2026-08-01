@@ -12,6 +12,7 @@ import { platform } from './platform/index.js';
 export type Route =
   | { name: 'home' }
   | { name: 'claim' }
+  | { name: 'join' }
   | { name: 'session'; id: string }
   | { name: 'payments'; id: string }
   | { name: 'history' }
@@ -26,6 +27,8 @@ export function parseRoute(path: string): Route {
   switch (segments[0]) {
     case 'claim':
       return { name: 'claim' };
+    case 'join':
+      return { name: 'join' };
     case 'session':
       return segments[1] ? { name: 'session', id: segments[1] } : { name: 'home' };
     case 'payments':
@@ -45,6 +48,8 @@ export function routePath(route: Route): string {
       return '/';
     case 'claim':
       return '/claim';
+    case 'join':
+      return '/join';
     case 'session':
       return `/session/${route.id}`;
     case 'payments':

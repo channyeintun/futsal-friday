@@ -41,3 +41,48 @@ export function localOrganizerId() {
   );
   return JSON.parse(out)[0].results[0].id;
 }
+
+/**
+ * Create the group invite directly in the local D1 and return the path a
+ * browser should open. Mirrors what the organizer's Setup screen does.
+ */
+export function localGroupJoinPath() {
+  const nonce = randomBytes(32).toString('base64url');
+  const now = new Date().toISOString();
+  const expires = new Date(Date.now() + 3_600_000).toISOString();
+
+  execFileSync(
+    'npx',
+    ['wrangler', 'd1', 'execute', 'futsal-friday', '--local', '--command',
+     `INSERT INTO group_invite (id, nonce, expires_at, created_at)
+        VALUES (1, '${nonce}', '${expires}', '${now}')
+        ON CONFLICT (id) DO UPDATE
+          SET nonce = excluded.nonce, expires_at = excluded.expires_at;`],
+    { cwd: API_DIR, encoding: 'utf8', stdio: 'pipe' },
+  );
+
+  return `/join#${nonce}`;
+}
+
+/** Add an unclaimed member so the join screen has something to offer. */
+export function localUnclaimedMember(name) {
+  const id = `mem_test_${randomBytes(6).toString('hex')}`;
+  execFileSync(
+    'npx',
+    ['wrangler', 'd1', 'execute', 'futsal-friday', '--local', '--command',
+     `INSERT INTO members (id, name, is_organizer, active, created_at)
+        VALUES ('${id}', '${name.replace(/'/g, "''")}', 0, 1, '${new Date().toISOString()}');`],
+    { cwd: API_DIR, encoding: 'utf8', stdio: 'pipe' },
+  );
+  return id;
+}
+
+/** Wipe test members so repeated runs start from the same place. */
+export function clearTestMembers() {
+  execFileSync(
+    'npx',
+    ['wrangler', 'd1', 'execute', 'futsal-friday', '--local', '--command',
+     `DELETE FROM members WHERE id LIKE 'mem_test_%';`],
+    { cwd: API_DIR, encoding: 'utf8', stdio: 'pipe' },
+  );
+}
