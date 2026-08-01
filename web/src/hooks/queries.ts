@@ -1,21 +1,165 @@
+import type { SessionDetail } from '@futsal/shared';
 import { useQuery } from '@tanstack/react-query';
-import { memberAvatar, memberProfile } from '../api/members.js';
+import {
+  listBalances,
+  listMembers,
+  memberAvatar,
+  memberHistory,
+  memberProfile,
+  pendingMembers,
+} from '../api/members.js';
+import { getPayments } from '../api/payments.js';
+import { pushStatus } from '../api/push.js';
+import { getSession, listSessions } from '../api/sessions.js';
+import { listVenues } from '../api/venues.js';
 
 /**
- * The cached reads.
+ * Every cached read in the app.
  *
  * TanStack Query sits *above* the transport: everything under `src/api` is
  * still plain `fetch` behind the platform seam, and these hooks only decide
  * when to call it. That keeps the data layer portable — a different shell can
  * reuse `src/api` without React Query coming along.
  *
- * The rest of the app still uses `useAsync`, which is fine for a screen that
- * loads once. These two are different: an avatar is asked for by every row in
- * every list, so deduplication and a real cache are the whole point.
+ * ## Why this replaced fetch-on-mount
+ *
+ * The old hook started every mount with `loading: true` and no data, so
+ * switching tabs meant a spinner every single time even though the answer had
+ * been on screen a second earlier. The fix is two things together: a cache
+ * that outlives the component, and rendering the spinner on `isPending` — "we
+ * have nothing to show" — rather than on `isFetching`, which is also true
+ * during the background refresh of data already on screen.
+ *
+ * `staleTime` is then just "how long before a revisit bothers to refetch",
+ * chosen per query by how fast the thing actually changes. Anything realtime
+ * touches can afford a long one, because the stream corrects it sooner than a
+ * refetch would.
  */
 
-export const avatarKey = (memberId: string, updatedAt: string | null) =>
-  ['avatar', memberId, updatedAt] as const;
+/* ------------------------------------------------------------------- keys */
+
+export const queryKeys = {
+  sessions: ['sessions'] as const,
+  session: (id: string) => ['session', id] as const,
+  payments: (sessionId: string) => ['payments', sessionId] as const,
+  members: ['members'] as const,
+  pendingMembers: ['members', 'pending'] as const,
+  venues: (includeRetired: boolean) => ['venues', includeRetired] as const,
+  history: (memberId: string) => ['history', memberId] as const,
+  balances: ['balances'] as const,
+  profile: (memberId: string) => ['profile', memberId] as const,
+  avatar: (memberId: string, updatedAt: string | null) =>
+    ['avatar', memberId, updatedAt] as const,
+  pushStatus: ['push-status'] as const,
+};
+
+/** Kept for the call sites that still spell it out. */
+export const profileKey = queryKeys.profile;
+export const avatarKey = queryKeys.avatar;
+
+/* ---------------------------------------------------------------- session */
+
+export function useSessions() {
+  return useQuery({
+    queryKey: queryKeys.sessions,
+    queryFn: ({ signal }) => listSessions(signal),
+    // The lobby channel announces new and changed fixtures, and the home
+    // screen is the most re-visited in the app.
+    staleTime: 60_000,
+  });
+}
+
+export function useSession(sessionId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.session(sessionId ?? ''),
+    queryFn: ({ signal }) => getSession(sessionId as string, signal),
+    enabled: sessionId !== null,
+    // Registrations arrive over SSE and patch this entry directly, so a
+    // refetch is the fallback rather than the mechanism.
+    staleTime: 60_000,
+  });
+}
+
+export function usePayments(sessionId: string) {
+  return useQuery({
+    queryKey: queryKeys.payments(sessionId),
+    queryFn: ({ signal }) => getPayments(sessionId, signal),
+    staleTime: 30_000,
+  });
+}
+
+/* ---------------------------------------------------------------- members */
+
+export function useMembers() {
+  return useQuery({
+    queryKey: queryKeys.members,
+    queryFn: ({ signal }) => listMembers(signal),
+    // A roster changes when somebody is added or approved, both of which
+    // invalidate it explicitly.
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function usePendingMembers(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.pendingMembers,
+    queryFn: ({ signal }) => pendingMembers(signal),
+    enabled,
+    // Somebody is sitting on a waiting screen; this is the one roster read
+    // worth keeping fresh.
+    staleTime: 30_000,
+  });
+}
+
+export function useVenues(includeRetired: boolean, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.venues(includeRetired),
+    queryFn: ({ signal }) => listVenues(includeRetired, signal),
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useHistory(memberId: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.history(memberId),
+    queryFn: ({ signal }) => memberHistory(memberId, signal),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+export function useBalances(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.balances,
+    queryFn: ({ signal }) => listBalances(signal),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+export function useProfile(memberId: string) {
+  return useQuery({
+    queryKey: queryKeys.profile(memberId),
+    queryFn: ({ signal }) => memberProfile(memberId, signal),
+    // A streak only moves when a session completes.
+    staleTime: 60_000,
+  });
+}
+
+/* ---------------------------------------------------------------- devices */
+
+export function usePushStatus() {
+  return useQuery({
+    queryKey: queryKeys.pushStatus,
+    queryFn: ({ signal }) => pushStatus(signal),
+    // Device state, not group state: it changes only through this screen, and
+    // every path that changes it invalidates.
+    staleTime: 5 * 60_000,
+  });
+}
+
+/* ---------------------------------------------------------------- avatars */
 
 /**
  * A member's picture, as a Blob.
@@ -30,26 +174,19 @@ export const avatarKey = (memberId: string, updatedAt: string | null) =>
  */
 export function useAvatar(memberId: string, updatedAt: string | null) {
   return useQuery({
-    queryKey: avatarKey(memberId, updatedAt),
+    queryKey: queryKeys.avatar(memberId, updatedAt),
     queryFn: ({ signal }) => memberAvatar(memberId, signal),
     // No picture, nothing to fetch — the initials stand in.
     enabled: updatedAt !== null,
-    // A picture at a given `updatedAt` is immutable, so it never goes stale and
-    // never needs refetching. Only eviction ends its life.
+    // A picture at a given `updatedAt` is immutable, so it never goes stale
+    // and never needs refetching. Only eviction ends its life.
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: 60 * 60 * 1000,
     retry: false,
   });
 }
 
-export const profileKey = (memberId: string) => ['profile', memberId] as const;
+/* ------------------------------------------------------------------ types */
 
-export function useProfile(memberId: string) {
-  return useQuery({
-    queryKey: profileKey(memberId),
-    queryFn: ({ signal }) => memberProfile(memberId, signal),
-    // A streak only moves when a session completes, so a minute is plenty and
-    // stops a back-and-forth between tabs re-querying every time.
-    staleTime: 60_000,
-  });
-}
+export type SessionQuery = ReturnType<typeof useSession>;
+export type { SessionDetail };

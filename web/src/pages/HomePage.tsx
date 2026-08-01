@@ -1,9 +1,9 @@
 import { formatKickoff, formatVnd } from '@futsal/shared';
-import { listSessions } from '../api/sessions.js';
+import { useQueryClient } from '@tanstack/react-query';
 import { Icon } from '../components/Icon.js';
 import { SessionView } from '../components/SessionView.js';
 import { ErrorBanner, Spinner } from '../components/ui.js';
-import { useAsync } from '../hooks/useAsync.js';
+import { queryKeys, useSessions } from '../hooks/queries.js';
 import { useLiveSession } from '../hooks/useLiveSession.js';
 import { navigate } from '../router.js';
 import { useApp } from '../state/app.js';
@@ -16,16 +16,19 @@ import { useLocale } from '../state/locale.js';
 export function HomePage() {
   const { identity } = useApp();
   const { m, locale } = useLocale();
-  const overview = useAsync((signal) => listSessions(signal), []);
+  const queryClient = useQueryClient();
+  const overview = useSessions();
 
   const upcomingId = overview.data?.upcoming?.id ?? null;
   const live = useLiveSession(upcomingId, identity.memberId);
 
-  if (overview.loading && !overview.data) return <Spinner label={m.home.loading} />;
+  // Only when there is genuinely nothing to draw. Coming back to this tab
+  // renders the cached fixture at once and refreshes underneath it.
+  if (overview.isPending) return <Spinner label={m.home.loading} />;
 
   return (
     <>
-      {overview.error ? <ErrorBanner>{overview.error}</ErrorBanner> : null}
+      {overview.error ? <ErrorBanner>{overview.error.message}</ErrorBanner> : null}
 
       {upcomingId && live.detail ? (
         <SessionView
@@ -34,7 +37,7 @@ export function HomePage() {
           recentlyChanged={live.recentlyChanged}
           onChanged={() => {
             live.reload();
-            overview.reload();
+            void queryClient.invalidateQueries({ queryKey: queryKeys.sessions });
           }}
         />
       ) : upcomingId ? (

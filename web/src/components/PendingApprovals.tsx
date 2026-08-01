@@ -1,7 +1,7 @@
 import type { Member } from '@futsal/shared';
 import { useState } from 'react';
-import { approveMember, pendingMembers, rejectMember } from '../api/members.js';
-import { useAsync } from '../hooks/useAsync.js';
+import { approveMember, rejectMember } from '../api/members.js';
+import { usePendingMembers } from '../hooks/queries.js';
 import { useApp } from '../state/app.js';
 import { useLocale } from '../state/locale.js';
 import { Avatar } from './Avatar.js';
@@ -17,7 +17,7 @@ import { Button, Dialog, ErrorBanner } from './ui.js';
 export function PendingApprovals({ onChanged }: { onChanged(): void }) {
   const { m } = useLocale();
   const { toast } = useApp();
-  const state = useAsync((signal) => pendingMembers(signal), []);
+  const state = usePendingMembers(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<Member | null>(null);
@@ -26,7 +26,7 @@ export function PendingApprovals({ onChanged }: { onChanged(): void }) {
   if (waiting.length === 0) return null;
 
   const settle = () => {
-    state.reload();
+    void state.refetch();
     // The roster and every count above it just changed too.
     onChanged();
   };

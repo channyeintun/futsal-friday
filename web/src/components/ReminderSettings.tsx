@@ -7,7 +7,7 @@ import {
   sendTestNotification,
   updateNotificationPrefs,
 } from '../api/push.js';
-import { useAsync } from '../hooks/useAsync.js';
+import { usePushStatus } from '../hooks/queries.js';
 import { platform } from '../platform/index.js';
 import { useApp } from '../state/app.js';
 import { useMessages } from '../state/locale.js';
@@ -26,7 +26,7 @@ import { Button, ErrorBanner, Switch } from './ui.js';
 export function ReminderSettings() {
   const { toast } = useApp();
   const m = useMessages();
-  const status = useAsync((signal) => pushStatus(signal), []);
+  const status = usePushStatus();
 
   const [deviceOn, setDeviceOn] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -59,7 +59,7 @@ export function ReminderSettings() {
           if (result.ok) {
             setDeviceOn(true);
             toast(m.toast.remindersOn);
-            status.reload();
+            void status.refetch();
           } else {
             setDeviceOn(false);
             setError(explain(result.reason, m));
@@ -68,7 +68,7 @@ export function ReminderSettings() {
           await disableNotifications();
           setDeviceOn(false);
           toast(m.toast.remindersOff);
-          status.reload();
+          void status.refetch();
         }
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : m.reminders.couldNotChange);
@@ -82,7 +82,7 @@ export function ReminderSettings() {
   const setPref = async (key: 'notifySession' | 'notifyPayment', value: boolean) => {
     try {
       await updateNotificationPrefs({ [key]: value });
-      status.reload();
+      void status.refetch();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : m.reminders.couldNotSave);
     }

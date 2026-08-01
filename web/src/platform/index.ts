@@ -30,6 +30,16 @@ export interface Clipboard {
   read(): Promise<string | null>;
 }
 
+/**
+ * Cross-fade one screen into the next.
+ *
+ * A seam because `document.startViewTransition` is browser-only and not
+ * universal: the implementation no-ops where it is missing, and — more
+ * importantly — where the reader has asked for reduced motion. Callers just
+ * hand over the state change and get animation where it is welcome.
+ */
+export type ViewTransition = (change: () => void) => void;
+
 export interface Navigation {
   /** Current in-app path, e.g. `/session/ses_123`. */
   path(): string;
@@ -104,6 +114,7 @@ export interface Platform {
   storage: KeyValueStorage;
   clipboard: Clipboard;
   navigation: Navigation;
+  viewTransition: ViewTransition;
   visibility: Visibility;
   notifications: Notifications;
   /** Registers the service worker. Resolves false where unsupported. */

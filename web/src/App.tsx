@@ -20,14 +20,26 @@ import { AppProvider, useApp } from './state/app.js';
 import { LocaleProvider, useMessages } from './state/locale.js';
 
 /**
- * One client for the whole app. Only the cached reads go through it — see
- * `hooks/queries.ts` — so its defaults are tuned for those: a phone that has
- * been in a pocket should not fire a burst of refetches the moment it wakes.
+ * One client for the whole app; every read goes through it.
+ *
+ * The defaults exist to answer one complaint: switching tabs used to show a
+ * spinner every time. That needs the cache to outlive the component, which
+ * `gcTime` controls, and it needs screens to render cached data while any
+ * refresh happens underneath — which is what `isPending` vs `isFetching` is
+ * for at the call sites.
+ *
+ * `refetchOnWindowFocus` stays off deliberately. A phone coming out of a
+ * pocket would otherwise fire a burst of requests across every mounted query,
+ * and the realtime stream already corrects anything that matters faster than a
+ * refetch would.
  */
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
+      // Long enough to survive wandering around the app; the point of the
+      // whole exercise is that coming back to a tab shows what was there.
+      gcTime: 30 * 60_000,
       retry: 1,
     },
   },

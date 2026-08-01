@@ -21,7 +21,8 @@ import { CopyButton } from '../components/CopyButton.js';
 import { Icon } from '../components/Icon.js';
 import { ProofViewer } from '../components/ProofViewer.js';
 import { Button, Dialog, ErrorBanner, Spinner, TextField } from '../components/ui.js';
-import { useAsync } from '../hooks/useAsync.js';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys, usePayments, useSession } from '../hooks/queries.js';
 import { useLive } from '../hooks/useLive.js';
 import { platform } from '../platform/index.js';
 import { useApp } from '../state/app.js';
@@ -39,16 +40,21 @@ export function PaymentsPage({ sessionId }: { sessionId: string }) {
   const { identity, toast } = useApp();
   const { m, locale } = useLocale();
 
-  const sessionState = useAsync((signal) => getSession(sessionId, signal), [sessionId]);
-  const paymentsState = useAsync((signal) => getPayments(sessionId, signal), [sessionId]);
+  const queryClient = useQueryClient();
+  const sessionState = useSession(sessionId);
+  const paymentsState = usePayments(sessionId);
 
-  const { reload: reloadPayments, set: setPayments } = paymentsState;
+  const reloadPayments = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.payments(sessionId) });
+  }, [queryClient, sessionId]);
 
   // Payment events carry enough to patch a single row, which keeps a dashboard
   // that ten people have open from issuing ten refetches per confirmation.
+  // Patching the cache rather than component state means the update is still
+  // there after a trip to another screen and back.
   const patch = useCallback(
     (memberId: string, change: Partial<Payment>) => {
-      setPayments((current: PaymentSummary | null) => {
+      queryClient.setQueryData<PaymentSummary>(queryKeys.payments(sessionId), (current) => {
         if (!current) return current;
         const payments = current.payments.map((p) =>
           p.memberId === memberId ? { ...p, ...change } : p,
@@ -56,7 +62,7 @@ export function PaymentsPage({ sessionId }: { sessionId: string }) {
         return { ...current, ...recomputeTotals(payments), payments };
       });
     },
-    [setPayments],
+    [queryClient, sessionId],
   );
 
   const connection = useLive([sessionChannel(sessionId)], {
@@ -75,7 +81,7 @@ export function PaymentsPage({ sessionId }: { sessionId: string }) {
         case 'session.updated':
           // A re-split changes every amount at once.
           reloadPayments();
-          sessionState.reload();
+          void queryClient.invalidateQueries({ queryKey: queryKeys.session(sessionId) });
           return;
         default:
           return;
@@ -87,9 +93,8 @@ export function PaymentsPage({ sessionId }: { sessionId: string }) {
   const summary = paymentsState.data;
 
   if (!session || !summary) {
-    if (sessionState.error || paymentsState.error) {
-      return <ErrorBanner>{sessionState.error ?? paymentsState.error}</ErrorBanner>;
-    }
+    const failure = sessionState.error ?? paymentsState.error;
+    if (failure) return <ErrorBanner>{failure.message}</ErrorBanner>;
     return <Spinner label={m.payments.loading} />;
   }
 
@@ -103,7 +108,7 @@ export function PaymentsPage({ sessionId }: { sessionId: string }) {
             sessionId={sessionId}
             onSettled={() => {
               reloadPayments();
-              sessionState.reload();
+              void queryClient.invalidateQueries({ queryKey: queryKeys.session(sessionId) });
             }}
           />
         ) : (
@@ -137,7 +142,7 @@ export function PaymentsPage({ sessionId }: { sessionId: string }) {
                 current={summary.totalCharge ?? 0}
                 onSettled={() => {
                   reloadPayments();
-                  sessionState.reload();
+                  void queryClient.invalidateQueries({ queryKey: queryKeys.session(sessionId) });
                 }}
               />
             ) : null}

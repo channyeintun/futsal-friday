@@ -1,15 +1,15 @@
 import { type Member, type Venue, nextFridayKickoff, toDatetimeLocal, fromDatetimeLocal } from '@futsal/shared';
 import { useState } from 'react';
-import { createMember, listMembers, removeMember, updateMember } from '../api/members.js';
+import { createMember, removeMember, updateMember } from '../api/members.js';
 import { createSession } from '../api/sessions.js';
-import { createVenue, listVenues, retireVenue, updateVenue } from '../api/venues.js';
+import { createVenue, retireVenue, updateVenue } from '../api/venues.js';
 import { Avatar } from '../components/Avatar.js';
 import { Icon } from '../components/Icon.js';
 import { GroupInviteCard, MemberInviteControls, MyDeviceCard } from '../components/InviteLink.js';
 import { PendingApprovals } from '../components/PendingApprovals.js';
 import { ReminderSettings } from '../components/ReminderSettings.js';
 import { Button, Dialog, ErrorBanner, Spinner, Switch, TextField } from '../components/ui.js';
-import { useAsync } from '../hooks/useAsync.js';
+import { useMembers, useVenues } from '../hooks/queries.js';
 import { navigate } from '../router.js';
 import { useApp } from '../state/app.js';
 import { useLocale, useMessages } from '../state/locale.js';
@@ -20,8 +20,9 @@ export function AdminPage() {
   const { identity, signOut } = useApp();
   const m = useMessages();
 
-  const members = useAsync((signal) => listMembers(signal), []);
-  const venues = useAsync((signal) => listVenues(true, signal), []);
+  const members = useMembers();
+  // Retired venues are only of interest on this screen.
+  const venues = useVenues(true, identity.isOrganizer);
 
   if (!identity.isOrganizer) {
     return (
@@ -46,7 +47,7 @@ export function AdminPage() {
     <>
       {/* First on the screen when it has anything to show: somebody is stuck
           on a waiting screen until this gets a tap. */}
-      <PendingApprovals onChanged={() => members.reload()} />
+      <PendingApprovals onChanged={() => void members.refetch()} />
       <LanguageCard />
       <MyDeviceCard />
       <ReminderSettings />
@@ -67,7 +68,7 @@ export function AdminPage() {
 
 /* ---------------------------------------------------------------- members */
 
-function MembersCard({ state }: { state: ReturnType<typeof useAsync<Member[]>> }) {
+function MembersCard({ state }: { state: ReturnType<typeof useMembers> }) {
   const { toast, refresh } = useApp();
   const m = useMessages();
   const [adding, setAdding] = useState(false);
@@ -84,7 +85,7 @@ function MembersCard({ state }: { state: ReturnType<typeof useAsync<Member[]>> }
       toast(m.toast.memberAdded(name.trim()));
       setName('');
       setAdding(false);
-      state.reload();
+      void state.refetch();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : m.admin.couldNotAdd);
     } finally {
@@ -95,7 +96,7 @@ function MembersCard({ state }: { state: ReturnType<typeof useAsync<Member[]>> }
   const toggleOrganizer = async (member: Member) => {
     try {
       await updateMember(member.id, { isOrganizer: !member.isOrganizer });
-      state.reload();
+      void state.refetch();
       // The caller may have just changed their own role.
       await refresh();
     } catch (cause) {
@@ -107,7 +108,7 @@ function MembersCard({ state }: { state: ReturnType<typeof useAsync<Member[]>> }
     try {
       await removeMember(member.id);
       toast(m.toast.memberRemoved(member.name));
-      state.reload();
+      void state.refetch();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : m.admin.couldNotRemove);
     }
@@ -124,7 +125,7 @@ function MembersCard({ state }: { state: ReturnType<typeof useAsync<Member[]>> }
       </div>
 
       {error ? <ErrorBanner>{error}</ErrorBanner> : null}
-      {state.loading && !state.data ? <Spinner /> : null}
+      {state.isPending ? <Spinner /> : null}
 
       {(state.data ?? []).map((member) => (
         <div key={member.id} className="member-row">
@@ -142,7 +143,7 @@ function MembersCard({ state }: { state: ReturnType<typeof useAsync<Member[]>> }
             <Switch selected={member.isOrganizer} onChange={() => toggleOrganizer(member)} />
           </div>
           <div className="row wrap" style={{ gap: 4, justifyContent: 'flex-end' }}>
-            <MemberInviteControls member={member} onChanged={() => state.reload()} />
+            <MemberInviteControls member={member} onChanged={() => void state.refetch()} />
             <Button variant="text" onClick={() => remove(member)}>
               <Icon name="close" size={16} />
             </Button>
@@ -177,7 +178,7 @@ function MembersCard({ state }: { state: ReturnType<typeof useAsync<Member[]>> }
 
 /* ----------------------------------------------------------------- venues */
 
-function VenuesCard({ state }: { state: ReturnType<typeof useAsync<Venue[]>> }) {
+function VenuesCard({ state }: { state: ReturnType<typeof useVenues> }) {
   const { toast } = useApp();
   const m = useMessages();
   const [editing, setEditing] = useState<Venue | 'new' | null>(null);
@@ -213,7 +214,7 @@ function VenuesCard({ state }: { state: ReturnType<typeof useAsync<Venue[]>> }) 
       else if (editing) await updateVenue(editing.id, input);
       toast(m.toast.venueSaved);
       setEditing(null);
-      state.reload();
+      void state.refetch();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : m.admin.couldNotSaveVenue);
     } finally {
@@ -224,7 +225,7 @@ function VenuesCard({ state }: { state: ReturnType<typeof useAsync<Venue[]>> }) 
   const retire = async (venue: Venue) => {
     try {
       await retireVenue(venue.id);
-      state.reload();
+      void state.refetch();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : m.admin.couldNotRetireVenue);
     }

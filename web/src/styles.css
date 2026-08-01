@@ -725,3 +725,73 @@ body {
 .pending-card {
   border: 1px solid var(--md-sys-color-primary);
 }
+
+/* ------------------------------------------------------- view transitions */
+
+/*
+ * A cross-fade between screens, with the incoming one rising very slightly.
+ *
+ * Deliberately not a directional slide: this app's navigation is a bottom bar
+ * where "forward" and "back" are not meaningful directions, so a slide would
+ * have to guess and would guess wrong half the time. A fade is honest about
+ * that and reads as fast rather than as animation.
+ *
+ * Short on purpose. Anything past ~200ms on a phone stops feeling like
+ * polish and starts feeling like waiting.
+ */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 180ms;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+::view-transition-old(root) {
+  animation-name: ff-fade-out;
+}
+
+::view-transition-new(root) {
+  animation-name: ff-fade-in;
+}
+
+@keyframes ff-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes ff-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/*
+ * The chrome stays put. Fading the bar along with the content makes the whole
+ * app blink, and the top bar and bottom nav are the fixed frame the content
+ * moves inside — so they are lifted out of the root snapshot and never
+ * animate.
+ */
+.topbar {
+  view-transition-name: ff-topbar;
+}
+
+.bottom-nav {
+  view-transition-name: ff-bottom-nav;
+}
+
+/*
+ * `prefers-reduced-motion` is honoured in `platform.viewTransition`, which
+ * simply does not start a transition — but a user agent can also start one on
+ * its own, so the styles opt out too rather than relying on that.
+ */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root),
+  ::view-transition-old(ff-topbar),
+  ::view-transition-new(ff-topbar),
+  ::view-transition-old(ff-bottom-nav),
+  ::view-transition-new(ff-bottom-nav) {
+    animation: none !important;
+  }
+}

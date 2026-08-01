@@ -6,6 +6,7 @@ import type {
   Platform,
   PushSubscriptionJson,
 } from './index.js';
+import { flushSync } from 'react-dom';
 
 /**
  * Browser implementation of the platform seam. This is the only file in the
@@ -104,6 +105,52 @@ if (typeof window !== 'undefined') {
   // opening a second one in an already-open tab would appear to do nothing.
   window.addEventListener('hashchange', notify);
 }
+
+/**
+ * Run a state change inside a view transition.
+ *
+ * `flushSync` is the load-bearing part: `startViewTransition` snapshots the
+ * DOM, calls this back, then snapshots again — so React has to have rendered
+ * by the time the callback returns. React's own scheduling would otherwise
+ * paint after the transition had already given up, and the animation would
+ * cross-fade a screen into itself.
+ */
+interface ViewTransitionHandle {
+  finished: Promise<void>;
+  ready: Promise<void>;
+  updateCallbackDone: Promise<void>;
+}
+
+const viewTransition: Platform['viewTransition'] = (change) => {
+  const start = (
+    document as Document & {
+      startViewTransition?: (cb: () => void) => ViewTransitionHandle;
+    }
+  ).startViewTransition;
+
+  // Motion is a preference, not a default. Anyone who has asked for less of it
+  // gets the same navigation without the cross-fade.
+  const reduced =
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+  if (typeof start !== 'function' || reduced) {
+    change();
+    return;
+  }
+
+  const transition = start.call(document, () => {
+    flushSync(change);
+  });
+
+  // A transition that is superseded — two taps in quick succession, or a
+  // backgrounded tab — rejects these with `AbortError`. Nothing is wrong and
+  // there is nothing to do, but an unhandled rejection would show up in the
+  // console and in any error reporting attached to it.
+  transition.finished.catch(() => {});
+  transition.ready.catch(() => {});
+  transition.updateCallbackDone.catch(() => {});
+};
 
 const navigation: Platform['navigation'] = {
   path: currentPath,
@@ -395,6 +442,7 @@ export const webPlatform: Platform = {
   storage,
   clipboard,
   navigation,
+  viewTransition,
   visibility,
   openExternal(url) {
     window.open(url, '_blank', 'noopener,noreferrer');

@@ -1,16 +1,13 @@
-import {
-  type Registration,
-  type SessionDetail,
-  sessionChannel,
-} from '@futsal/shared';
+import { type Registration, type SessionDetail, sessionChannel } from '@futsal/shared';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
-import { getSession } from '../api/sessions.js';
 import type { ConnectionState } from '../api/realtime.js';
-import { useAsync } from './useAsync.js';
+import { queryKeys, useSession } from './queries.js';
 import { useLive } from './useLive.js';
 
 export interface LiveSession {
   detail: SessionDetail | null;
+  /** True only when there is nothing to show — never during a background refresh. */
   loading: boolean;
   error: string | null;
   connection: ConnectionState;
@@ -27,16 +24,31 @@ export interface LiveSession {
  * and the counter locally, so an ordinary "someone else joined" costs zero
  * requests for every other viewer. Anything structural (`session.updated`)
  * falls back to a refetch, which is rare enough not to matter.
+ *
+ * Those patches go into the *query cache* rather than component state, which
+ * is what makes them survive a trip to another tab and back: the live update
+ * somebody saw a moment ago is still there when they return, instead of being
+ * thrown away with the component and fetched again.
  */
 export function useLiveSession(sessionId: string | null, viewerId: string): LiveSession {
   const [recentlyChanged, setRecentlyChanged] = useState<Set<string>>(new Set());
+  const queryClient = useQueryClient();
+  const query = useSession(sessionId);
 
-  const state = useAsync<SessionDetail | null>(
-    (signal) => (sessionId ? getSession(sessionId, signal) : Promise.resolve(null)),
-    [sessionId],
+  const patch = useCallback(
+    (updater: (current: SessionDetail) => SessionDetail) => {
+      if (!sessionId) return;
+      queryClient.setQueryData<SessionDetail>(queryKeys.session(sessionId), (current) =>
+        current ? updater(current) : current,
+      );
+    },
+    [queryClient, sessionId],
   );
 
-  const { set, reload } = state;
+  const reload = useCallback(() => {
+    if (!sessionId) return;
+    void queryClient.invalidateQueries({ queryKey: queryKeys.session(sessionId) });
+  }, [queryClient, sessionId]);
 
   const flash = useCallback((memberId: string) => {
     setRecentlyChanged((current) => new Set(current).add(memberId));
@@ -59,8 +71,8 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
             const { memberId, memberName, memberAvatarUpdatedAt, status, position, counts } =
               event.data;
             flash(memberId);
-            set((current) => {
-              if (!current || current.session.id !== event.data.sessionId) return current;
+            patch((current) => {
+              if (current.session.id !== event.data.sessionId) return current;
               // Guard against a duplicate arriving from the history replay.
               if (current.registrations.some((r) => r.memberId === memberId)) return current;
 
@@ -91,8 +103,8 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
             const { memberId, promoted, counts } = event.data;
             flash(memberId);
             if (promoted) flash(promoted.memberId);
-            set((current) => {
-              if (!current || current.session.id !== event.data.sessionId) return current;
+            patch((current) => {
+              if (current.session.id !== event.data.sessionId) return current;
               const registrations = current.registrations
                 .filter((r) => r.memberId !== memberId)
                 .map((r) =>
@@ -126,12 +138,16 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
   );
 
   return {
-    detail: state.data,
-    loading: state.loading,
-    error: state.error,
+    detail: query.data ?? null,
+    // `isPending`, not `isFetching`: a background refresh of data already on
+    // screen must not put a spinner over the top of it.
+    loading: sessionId !== null && query.isPending,
+    error: query.error instanceof Error ? query.error.message : null,
     connection,
     reload,
     recentlyChanged,
-    apply: (next) => set(next),
+    apply: (next) => {
+      if (sessionId) queryClient.setQueryData(queryKeys.session(sessionId), next);
+    },
   };
 }

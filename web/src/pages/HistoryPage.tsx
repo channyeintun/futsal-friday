@@ -1,10 +1,8 @@
 import { formatKickoff, formatVnd } from '@futsal/shared';
-import { listBalances, memberHistory } from '../api/members.js';
 import { Icon } from '../components/Icon.js';
 import { ProfileCard } from '../components/ProfileCard.js';
 import { ErrorBanner, Spinner } from '../components/ui.js';
-import { useProfile } from '../hooks/queries.js';
-import { useAsync } from '../hooks/useAsync.js';
+import { useBalances, useHistory, useProfile } from '../hooks/queries.js';
 import { navigate } from '../router.js';
 import { useApp } from '../state/app.js';
 import { useLocale } from '../state/locale.js';
@@ -17,14 +15,8 @@ export function HistoryPage() {
   const { identity } = useApp();
   const { m, locale } = useLocale();
 
-  const history = useAsync(
-    (signal) => memberHistory(identity.memberId, signal),
-    [identity.memberId],
-  );
-  const balances = useAsync(
-    (signal) => (identity.isOrganizer ? listBalances(signal) : Promise.resolve([])),
-    [identity.isOrganizer],
-  );
+  const history = useHistory(identity.memberId);
+  const balances = useBalances(identity.isOrganizer);
   const profile = useProfile(identity.memberId);
 
   const myOutstanding = (history.data ?? []).reduce(
@@ -67,8 +59,8 @@ export function HistoryPage() {
         </div>
       )}
 
-      {history.error ? <ErrorBanner>{history.error}</ErrorBanner> : null}
-      {history.loading && !history.data ? <Spinner label={m.history.loading} /> : null}
+      {history.error ? <ErrorBanner>{history.error.message}</ErrorBanner> : null}
+      {history.isPending ? <Spinner label={m.history.loading} /> : null}
 
       {history.data && history.data.length > 0 ? (
         <div className="card">
@@ -133,7 +125,7 @@ export function HistoryPage() {
           <h2 className="card-title">
             <Icon name="money" size={18} /> {m.history.whoOwes}
           </h2>
-          {balances.error ? <ErrorBanner>{balances.error}</ErrorBanner> : null}
+          {balances.error ? <ErrorBanner>{balances.error.message}</ErrorBanner> : null}
           {(balances.data ?? []).length === 0 ? (
             <p className="empty">{m.history.noPayments}</p>
           ) : (

@@ -125,6 +125,36 @@ async function run() {
     return false;
   };
 
+  // Navigation now runs inside a view transition, whose callback the browser
+  // defers by a frame — so the URL changes a beat after the tap. Anything that
+  // reloads the page has to let the navigation land first, or it reloads the
+  // screen it was leaving.
+  const goToTab = async (index, expect) => {
+    // The nav can be momentarily absent — mid-reload, or while the app boots —
+    // and clicking `undefined` throws instead of failing a check.
+    await waitFor(`document.querySelectorAll('.bottom-nav button').length === 3`, 'nav is ready');
+    await evalJs(`[...document.querySelectorAll('.bottom-nav button')][${index}].click()`);
+    return waitFor(`document.body.innerText.includes(${JSON.stringify(expect)})`, `reach ${expect}`);
+  };
+
+  /**
+   * Reload and wait for the *new* document.
+   *
+   * `Page.reload` resolves when the command is accepted, not when the load
+   * finishes, so waiting on a selector can match the outgoing page and then
+   * have it pulled away mid-test. The marker only exists on the old document,
+   * which makes the wait exact.
+   */
+  const reloadApp = async (label) => {
+    await evalJs('window.__ffBeforeReload = true');
+    await send('Page.reload');
+    await waitFor(
+      `typeof window.__ffBeforeReload === 'undefined' && !!document.querySelector('.bottom-nav')`,
+      label,
+    );
+  };
+
+
   console.log('\nwithout a link');
   await send('Page.navigate', { url: `${APP_URL}/` });
   await waitFor('!!document.querySelector("#root")?.children.length', 'app mounts');
@@ -252,7 +282,8 @@ async function run() {
   }
   check('somebody can add themselves from the link', requested === 201, requested);
 
-  await send('Page.reload');
+  await reloadApp('app is back after the self-add');
+  await goToTab(2, 'Players');
   await waitFor('document.body.innerText.includes("waiting to join")', 'the queue appears in Setup');
   await sleep(500);
   check('it names who is waiting',
@@ -318,9 +349,11 @@ async function run() {
     method: 'DELETE',
     headers: { Authorization: 'Bearer ' + localStorage.getItem('futsal:token') },
   }).then((r) => r.status)`);
-  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][1].click()`);
-  await send('Page.reload');
-  await waitFor('document.body.innerText.includes("Streak")', 'the profile card leads History');
+  // Reload first to pick up the avatar deletion, then navigate: a reload lands
+  // on whatever URL the address bar holds, which is not necessarily History.
+  await reloadApp('app is back after reload');
+  await goToTab(1, 'Streak');
+  check('the profile card leads History', await evalJs('!!document.querySelector(".streak-cell")'));
   await sleep(500);
   await shoot('11-profile');
   check('it shows a current streak', await evalJs(`document.querySelectorAll('.streak-cell').length === 3`),
@@ -357,8 +390,8 @@ async function run() {
   })()`);
   check('a picture can be stored', uploaded === 200, uploaded);
 
-  await send('Page.reload');
-  await waitFor('!!document.querySelector(".streak-cell")', 'history reloads with a picture');
+  await reloadApp('app is back after reload');
+  await goToTab(1, 'Streak');
   await waitFor('!!document.querySelector(".avatar img")', 'the stored picture renders');
   check('the initials are gone once there is a photo',
     await evalJs(`document.querySelector('.avatar').textContent.trim() === ''`),
@@ -367,15 +400,13 @@ async function run() {
   await shoot('13-avatar');
 
   // And it reaches the places that list people, not just the profile.
-  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][2].click()`);
-  await waitFor('document.body.innerText.includes("Players")', 'roster loads');
+  await goToTab(2, 'Players');
   await sleep(600);
   check('the roster shows the picture too',
     await evalJs(`!!document.querySelector('.member-row .avatar img')`),
     await evalJs(`document.querySelectorAll('.member-row .avatar').length`));
 
-  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][1].click()`);
-  await waitFor('!!document.querySelector(".streak-cell")', 'back on history');
+  await goToTab(1, 'Streak');
   await sleep(300);
 
   // A team-mate's profile is reachable from the session list.
@@ -443,6 +474,49 @@ async function run() {
 
   await evalJs(`document.querySelector('md-dialog[open]')?.close()`);
   await sleep(400);
+
+  console.log('\nswitching tabs does not re-show a spinner');
+  // The complaint this replaced fetch-on-mount to fix. Warm every tab first,
+  // then poll hard while moving between them: the old behaviour put a spinner
+  // up on every single mount, so anything above zero here is a regression.
+  const tab = (index) => evalJs(`[...document.querySelectorAll('.bottom-nav button')][${index}].click()`);
+  const settled = (text) => waitFor(`document.body.innerText.includes(${JSON.stringify(text)})`, `warm: ${text}`);
+
+  await tab(0);
+  await settled('Playing');
+  await tab(1);
+  await settled('Streak');
+  await tab(2);
+  await settled('Players');
+  await sleep(600);
+
+  // Now the cache is warm. Sample continuously across several switches.
+  let spinnerSightings = 0;
+  const watch = async (index, ms) => {
+    await tab(index);
+    const until = Date.now() + ms;
+    while (Date.now() < until) {
+      if (await evalJs(`!!document.querySelector('.spinner, md-circular-progress')`)) {
+        spinnerSightings++;
+      }
+    }
+  };
+  for (const index of [0, 1, 2, 0, 1, 2]) await watch(index, 260);
+
+  check('no spinner appears when revisiting a warmed tab', spinnerSightings === 0,
+    `${spinnerSightings} sightings`);
+
+  // And the content is actually there, not merely spinner-free.
+  await tab(1);
+  await sleep(120);
+  check('the history tab paints its content immediately',
+    await evalJs(`document.body.innerText.includes('Streak')`),
+    await evalJs(`document.body.innerText.slice(0, 120)`));
+  await tab(0);
+  await sleep(120);
+  check('and so does the session tab',
+    await evalJs(`document.body.innerText.includes('Playing')`),
+    await evalJs(`document.body.innerText.slice(0, 120)`));
 
   console.log('\ndark mode');
   await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }] });

@@ -395,15 +395,54 @@ the member id — stable per person, stored nowhere. `initialsOf` splits on
 grapheme clusters via `Intl.Segmenter`, because slicing a Burmese name by index
 strands a combining mark and renders a dotted circle.
 
-**Caching** is [TanStack Query](https://tanstack.com/query), and only for these
-two reads — see `web/src/hooks/queries.ts`. It sits *above* the transport:
-everything in `web/src/api` is still plain `fetch` behind the platform seam, so
-that layer stays portable. An avatar is requested by every row of every list,
-which is what makes deduplication and a real cache worth a dependency; the rest
-of the app still uses `useAsync`, which is fine for a screen that loads once.
-The query caches the `Blob` rather than an object URL — a URL has to be revoked
+**Caching** is [TanStack Query](https://tanstack.com/query), and every read in
+the app goes through it — see `web/src/hooks/queries.ts`. It sits *above* the
+transport: everything in `web/src/api` is still plain `fetch` behind the
+platform seam, so that layer stays portable and a different shell could reuse
+it without React Query coming along.
+
+This replaced fetch-on-mount, which started every mount with no data and so
+put a spinner up every single time somebody switched tabs — even when the same
+answer had been on screen a second earlier. Two things fix that together: a
+cache that outlives the component (`gcTime`), and rendering the spinner on
+`isPending` — "there is nothing to show" — rather than on `isFetching`, which
+is also true while data already on screen refreshes underneath. `staleTime` is
+then only "how long before a revisit bothers to refetch", set per query by how
+fast the thing actually changes; anything the realtime stream touches can
+afford a long one, because the stream corrects it sooner than a refetch would.
+
+`refetchOnWindowFocus` is off deliberately: a phone coming out of a pocket
+would otherwise fire a burst of requests across every mounted query.
+
+Realtime writes into the same cache. `player.joined` and `player.left` patch
+the cached session with `setQueryData` instead of component state, so a live
+update somebody saw is still there when they come back from another tab rather
+than being thrown away and fetched again. Payment events do the same for the
+payments screen.
+
+Avatars are cached as `Blob`s rather than object URLs — a URL has to be revoked
 and the cache has no eviction hook to do it, so each component mints its own
 from the shared blob and revokes on unmount.
+
+### Moving between screens
+
+Navigation runs inside a [view
+transition](https://developer.mozilla.org/en-US/docs/Web/API/View_Transition_API),
+so screens cross-fade instead of snapping. It lives behind
+`platform.viewTransition`, which no-ops where the API is missing *and* where
+the reader has asked for reduced motion.
+
+`flushSync` is the load-bearing part: `startViewTransition` snapshots the DOM,
+calls back, then snapshots again, so React has to have rendered by the time the
+callback returns — otherwise the animation cross-fades a screen into itself.
+One consequence worth knowing: the callback is deferred by about a frame, so
+`history.pushState` lands a beat after the tap rather than synchronously.
+
+The animation is a fade, not a directional slide. Navigation here is a bottom
+bar where "forward" and "back" are not meaningful directions, so a slide would
+have to guess and would be wrong half the time. The top bar and bottom nav are
+given their own `view-transition-name` so the frame stays put while only the
+content changes — fading the whole document makes the app blink.
 
 ### Hyping the group
 

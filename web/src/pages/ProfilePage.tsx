@@ -1,10 +1,8 @@
 import { formatKickoff } from '@futsal/shared';
-import { memberHistory } from '../api/members.js';
 import { Icon } from '../components/Icon.js';
 import { ProfileCard } from '../components/ProfileCard.js';
 import { ErrorBanner, Spinner } from '../components/ui.js';
-import { useAsync } from '../hooks/useAsync.js';
-import { useProfile } from '../hooks/queries.js';
+import { useHistory, useProfile } from '../hooks/queries.js';
 import { useApp } from '../state/app.js';
 import { useLocale } from '../state/locale.js';
 
@@ -20,13 +18,8 @@ export function ProfilePage({ memberId }: { memberId: string }) {
   const { m, locale } = useLocale();
   const profile = useProfile(memberId);
 
-  const history = useAsync(
-    (signal) =>
-      identity.isOrganizer || memberId === identity.memberId
-        ? memberHistory(memberId, signal)
-        : Promise.resolve([]),
-    [memberId, identity.isOrganizer, identity.memberId],
-  );
+  // Somebody else's match list is the organizer's business, or your own.
+  const history = useHistory(memberId, identity.isOrganizer || memberId === identity.memberId);
 
   if (profile.isPending) return <Spinner label={m.app.loading} />;
   if (profile.error || !profile.data) {

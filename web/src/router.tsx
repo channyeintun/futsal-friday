@@ -74,10 +74,18 @@ export function useRoute(): Route {
   return parseRoute(path);
 }
 
+/**
+ * Move to another screen.
+ *
+ * Wrapped in a view transition so the swap cross-fades instead of snapping.
+ * The route lives in `useRoute`'s state, so the transition has to enclose the
+ * subscriber notification that sets it — which `platform.navigation.push`
+ * fires synchronously, and which the seam flushes for us.
+ */
 export function navigate(route: Route): void {
-  platform.navigation.push(routePath(route));
+  platform.viewTransition(() => platform.navigation.push(routePath(route)));
 }
 
 export function replace(route: Route): void {
-  platform.navigation.replace(routePath(route));
+  platform.viewTransition(() => platform.navigation.replace(routePath(route)));
 }
