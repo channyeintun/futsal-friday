@@ -23,6 +23,16 @@ export const en = {
     remove: 'Remove',
   },
 
+  paste: {
+    title: 'Got a link?',
+    body: "Paste it here. Handy when the app is on your home screen — there's no address bar to open a link in.",
+    label: 'Paste your invite link',
+    go: 'Use this link',
+    fromClipboard: 'Paste from clipboard',
+    notALink: "That doesn't look like an invite link. Copy the whole thing from the chat.",
+    pasteBlocked: 'Your browser would not let the app read the clipboard. Paste into the box instead.',
+  },
+
   waiting: {
     title: 'Almost in',
     body: (name: string) =>

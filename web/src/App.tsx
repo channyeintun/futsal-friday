@@ -1,4 +1,4 @@
-import type { Identity } from '@futsal/shared';
+import type { Identity, InviteKind } from '@futsal/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 import { currentIdentity } from './api/auth.js';
@@ -41,6 +41,12 @@ export function App() {
   // still runs underneath, which recovers the rarer case of a live auth cookie
   // with no token beside it (same-origin deploys, cleared local storage).
   const [checking, setChecking] = useState(() => getToken() !== null);
+  // An invite the user pasted, for the case where there is no address bar to
+  // open one in. Held here rather than pushed into the URL because
+  // `replaceState` fires no event, so writing the hash would not re-route.
+  const [pastedInvite, setPastedInvite] = useState<{ kind: InviteKind; nonce: string } | null>(
+    null,
+  );
 
   useEffect(() => {
     // A rejected token can surface from any request; drop straight back to the
@@ -72,16 +78,24 @@ export function App() {
 
   if (!identity) {
     // Two ways in: /join is the one link the whole group gets, /claim is a
-    // personal link. Anywhere else just explains that you need one.
-    const route = parseRoute(platform.navigation.path()).name;
+    // personal link. A pasted link takes precedence over the address — an
+    // installed PWA has no address bar, so pasting is the only route it has.
+    // A bare /join or /claim with no fragment is a dead end — usually a PWA
+    // launched from the home screen, where the link that was tapped never
+    // reached this window. Send it to the screen that can accept a paste
+    // rather than to an error about a link that is not there.
+    const onRoute = parseRoute(platform.navigation.path()).name;
+    const hasHash = platform.navigation.hash() !== '';
+    const route =
+      pastedInvite?.kind ?? (hasHash && (onRoute === 'join' || onRoute === 'claim') ? onRoute : '');
     return (
       <LocaleProvider>
         {route === 'join' ? (
-          <JoinPage onSignedIn={setIdentity} />
+          <JoinPage onSignedIn={setIdentity} nonce={pastedInvite?.nonce} />
         ) : route === 'claim' ? (
-          <ClaimPage onSignedIn={setIdentity} />
+          <ClaimPage onSignedIn={setIdentity} nonce={pastedInvite?.nonce} />
         ) : (
-          <SignInNeeded />
+          <SignInNeeded onInvite={(kind, nonce) => setPastedInvite({ kind, nonce })} />
         )}
       </LocaleProvider>
     );

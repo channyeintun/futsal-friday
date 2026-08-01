@@ -262,6 +262,73 @@ async function run() {
   await sleep(400);
   await walkin.shoot('15-let-in');
 
+  console.log('\npasting a link, the way a home-screen PWA has to');
+  const pwa = await newVisitor();
+  // No fragment: this is what launching from the home screen looks like, and
+  // what a chat webview leaves behind after signing in somewhere else.
+  await pwa.send('Page.navigate', { url: `${APP_URL}/join` });
+  await pwa.waitFor('document.body.innerText.includes("Got a link?")',
+    'a bare /join offers the paste box instead of an error');
+  await sleep(400);
+  await pwa.shoot('17-paste');
+
+  const typeLink = async (value) => {
+    await pwa.evalJs(`(() => {
+      const f = [...document.querySelectorAll('md-outlined-text-field')].at(-1);
+      f.value = ${JSON.stringify(value)};
+      f.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    })()`);
+    await sleep(250);
+    await pwa.evalJs(`(() => {
+      [...document.querySelectorAll('md-filled-button')]
+        .find((b) => b.textContent.includes('Use this link')).click();
+    })()`);
+  };
+
+  await typeLink('https://example.test/not-a-link');
+  await pwa.waitFor(`document.body.innerText.includes("doesn't look like an invite link")`,
+    'rubbish is rejected with an explanation');
+
+  // The whole URL, exactly as it would be copied out of a group chat.
+  await typeLink(`https://futsal-friday.pages.dev${joinPath}`);
+  await pwa.waitFor('document.body.innerText.includes("Which one are you")',
+    'a pasted group link opens the name picker');
+  await sleep(400);
+  const pastedNames = await pwa.evalJs(nameOfButtons);
+
+  // The invariant is that pasting a link is indistinguishable from tapping it,
+  // so compare against a visitor who tapped — naming a member here would only
+  // assert what this suite happened to leave unclaimed.
+  const tapped = await newVisitor();
+  await tapped.send('Page.navigate', { url: `${APP_URL}${joinPath}` });
+  await tapped.waitFor('document.body.innerText.includes("Which one are you")', 'tapped visit loads');
+  await sleep(300);
+  const tappedNames = await tapped.evalJs(nameOfButtons);
+
+  check('the pasted picker is not empty', pastedNames.length > 0);
+  check('and offers exactly what tapping the link would',
+    JSON.stringify(pastedNames) === JSON.stringify(tappedNames),
+    `pasted ${pastedNames.length} vs tapped ${tappedNames.length}`);
+  await pwa.shoot('18-pasted-picker');
+
+  // A bare code carries no path, so the app has to work out which sort it is.
+  const bare = await newVisitor();
+  await bare.send('Page.navigate', { url: `${APP_URL}/` });
+  await bare.waitFor('document.body.innerText.includes("Got a link?")', 'the home screen offers it too');
+  await sleep(300);
+  await bare.evalJs(`(() => {
+    const f = [...document.querySelectorAll('md-outlined-text-field')].at(-1);
+    f.value = ${JSON.stringify(joinPath.split('#')[1])};
+    f.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+  })()`);
+  await sleep(250);
+  await bare.evalJs(`(() => {
+    [...document.querySelectorAll('md-filled-button')]
+      .find((b) => b.textContent.includes('Use this link')).click();
+  })()`);
+  await bare.waitFor('document.body.innerText.includes("Which one are you")',
+    'a bare code is resolved to the group link');
+
   void bao;
   clearTestMembers();
 

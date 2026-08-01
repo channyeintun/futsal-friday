@@ -53,6 +53,17 @@ const clipboard: Platform['clipboard'] = {
     }
     return legacyCopy(text);
   },
+
+  async read() {
+    try {
+      if (navigator.clipboard?.readText) return await navigator.clipboard.readText();
+    } catch {
+      // Denied, or no permission prompt available. There is no legacy fallback
+      // for reading — `execCommand('paste')` was never allowed — so the caller
+      // falls back to letting the user paste into a field themselves.
+    }
+    return null;
+  },
 };
 
 /** `document.execCommand` is deprecated but is the only path in some webviews. */

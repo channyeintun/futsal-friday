@@ -13,6 +13,7 @@ import { formatKickoff, relativeToNow } from '../src/time.ts';
 import { sessionAnnouncement } from '../src/announce.ts';
 import { computeStreak, type StreakEntry } from '../src/streak.ts';
 import { initialsOf } from '../src/names.ts';
+import { parseInvite } from '../src/invite.ts';
 
 let failed = 0;
 const check = (label: string, ok: boolean, detail?: unknown) => {
@@ -279,6 +280,51 @@ check('a Burmese two-part name takes a cluster from each',
 // Astral plane: an emoji is one grapheme, not two code units.
 check('an emoji name is not cut in half', initialsOf('🦵 Legs') !== '\uD83E',
   JSON.stringify(initialsOf('🦵 Legs')));
+
+
+console.log('\npasted invite links');
+
+const N = 'aG9sYS10aGlzLWlzLWEtbm9uY2UtdmFsdWU';
+const parsed = (text: string) => JSON.stringify(parseInvite(text));
+
+check('a whole join URL',
+  parsed(`https://futsal-friday.pages.dev/join#${N}`) === JSON.stringify({ nonce: N, kind: 'join' }),
+  parsed(`https://futsal-friday.pages.dev/join#${N}`));
+check('a whole claim URL',
+  parsed(`https://futsal-friday.pages.dev/claim#${N}`) === JSON.stringify({ nonce: N, kind: 'claim' }),
+  parsed(`https://futsal-friday.pages.dev/claim#${N}`));
+check('a bare code has no kind',
+  parsed(N) === JSON.stringify({ nonce: N, kind: null }), parsed(N));
+
+// Chat clients mangle links in predictable ways.
+check('surrounding chatter is ignored',
+  parseInvite(`join here lads https://futsal-friday.pages.dev/join#${N} see you friday`)?.nonce === N,
+  parsed(`join here lads https://futsal-friday.pages.dev/join#${N} see you friday`));
+check('a trailing full stop is not part of the code',
+  parseInvite(`https://futsal-friday.pages.dev/join#${N}.`)?.nonce === N,
+  parsed(`https://futsal-friday.pages.dev/join#${N}.`));
+check('tracking parameters before the fragment do not confuse it',
+  parseInvite(`https://futsal-friday.pages.dev/join?utm_source=chat#${N}`)?.kind === 'join',
+  parsed(`https://futsal-friday.pages.dev/join?utm_source=chat#${N}`));
+check('whitespace around the paste is trimmed',
+  parseInvite(`  https://futsal-friday.pages.dev/claim#${N}  `)?.nonce === N,
+  parsed(`  https://futsal-friday.pages.dev/claim#${N}  `));
+check('an unknown path still yields the code',
+  parseInvite(`https://example.test/somewhere#${N}`)?.kind === null,
+  parsed(`https://example.test/somewhere#${N}`));
+
+check('empty input', parseInvite('') === null);
+check('whitespace only', parseInvite('   ') === null);
+check('prose with no code', parseInvite('hey can you send me the link') === null,
+  parsed('hey can you send me the link'));
+check('a short token is not a nonce', parseInvite('abc123') === null, parsed('abc123'));
+// A link whose fragment never survived carries nothing to recover.
+check('a URL with no fragment is refused',
+  parseInvite('https://futsal-friday.pages.dev/join') === null,
+  parsed('https://futsal-friday.pages.dev/join'));
+check('a fragment with nothing usable in it',
+  parseInvite('https://futsal-friday.pages.dev/join#') === null,
+  parsed('https://futsal-friday.pages.dev/join#'));
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILURE(S)`);
 process.exit(failed === 0 ? 0 : 1);

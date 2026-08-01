@@ -14,9 +14,16 @@ import { useLocale } from '../state/locale.js';
  * all. Both rules are enforced server-side; this screen just renders what it
  * is given, so a stale page cannot be used to claim something it should not.
  */
-export function JoinPage({ onSignedIn }: { onSignedIn(identity: Identity): void }) {
+export function JoinPage({
+  onSignedIn,
+  nonce: pasted,
+}: {
+  onSignedIn(identity: Identity): void;
+  /** Set when the link was pasted in rather than opened. */
+  nonce?: string;
+}) {
   const { m, locale, setLocale } = useLocale();
-  const [nonce] = useState(() => platform.navigation.hash());
+  const [nonce] = useState(() => pasted ?? platform.navigation.hash());
   const [members, setMembers] = useState<JoinableMember[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);

@@ -441,6 +441,19 @@ A **personal link** still exists for the cases that need one: organizers, a
 second device, or re-inviting somebody after their access was removed. Setup
 mints one next to any name.
 
+**No address bar? Paste the link.** Once the app is installed to a home screen
+there is nowhere to open a link, and on iOS a link tapped inside a chat opens
+that chat's in-app webview — separate storage, so somebody can sign in there
+and still find their home-screen icon signed out. Every signed-out screen
+therefore carries a **Got a link?** box: paste the whole URL, or just the code,
+and it does the same thing tapping it would. `/join` or `/claim` opened with no
+fragment lands there too, rather than on an error about a link that is not
+present. The parser (`shared/src/invite.ts`) takes a bare code, a URL with
+tracking parameters, or a link with chat around it. There is a *Paste from
+clipboard* button as well, but the field is the thing that always works —
+Firefox refuses clipboard reads outright, Safari allows them only from a
+gesture, and chat webviews usually block them.
+
 Four limits are what make a link that lives in a group chat safe to leave there:
 
 1. **A name can only be taken once.** After that it disappears from the list,

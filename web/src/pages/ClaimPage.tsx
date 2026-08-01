@@ -1,8 +1,9 @@
-import type { Identity } from '@futsal/shared';
+import type { Identity, InviteKind } from '@futsal/shared';
 import { LOCALES, LOCALE_LABELS } from '@futsal/shared';
 import { useEffect, useRef, useState } from 'react';
 import { claim } from '../api/auth.js';
 import { Icon } from '../components/Icon.js';
+import { PasteInvite } from '../components/PasteInvite.js';
 import { Button, ErrorBanner, Spinner } from '../components/ui.js';
 import { platform } from '../platform/index.js';
 import { useLocale } from '../state/locale.js';
@@ -15,15 +16,27 @@ import { useLocale } from '../state/locale.js';
  * reveals who is in the group, which is the point: before this change, anyone
  * with the group code could read the roster and pick any name on it.
  */
-export function ClaimPage({ onSignedIn }: { onSignedIn(identity: Identity): void }) {
+export function ClaimPage({
+  onSignedIn,
+  nonce,
+}: {
+  onSignedIn(identity: Identity): void;
+  /** Set when the link was pasted in rather than opened. */
+  nonce?: string;
+}) {
   const { m, locale, setLocale } = useLocale();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
-  const [hash, setHash] = useState(() => platform.navigation.hash());
+  // `nonce` wins when the link was pasted rather than opened — an installed
+  // PWA has no address bar to carry a fragment.
+  const [hash, setHash] = useState(() => nonce ?? platform.navigation.hash());
 
   // Opening a second link in a tab that is already here changes only the
   // fragment, which does not reload the page.
-  useEffect(() => platform.navigation.subscribe(() => setHash(platform.navigation.hash())), []);
+  useEffect(() => {
+    if (nonce) return;
+    return platform.navigation.subscribe(() => setHash(platform.navigation.hash()));
+  }, [nonce]);
 
   // Keyed on the nonce rather than a boolean: Strict mode double-invokes
   // effects and a link is single-use, so the second attempt would spend
@@ -97,7 +110,11 @@ export function ClaimPage({ onSignedIn }: { onSignedIn(identity: Identity): void
 }
 
 /** Shown when someone opens the app without ever having claimed an identity. */
-export function SignInNeeded() {
+export function SignInNeeded({
+  onInvite,
+}: {
+  onInvite(kind: InviteKind, nonce: string): void;
+}) {
   const { m, locale, setLocale } = useLocale();
 
   return (
@@ -116,6 +133,8 @@ export function SignInNeeded() {
             {m.claim.askOrganizer}
           </p>
         </div>
+
+        <PasteInvite onInvite={onInvite} />
 
         <div className="row" style={{ justifyContent: 'center', gap: 4 }}>
           {LOCALES.map((code) => (

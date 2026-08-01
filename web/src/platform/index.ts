@@ -21,6 +21,13 @@ export interface KeyValueStorage {
 export interface Clipboard {
   /** Resolves false when the platform refused rather than throwing. */
   write(text: string): Promise<boolean>;
+  /**
+   * Resolves null when reading is unavailable or refused — which is common:
+   * Safari only allows it from a user gesture, Firefox not at all, and chat
+   * webviews frequently block it. Callers must keep a text field as the way
+   * that always works.
+   */
+  read(): Promise<string | null>;
 }
 
 export interface Navigation {
