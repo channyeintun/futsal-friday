@@ -9,9 +9,11 @@ import { useLocale } from '../state/locale.js';
 /**
  * Somebody else's profile, reached by tapping their name on a session.
  *
- * Deliberately thinner than your own History screen: their run and their
- * recent matches, but none of their money. Who owes what is between them and
- * the organizer.
+ * Thinner than your own History screen — their run and recent matches, no
+ * ledger — but not private: `ProfileCard` shows what they still owe, and the
+ * group-wide list on History says the same thing. In a group this size the
+ * debt is public on purpose, so that the reminder does not fall entirely on
+ * whoever is chasing it.
  */
 export function ProfilePage({ memberId }: { memberId: string }) {
   const { identity } = useApp();

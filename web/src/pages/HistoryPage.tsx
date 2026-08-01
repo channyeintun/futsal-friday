@@ -16,7 +16,9 @@ export function HistoryPage() {
   const { m, locale } = useLocale();
 
   const history = useHistory(identity.memberId);
-  const balances = useBalances(identity.isOrganizer);
+  // Everyone's, not just the organizer's: the point of the list is that being
+  // on it is public.
+  const balances = useBalances(true);
   const profile = useProfile(identity.memberId);
 
   const myOutstanding = (history.data ?? []).reduce(
@@ -120,37 +122,42 @@ export function HistoryPage() {
         <p className="empty">{m.history.nonePlayed}</p>
       ) : null}
 
-      {identity.isOrganizer ? (
-        <div className="card">
-          <h2 className="card-title">
-            <Icon name="money" size={18} /> {m.history.whoOwes}
-          </h2>
-          {balances.error ? <ErrorBanner>{balances.error.message}</ErrorBanner> : null}
-          {(balances.data ?? []).length === 0 ? (
-            <p className="empty">{m.history.noPayments}</p>
-          ) : (
-            (balances.data ?? [])
-              // Debtors first — that is the list the organizer is chasing.
-              .slice()
-              .sort((a, b) => b.outstanding - a.outstanding)
-              .map((balance) => (
-                <div key={balance.member.id} className="player-row">
-                  <span className="player-name truncate">{balance.member.name}</span>
-                  <span className="muted">{balance.sessionsPlayed}×</span>
-                  <span
-                    className="amount"
-                    style={{
-                      color:
-                        balance.outstanding > 0 ? 'var(--md-sys-color-error)' : 'var(--ff-paid)',
-                    }}
-                  >
-                    {formatVnd(balance.outstanding)}
-                  </span>
-                </div>
-              ))
-          )}
-        </div>
-      ) : null}
+      {/* Shown to everyone, not just the organizer. Being on this list is the
+          reminder; that only works if the group can see it. */}
+      <div className="card">
+        <h2 className="card-title">
+          <Icon name="money" size={18} /> {m.history.whoOwes}
+        </h2>
+        <p className="card-sub">{m.history.whoOwesBody}</p>
+        {balances.error ? <ErrorBanner>{balances.error.message}</ErrorBanner> : null}
+        {(balances.data ?? []).length === 0 ? (
+          <p className="empty">{m.history.noPayments}</p>
+        ) : (
+          (balances.data ?? [])
+            // Debtors first. It is the list nobody wants to be at the top of,
+            // which only works if the top is where the eye lands.
+            .slice()
+            .sort((a, b) => b.outstanding - a.outstanding)
+            .map((balance) => (
+              <div
+                key={balance.member.id}
+                className={`player-row${balance.member.id === identity.memberId ? ' is-me' : ''}`}
+              >
+                <span className="player-name truncate">{balance.member.name}</span>
+                <span className="muted">{balance.sessionsPlayed}×</span>
+                <span
+                  className="amount"
+                  style={{
+                    color:
+                      balance.outstanding > 0 ? 'var(--md-sys-color-error)' : 'var(--ff-paid)',
+                  }}
+                >
+                  {balance.outstanding > 0 ? formatVnd(balance.outstanding) : m.history.settledUp}
+                </span>
+              </div>
+            ))
+        )}
+      </div>
     </>
   );
 }

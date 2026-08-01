@@ -83,8 +83,17 @@ export const memberRoutes = new Hono<AppContext>()
     return c.json({ ok: true });
   })
 
-  /** Organizer dashboard: who owes what, across every session. */
-  .get('/balances', requireOrganizer(), async (c) => {
+  /**
+   * Who owes what, across every session — readable by anyone signed in.
+   *
+   * Deliberately not an organizer secret. In a group this size the debt is
+   * already public: the payments screen has a *Copy status for chat* button
+   * whose whole job is pasting the unpaid list into the group, and any
+   * member's outstanding total is already on their profile. Keeping the
+   * aggregate private only meant the one person chasing the money was also
+   * the only one who could see it, which put all the nagging on them.
+   */
+  .get('/balances', async (c) => {
     return c.json({ balances: await loadMemberBalances(c.env.DB) });
   })
 

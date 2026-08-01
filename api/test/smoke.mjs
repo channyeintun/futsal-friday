@@ -187,8 +187,17 @@ const run = async () => {
   const forbidden = await call('POST', '/venues', { token: alice.token, body: { name: 'Sneaky' } });
   check('non-organizers cannot create venues', forbidden.status === 403, forbidden.body);
 
-  const balancesDenied = await call('GET', '/members/balances', { token: alice.token });
-  check('non-organizers cannot read balances', balancesDenied.status === 403, balancesDenied.body);
+  // Deliberately not organizer-only. The unpaid list is already pasted into
+  // the group chat by the copy-status button, and being on it in public is
+  // what the feature is for.
+  const balancesForMember = await call('GET', '/members/balances', { token: alice.token });
+  check('any member can see who owes what', balancesForMember.status === 200,
+    balancesForMember.status);
+  check('and it names names', Array.isArray(balancesForMember.body?.balances) &&
+    balancesForMember.body.balances.length > 0,
+    JSON.stringify(balancesForMember.body).slice(0, 120));
+  const balancesAnon = await call('GET', '/members/balances');
+  check('but not without signing in', balancesAnon.status === 401, balancesAnon.status);
 
   section('sessions + waitlist');
   const startsAt = new Date(Date.now() + 3 * 86_400_000).toISOString();

@@ -271,6 +271,8 @@ export const en = {
     yourSessions: 'Your sessions',
     nonePlayed: 'You have not played a session yet.',
     whoOwes: 'Who owes what',
+    whoOwesBody: 'Everyone in the group sees this list. The quick way off it is to pay.',
+    settledUp: 'all square',
     noPayments: 'No payments recorded yet.',
     waitlisted: 'waitlisted',
     loading: 'Loading history…',

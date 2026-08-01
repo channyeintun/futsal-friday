@@ -361,6 +361,22 @@ Trigger it locally with:
 curl "http://localhost:8787/cdn-cgi/local/scheduled"
 ```
 
+### Who owes what is public
+
+The group-wide unpaid list on **History** is visible to every member, not just
+the organizer, and says so on the card. That is the point of it: an unpaid debt
+that only the organizer can see makes chasing it one person's unpaid job, and
+this is a friend group, not a business.
+
+It is also not the disclosure it first looks like. The payments screen already
+has a *Copy status for chat* button whose entire purpose is pasting the unpaid
+list into the group, and any member's outstanding total already appears on
+their profile. Keeping the aggregate behind `requireOrganizer()` was the odd
+one out rather than a privacy boundary.
+
+Your own row is highlighted, debtors sort to the top, and anyone square shows
+"all square" rather than `0d`.
+
 ### Streaks and profile pictures
 
 Every member has a profile: their picture, their attendance run, and how much
@@ -742,7 +758,7 @@ ICT date arithmetic (including the UTC-vs-ICT boundary cases where a Thursday
 evening in UTC is already Friday in Ho Chi Minh City) and the money split
 (exact-sum invariants, overrides, rounding).
 
-The API integration suite is 147 checks against real local D1 and R2 — the invite
+The API integration suite is 149 checks against real local D1 and R2 — the invite
 gate, the waitlist and its auto-promotion, the split, the payment state machine,
 proof upload and access control, and the cron. It needs `wrangler dev` running
 and writes to the local database, so run it in a second terminal:

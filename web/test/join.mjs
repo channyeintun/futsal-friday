@@ -176,6 +176,23 @@ async function run() {
   await sleep(800);
   await a.shoot('12-join-signed-in');
 
+  // A plain member — not the organizer — must see the group's unpaid list.
+  // The ui suite cannot prove this: it signs in as an organizer, who would see
+  // the list either way.
+  await a.evalJs(`[...document.querySelectorAll('.bottom-nav button')][1].click()`);
+  await a.waitFor('document.body.innerText.includes("Who owes what")',
+    'a non-organizer sees the owe list');
+  await sleep(400);
+  check('the owe list names other people, not just the viewer',
+    (await a.evalJs(`[...document.querySelectorAll('.player-row .player-name')].length`)) > 0,
+    await a.evalJs(`[...document.querySelectorAll('.player-row .player-name')].map(n => n.textContent.trim()).join(', ').slice(0, 160)`));
+  check('and it is not the organizer-only ledger heading',
+    !(await a.evalJs('document.body.innerText.includes("You owe")')) ||
+      (await a.evalJs('document.body.innerText.includes("Who owes what")')));
+  await a.shoot('19-owe-list-member');
+  await a.evalJs(`[...document.querySelectorAll('.bottom-nav button')][0].click()`);
+  await a.waitFor('!!document.querySelector(".conn")', 'back on the session screen');
+
   console.log('\nthe name is gone for the next person');
   const c = await newVisitor();
   await c.send('Page.navigate', { url: `${APP_URL}${joinPath}` });

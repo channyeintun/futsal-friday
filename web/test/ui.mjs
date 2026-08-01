@@ -361,6 +361,14 @@ async function run() {
   check('the streak values are numbers',
     await evalJs(`[...document.querySelectorAll('.streak-value')].every(v => /^\\d+$/.test(v.textContent.trim()))`),
     await evalJs(`[...document.querySelectorAll('.streak-value')].map(v => v.textContent.trim()).join(',')`));
+  // The point of making this public: everybody can see the list, so nobody
+  // needs the organizer to nag them.
+  check('the owe list is on History for everyone',
+    await evalJs('document.body.innerText.includes("Who owes what")'),
+    await evalJs('document.body.innerText.slice(0, 200)'));
+  check('and says so plainly',
+    await evalJs('document.body.innerText.includes("Everyone in the group sees this list")'));
+
   check('it counts matches played of total',
     await evalJs(`/Played \\d+ of \\d+ matches/.test(document.body.innerText)`),
     await evalJs(`document.body.innerText.slice(0, 200)`));
@@ -425,8 +433,13 @@ async function run() {
     await waitFor('!!document.querySelector(".streak-cell")', 'their streak renders');
     await sleep(400);
     await shoot('12-profile-other');
-    check('a team-mate\'s profile hides their money',
-      !(await evalJs('document.body.innerText.includes("You owe")')));
+    // Their profile is a summary, not your ledger: no "You owe" block, no
+    // group-wide list. What it does carry — their own outstanding total — is
+    // deliberate, and the same number the History list shows everyone.
+    check('a team-mate\'s profile is not your own ledger',
+      !(await evalJs('document.body.innerText.includes("You owe")')) &&
+        !(await evalJs('document.body.innerText.includes("Who owes what")')),
+      await evalJs('document.body.innerText.slice(0, 200)'));
   }
   await evalJs(`[...document.querySelectorAll('.bottom-nav button')][0].click()`);
   await waitFor('!!document.querySelector(".conn")', 'back to the session again');
