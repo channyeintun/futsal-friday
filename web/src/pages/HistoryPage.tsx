@@ -1,7 +1,9 @@
 import { formatKickoff, formatVnd } from '@futsal/shared';
 import { listBalances, memberHistory } from '../api/members.js';
 import { Icon } from '../components/Icon.js';
+import { ProfileCard } from '../components/ProfileCard.js';
 import { ErrorBanner, Spinner } from '../components/ui.js';
+import { useProfile } from '../hooks/queries.js';
 import { useAsync } from '../hooks/useAsync.js';
 import { navigate } from '../router.js';
 import { useApp } from '../state/app.js';
@@ -23,6 +25,7 @@ export function HistoryPage() {
     (signal) => (identity.isOrganizer ? listBalances(signal) : Promise.resolve([])),
     [identity.isOrganizer],
   );
+  const profile = useProfile(identity.memberId);
 
   const myOutstanding = (history.data ?? []).reduce(
     (sum, entry) =>
@@ -32,30 +35,37 @@ export function HistoryPage() {
 
   return (
     <>
-      <div className="card">
-        <div className="row between">
-          <div>
-            <h2 className="card-title">{identity.name}</h2>
-            <p className="card-sub">
-              {m.history.sessionsPlayed(
-                (history.data ?? []).filter((e) => e.registrationStatus === 'in').length,
-              )}
-            </p>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <div className="muted">{m.history.youOwe}</div>
-            <div
-              className="amount"
-              style={{
-                fontSize: '1.3rem',
-                color: myOutstanding > 0 ? 'var(--md-sys-color-error)' : 'var(--ff-paid)',
-              }}
-            >
-              {formatVnd(myOutstanding)}
+      {/* Your profile leads: face, streak, and what you owe. Falls back to the
+          plain header while the profile is still in flight, so the amount you
+          owe never disappears behind a spinner. */}
+      {profile.data ? (
+        <ProfileCard profile={profile.data} />
+      ) : (
+        <div className="card">
+          <div className="row between">
+            <div>
+              <h2 className="card-title">{identity.name}</h2>
+              <p className="card-sub">
+                {m.history.sessionsPlayed(
+                  (history.data ?? []).filter((e) => e.registrationStatus === 'in').length,
+                )}
+              </p>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div className="muted">{m.history.youOwe}</div>
+              <div
+                className="amount"
+                style={{
+                  fontSize: '1.3rem',
+                  color: myOutstanding > 0 ? 'var(--md-sys-color-error)' : 'var(--ff-paid)',
+                }}
+              >
+                {formatVnd(myOutstanding)}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {history.error ? <ErrorBanner>{history.error}</ErrorBanner> : null}
       {history.loading && !history.data ? <Spinner label={m.history.loading} /> : null}

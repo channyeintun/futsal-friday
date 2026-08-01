@@ -1,4 +1,5 @@
 import type { Identity } from '@futsal/shared';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 import { currentIdentity } from './api/auth.js';
 import { getToken, onUnauthorized } from './api/client.js';
@@ -10,11 +11,26 @@ import { JoinPage } from './pages/JoinPage.js';
 import { HistoryPage } from './pages/HistoryPage.js';
 import { HomePage } from './pages/HomePage.js';
 import { PaymentsPage } from './pages/PaymentsPage.js';
+import { ProfilePage } from './pages/ProfilePage.js';
 import { SessionPage } from './pages/SessionPage.js';
 import { platform } from './platform/index.js';
 import { type Route, navigate, parseRoute, replace, useRoute } from './router.js';
 import { AppProvider, useApp } from './state/app.js';
 import { LocaleProvider, useMessages } from './state/locale.js';
+
+/**
+ * One client for the whole app. Only the cached reads go through it — see
+ * `hooks/queries.ts` — so its defaults are tuned for those: a phone that has
+ * been in a pocket should not fire a burst of refetches the moment it wakes.
+ */
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 export function App() {
   const [identity, setIdentity] = useState<Identity | null>(null);
@@ -74,9 +90,11 @@ export function App() {
     // The member's stored language seeds the provider, but only when this
     // device has not already chosen one for itself.
     <LocaleProvider serverLocale={identity.language}>
-      <AppProvider identity={identity} onSignOut={signOut}>
-        <Shell />
-      </AppProvider>
+      <QueryClientProvider client={queryClient}>
+        <AppProvider identity={identity} onSignOut={signOut}>
+          <Shell />
+        </AppProvider>
+      </QueryClientProvider>
     </LocaleProvider>
   );
 }
@@ -160,6 +178,8 @@ function Page({ route }: { route: Route }) {
       return <PaymentsPage sessionId={route.id} />;
     case 'history':
       return <HistoryPage />;
+    case 'profile':
+      return <ProfilePage memberId={route.id} />;
     case 'admin':
       return <AdminPage />;
   }
@@ -177,6 +197,8 @@ function titleFor(route: Route, m: ReturnType<typeof useMessages>): string {
       return m.nav.payments;
     case 'history':
       return m.nav.history;
+    case 'profile':
+      return m.profile.title;
     case 'admin':
       return m.nav.setup;
   }

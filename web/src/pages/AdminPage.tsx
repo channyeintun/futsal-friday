@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { createMember, listMembers, removeMember, updateMember } from '../api/members.js';
 import { createSession } from '../api/sessions.js';
 import { createVenue, listVenues, retireVenue, updateVenue } from '../api/venues.js';
+import { Avatar } from '../components/Avatar.js';
 import { Icon } from '../components/Icon.js';
 import { GroupInviteCard, MemberInviteControls, MyDeviceCard } from '../components/InviteLink.js';
 import { ReminderSettings } from '../components/ReminderSettings.js';
@@ -124,7 +125,12 @@ function MembersCard({ state }: { state: ReturnType<typeof useAsync<Member[]>> }
       {(state.data ?? []).map((member) => (
         <div key={member.id} className="member-row">
           <div className="row" style={{ gap: 8 }}>
-            <Icon name="person" size={18} />
+            <Avatar
+              memberId={member.id}
+              name={member.name}
+              avatarUpdatedAt={member.avatarUpdatedAt}
+              size={32}
+            />
             <span className="player-name truncate grow">{member.name}</span>
             <span className="muted" style={{ fontSize: '0.75rem' }}>
               {m.app.organizerSuffix}

@@ -608,3 +608,113 @@ body {
   border-radius: 12px;
   background: var(--md-sys-color-surface-container-highest);
 }
+
+/* ------------------------------------------------------------------ avatars */
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+  color: #fff;
+  font-weight: 600;
+  /* Initials are short and often Burmese; keep them off the body line-height,
+     which is tall enough to push them off-centre in a small circle. */
+  line-height: 1;
+  user-select: none;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* The editable one on your own profile. */
+.avatar-edit {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: 50%;
+  /* Clips the scrim below to the circle. Without it the bar renders as a
+     rectangle hanging off both sides of the avatar. */
+  overflow: hidden;
+}
+
+.avatar-edit::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 34%;
+  background: rgb(0 0 0 / 45%);
+}
+
+.avatar-edit .avatar-pencil {
+  position: absolute;
+  bottom: 6%;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  color: #fff;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ streaks */
+
+.streak {
+  display: flex;
+  gap: 8px;
+}
+
+.streak-cell {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  padding: 10px 6px;
+  border-radius: 12px;
+  background: var(--md-sys-color-surface-container-highest);
+}
+
+.streak-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--md-sys-color-on-surface);
+}
+
+/* A live run is the thing worth looking at, so it gets the accent. */
+.streak-cell.is-live .streak-value {
+  color: var(--ff-paid);
+}
+
+.streak-label {
+  font-size: 0.7rem;
+  /* Burmese labels wrap where English does not; give them room rather than
+     letting a two-line label shove the row taller than its neighbours. */
+  line-height: 1.4;
+  color: var(--md-sys-color-on-surface-variant);
+  overflow-wrap: anywhere;
+}
+
+/* A name that navigates. Styled as text, not a button — the row should read as
+   a list, and only the affordance colour hints that it is tappable. */
+.player-name.link {
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  color: var(--md-sys-color-primary);
+  text-align: left;
+  cursor: pointer;
+  /* Keep the 44px touch target the row already provides without changing the
+     visual line height. */
+  min-height: 32px;
+}

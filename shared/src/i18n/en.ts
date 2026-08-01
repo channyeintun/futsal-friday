@@ -20,6 +20,25 @@ export const en = {
     working: 'One sec…',
     somethingWrong: 'Something went wrong',
     organizerSuffix: 'organizer',
+    remove: 'Remove',
+  },
+
+  profile: {
+    title: 'Profile',
+    currentStreak: 'Streak',
+    bestStreak: 'Best',
+    played: 'Played',
+    playedOf: (played: number, total: number) => `Played ${played} of ${total} matches`,
+    owes: (amount: string) => `Owes ${amount}`,
+    keepItUp: (count: number) =>
+      count === 1 ? 'One in a row. Do not stop now.' : `${count} in a row. Do not break it.`,
+    noStreak: 'No run going. The next match starts one.',
+    changePicture: 'Change picture',
+    removePicture: 'Remove picture',
+    removePictureBody: 'Your initials will show instead. You can add a new one any time.',
+    pictureUpdated: 'Picture updated',
+    couldNotUpload: 'Could not save that picture',
+    couldNotLoad: 'Could not load that profile',
   },
 
   nav: {
@@ -216,6 +235,7 @@ export const en = {
     noPayments: 'No payments recorded yet.',
     waitlisted: 'waitlisted',
     loading: 'Loading history…',
+    recent: 'Recent matches',
   },
 
   admin: {

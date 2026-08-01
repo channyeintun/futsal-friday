@@ -16,6 +16,7 @@ export type Route =
   | { name: 'session'; id: string }
   | { name: 'payments'; id: string }
   | { name: 'history' }
+  | { name: 'profile'; id: string }
   | { name: 'admin' };
 
 export function parseRoute(path: string): Route {
@@ -35,6 +36,8 @@ export function parseRoute(path: string): Route {
       return segments[1] ? { name: 'payments', id: segments[1] } : { name: 'home' };
     case 'history':
       return { name: 'history' };
+    case 'profile':
+      return segments[1] ? { name: 'profile', id: segments[1] } : { name: 'home' };
     case 'admin':
       return { name: 'admin' };
     default:
@@ -56,6 +59,8 @@ export function routePath(route: Route): string {
       return `/payments/${route.id}`;
     case 'history':
       return '/history';
+    case 'profile':
+      return `/profile/${route.id}`;
     case 'admin':
       return '/admin';
   }

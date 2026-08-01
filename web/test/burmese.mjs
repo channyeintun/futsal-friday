@@ -82,6 +82,38 @@ const overflowing = await js(`(() => {
 })()`);
 check('no element overflows its box', overflowing === '[]', overflowing);
 
+console.log('\nthe Burmese profile card');
+await js(`[...document.querySelectorAll('.bottom-nav button')][1].click()`);
+await waitFor(`!!document.querySelector('.streak-cell')`, 'profile card renders in Burmese');
+await sleep(600);
+await shoot('05-profile-my');
+check('streak labels are in Burmese',
+  await js(`[...document.querySelectorAll('.streak-label')].every(l => /[\u1000-\u109F]/.test(l.textContent))`),
+  await js(`[...document.querySelectorAll('.streak-label')].map(l => l.textContent).join('|')`));
+check('the counts stay in Arabic numerals',
+  await js(`[...document.querySelectorAll('.streak-value')].every(v => /^\\d+$/.test(v.textContent.trim()))`),
+  await js(`[...document.querySelectorAll('.streak-value')].map(v => v.textContent.trim()).join(',')`));
+// Three narrow cells with Burmese labels is the most likely place to overflow.
+check('no streak cell overflows its box',
+  await js(`[...document.querySelectorAll('.streak-cell')].every(c => c.scrollWidth <= c.clientWidth + 2)`),
+  await js(`[...document.querySelectorAll('.streak-cell')].map(c => c.scrollWidth+'>'+c.clientWidth).join('|')`));
+check('the three cells stay the same height',
+  await js(`(() => { const h = [...document.querySelectorAll('.streak-cell')].map(c => Math.round(c.getBoundingClientRect().height)); return new Set(h).size === 1; })()`),
+  await js(`[...document.querySelectorAll('.streak-cell')].map(c => Math.round(c.getBoundingClientRect().height)).join(',')`));
+// Either branch is correct — a previous suite may have left a picture on this
+// account. What matters is that the circle is never blank. The grapheme
+// handling behind the initials is unit-tested against real Burmese names in
+// shared/test.
+check('the avatar renders something, picture or initials',
+  await js(`(() => {
+    const a = document.querySelector('.avatar');
+    return !!a && (!!a.querySelector('img') || a.textContent.trim().length > 0);
+  })()`),
+  await js(`document.querySelector('.avatar')?.outerHTML?.slice(0, 120)`));
+await js(`[...document.querySelectorAll('.bottom-nav button')][0].click()`);
+await waitFor(`!!document.querySelector('.conn')`, 'back to the session screen');
+await sleep(500);
+
 console.log('\nthe Burmese announcement');
 await js(`(()=>{const b=[...document.querySelectorAll('md-text-button')].find(x=>x.textContent.includes('ကြေညာချက် ရေးမယ်'));if(b)b.click()})()`);
 await waitFor(`document.body.innerText.includes('အုပ်စုကို လှုံ့ဆော်မယ်')`, 'announcement dialog opens in Burmese');

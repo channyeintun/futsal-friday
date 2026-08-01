@@ -36,6 +36,11 @@ export const playerJoinedSchema = z.object({
   sessionId: idSchema,
   memberId: idSchema,
   memberName: z.string(),
+  /**
+   * Carried for the same reason as the name: so a client can draw the new row
+   * complete, without the picture popping in on the next refresh.
+   */
+  memberAvatarUpdatedAt: isoSchema.nullable().default(null),
   status: registrationStatusSchema,
   position: z.number().int(),
   counts,

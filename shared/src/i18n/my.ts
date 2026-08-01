@@ -31,6 +31,25 @@ export const my: Messages = {
     working: 'ခဏလေး…',
     somethingWrong: 'တစ်ခုခု မှားယွင်းသွားပါသည်',
     organizerSuffix: 'စီစဉ်သူ',
+    remove: 'ဖယ်ရှားမည်',
+  },
+
+  profile: {
+    title: 'ကိုယ်ရေးအချက်အလက်',
+    currentStreak: 'ဆက်တိုက်',
+    bestStreak: 'အများဆုံး',
+    played: 'ကစားပြီး',
+    playedOf: (played, total) => `ပွဲ ${total} ပွဲအနက် ${played} ပွဲ ကစားပြီး`,
+    owes: (amount) => `ကျန်ငွေ ${amount}`,
+    keepItUp: (count) =>
+      count === 1 ? 'တစ်ပွဲ ဆက်တိုက်။ ဒီမှာ မရပ်နဲ့။' : `${count} ပွဲ ဆက်တိုက်။ မပြတ်စေနဲ့။`,
+    noStreak: 'ဆက်တိုက်စာရင်း မရှိသေးဘူး။ နောက်ပွဲက စလို့ရတယ်။',
+    changePicture: 'ဓာတ်ပုံ ပြောင်းမည်',
+    removePicture: 'ဓာတ်ပုံ ဖယ်မည်',
+    removePictureBody: 'အစား နာမည်အက္ခရာ ပြပါမယ်။ ဘယ်အချိန်မဆို ပြန်ထည့်လို့ရတယ်။',
+    pictureUpdated: 'ဓာတ်ပုံ ပြောင်းပြီးပါပြီ',
+    couldNotUpload: 'ဓာတ်ပုံ မသိမ်းနိုင်ပါ',
+    couldNotLoad: 'ကိုယ်ရေးအချက်အလက် မဖတ်နိုင်ပါ',
   },
 
   nav: {
@@ -224,6 +243,7 @@ export const my: Messages = {
     noPayments: 'ငွေပေးချေမှု မှတ်တမ်း မရှိသေးပါ။',
     waitlisted: 'စောင့်ဆိုင်းခဲ့',
     loading: 'မှတ်တမ်း ဖွင့်နေသည်…',
+    recent: 'မကြာသေးမီ ပွဲများ',
   },
 
   admin: {

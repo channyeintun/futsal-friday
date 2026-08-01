@@ -1,8 +1,11 @@
-import { normalizeLocale } from '@futsal/shared';
+import { computeStreak, normalizeLocale } from '@futsal/shared';
 import type {
+  Attendance,
   Member,
   MemberBalance,
   MemberHistoryEntry,
+  MemberProfile,
+  StreakEntry,
   Payment,
   PaymentSummary,
   Registration,
@@ -37,6 +40,8 @@ export interface MemberRow {
   claim_nonce: string | null;
   claim_expires_at: string | null;
   token_version: number;
+  avatar_key: string | null;
+  avatar_updated_at: string | null;
 }
 
 export interface VenueRow {
@@ -78,6 +83,7 @@ export interface RegistrationRow {
   session_id: string;
   member_id: string;
   member_name: string;
+  member_avatar_updated_at: string | null;
   status: string;
   position: number;
   created_at: string;
@@ -115,6 +121,9 @@ export const toMember = (row: MemberRow): Member => ({
   // The nonce itself never leaves the server; the roster only needs to know
   // whether an invitation is outstanding.
   hasPendingLink: row.claim_nonce !== null,
+  // Likewise the R2 key: the client gets a timestamp to cache against and
+  // reads the picture through an authorized route.
+  avatarUpdatedAt: row.avatar_updated_at ?? null,
 });
 
 export const toVenue = (row: VenueRow): Venue => ({
@@ -157,6 +166,7 @@ export const toRegistration = (row: RegistrationRow): Registration => ({
   sessionId: row.session_id,
   memberId: row.member_id,
   memberName: row.member_name,
+  memberAvatarUpdatedAt: row.member_avatar_updated_at ?? null,
   status: row.status as Registration['status'],
   position: row.position,
   createdAt: row.created_at,
@@ -217,8 +227,9 @@ export async function listRegistrations(
 ): Promise<Registration[]> {
   const { results } = await db
     .prepare(
-      `SELECT r.id, r.session_id, r.member_id, m.name AS member_name, r.status,
-              r.position, r.created_at
+      `SELECT r.id, r.session_id, r.member_id, m.name AS member_name,
+              m.avatar_updated_at AS member_avatar_updated_at,
+              r.status, r.position, r.created_at
          FROM registrations r
          JOIN members m ON m.id = r.member_id
         WHERE r.session_id = ?1
@@ -360,6 +371,75 @@ export async function loadMemberBalances(db: D1Database): Promise<MemberBalance[
     totalConfirmed: row.total_confirmed,
     outstanding: Math.max(0, row.total_owed - row.total_confirmed),
   }));
+}
+
+/**
+ * Everything a profile screen shows: who they are, their attendance run, and
+ * what they still owe.
+ *
+ * The streak deliberately does *not* reuse `loadMemberHistory`. That query
+ * keeps only sessions where the member has a registration or payment row,
+ * which silently drops the games they ignored entirely — exactly the gaps that
+ * are supposed to end a run. Reading it from there would hand every no-show a
+ * perfect record.
+ */
+export async function loadMemberProfile(
+  db: D1Database,
+  memberId: string,
+  now = new Date(),
+): Promise<MemberProfile | null> {
+  const row = await db
+    .prepare(`SELECT * FROM members WHERE id = ?1`)
+    .bind(memberId)
+    .first<MemberRow>();
+  if (!row) return null;
+
+  const nowIso = now.toISOString();
+  const { results } = await db
+    .prepare(
+      // Every game that has already kicked off since they joined. Cancelled
+      // ones are excluded rather than treated as misses: nobody played, so
+      // nobody's run should end. `starts_at` rather than `status` decides
+      // whether it has happened, so a late cron cannot resurrect a streak.
+      `SELECT s.id, s.starts_at, r.status AS reg_status
+         FROM sessions s
+         LEFT JOIN registrations r ON r.session_id = s.id AND r.member_id = ?1
+        WHERE s.status != 'cancelled'
+          AND s.starts_at < ?2
+          AND s.starts_at >= ?3
+        ORDER BY s.starts_at DESC
+        LIMIT 200`,
+    )
+    .bind(memberId, nowIso, row.created_at)
+    .all<{ id: string; starts_at: string; reg_status: string | null }>();
+
+  const entries: StreakEntry[] = results.map((session) => ({
+    sessionId: session.id,
+    startsAt: session.starts_at,
+    attendance: toAttendance(session.reg_status),
+  }));
+
+  const owed = await db
+    .prepare(
+      `SELECT COALESCE(SUM(COALESCE(amount_override, amount_due)), 0) AS due
+         FROM payments
+        WHERE member_id = ?1 AND status != 'confirmed'`,
+    )
+    .bind(memberId)
+    .first<{ due: number }>();
+
+  return {
+    member: toMember(row),
+    streak: computeStreak(entries),
+    outstanding: Math.max(0, owed?.due ?? 0),
+  };
+}
+
+/** No registration row at all reads the same as "out": they were not there. */
+function toAttendance(status: string | null): Attendance {
+  if (status === 'in') return 'in';
+  if (status === 'waitlist') return 'waitlist';
+  return 'missed';
 }
 
 /** One member's session-by-session history, newest first. */

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Futsal Friday frontend \u2014 React + Vite + Material Design 3, deployed on Cloudflare Pages.",
+  "description": "Futsal Friday frontend — React + Vite + Material Design 3, deployed on Cloudflare Pages.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -22,6 +22,7 @@
   "dependencies": {
     "@futsal/shared": "*",
     "@material/web": "^2.4.0",
+    "@tanstack/react-query": "^5.101.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "zod": "^4.1.5"

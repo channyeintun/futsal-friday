@@ -56,7 +56,8 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
       onEvent: (event) => {
         switch (event.name) {
           case 'player.joined': {
-            const { memberId, memberName, status, position, counts } = event.data;
+            const { memberId, memberName, memberAvatarUpdatedAt, status, position, counts } =
+              event.data;
             flash(memberId);
             set((current) => {
               if (!current || current.session.id !== event.data.sessionId) return current;
@@ -68,6 +69,7 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
                 sessionId: event.data.sessionId,
                 memberId,
                 memberName,
+                memberAvatarUpdatedAt,
                 status,
                 position,
                 createdAt: event.data.at,

@@ -217,6 +217,7 @@ export const sessionRoutes = new Hono<AppContext>()
         sessionId,
         memberId: identity.memberId,
         memberName: identity.name,
+        memberAvatarUpdatedAt: mine.memberAvatarUpdatedAt,
         status: mine.status,
         position: mine.position,
         counts,

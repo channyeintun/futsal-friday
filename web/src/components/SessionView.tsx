@@ -13,6 +13,7 @@ import { navigate } from '../router.js';
 import { useApp } from '../state/app.js';
 import { useLocale, useMessages } from '../state/locale.js';
 import { AnnounceButton } from './AnnounceButton.js';
+import { Avatar } from './Avatar.js';
 import { CopyButton } from './CopyButton.js';
 import { Icon } from './Icon.js';
 import { SessionEditor } from './SessionEditor.js';
@@ -165,7 +166,22 @@ export function SessionView({
                   .join(' ')}
               >
                 <span className="player-index">{index + 1}</span>
-                <span className="player-name truncate">{registration.memberName}</span>
+                <Avatar
+                  memberId={registration.memberId}
+                  name={registration.memberName}
+                  avatarUpdatedAt={registration.memberAvatarUpdatedAt}
+                  size={32}
+                />
+                {/* The name is the way through to a streak, so it is the
+                    control rather than the row — a whole-row tap would fight
+                    the list's own scrolling on a phone. */}
+                <button
+                  type="button"
+                  className="player-name truncate link"
+                  onClick={() => navigate({ name: 'profile', id: registration.memberId })}
+                >
+                  {registration.memberName}
+                </button>
                 {registration.memberId === identity.memberId ? (
                   <span className="badge paid">{m.session.you}</span>
                 ) : null}
@@ -192,7 +208,19 @@ export function SessionView({
                     .join(' ')}
                 >
                   <span className="player-index">{index + 1}</span>
-                  <span className="player-name truncate">{registration.memberName}</span>
+                  <Avatar
+                    memberId={registration.memberId}
+                    name={registration.memberName}
+                    avatarUpdatedAt={registration.memberAvatarUpdatedAt}
+                    size={32}
+                  />
+                  <button
+                    type="button"
+                    className="player-name truncate link"
+                    onClick={() => navigate({ name: 'profile', id: registration.memberId })}
+                  >
+                    {registration.memberName}
+                  </button>
                   <span className="badge waitlist">{m.session.waiting}</span>
                 </div>
               ))}

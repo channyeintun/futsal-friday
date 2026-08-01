@@ -11,6 +11,8 @@ import { en } from '../src/i18n/en.ts';
 import { my } from '../src/i18n/my.ts';
 import { formatKickoff, relativeToNow } from '../src/time.ts';
 import { sessionAnnouncement } from '../src/announce.ts';
+import { computeStreak, type StreakEntry } from '../src/streak.ts';
+import { initialsOf } from '../src/names.ts';
 
 let failed = 0;
 const check = (label: string, ok: boolean, detail?: unknown) => {
@@ -199,6 +201,84 @@ check('both banks are the same size', (() => (
   en.announce.teases.length === my.announce.teases.length &&
   en.announce.callToAction.length === my.announce.callToAction.length
 ))());
+
+
+console.log('\nattendance streaks');
+
+// Newest first, which is the order the query returns and the order the current
+// streak has to be read in. `i` = in, `w` = waitlist, `x` = missed.
+const run = (pattern: string) =>
+  computeStreak(
+    [...pattern].map((ch, index): StreakEntry => ({
+      sessionId: `s${index}`,
+      startsAt: new Date(Date.UTC(2026, 0, 30 - index)).toISOString(),
+      attendance: ch === 'i' ? 'in' : ch === 'w' ? 'waitlist' : 'missed',
+    })),
+  );
+
+check('no history at all', JSON.stringify(run('')) === JSON.stringify({ current: 0, best: 0, played: 0, total: 0 }),
+  JSON.stringify(run('')));
+check('an unbroken run', run('iiii').current === 4 && run('iiii').best === 4);
+check('a miss last week ends the current run', run('xiii').current === 0, JSON.stringify(run('xiii')));
+check('but the best run survives it', run('xiii').best === 3, JSON.stringify(run('xiii')));
+check('the current run stops at the first gap', run('iixii').current === 2, JSON.stringify(run('iixii')));
+check('and best looks past it', run('iixiii').best === 3, JSON.stringify(run('iixiii')));
+check('best is the longest, not the latest', run('iixiiii').best === 4, JSON.stringify(run('iixiiii')));
+
+// The waitlist rule: you said yes, there was no room. It must not end a run.
+check('the waitlist does not break a streak', run('iwii').current === 3, JSON.stringify(run('iwii')));
+check('and does not inflate one either', run('iwii').played === 3, JSON.stringify(run('iwii')));
+check('a waitlist-only history has no streak', run('www').current === 0 && run('www').best === 0);
+check('waitlisted games still count in the total', run('iwii').total === 4, JSON.stringify(run('iwii')));
+check('a run that is only waitlists between plays joins up', run('iwwwi').current === 2,
+  JSON.stringify(run('iwwwi')));
+
+check('played counts every game, not just the current run', run('ixixi').played === 3,
+  JSON.stringify(run('ixixi')));
+check('never played', JSON.stringify(run('xxx')) === JSON.stringify({ current: 0, best: 0, played: 0, total: 3 }),
+  JSON.stringify(run('xxx')));
+
+
+console.log('\navatar initials');
+
+check('one word', initialsOf('Bao') === 'B', initialsOf('Bao'));
+check('two words take one letter each', initialsOf('Chan Nyein') === 'CN', initialsOf('Chan Nyein'));
+check('a third word is ignored', initialsOf('Chan Nyein Tun') === 'CN', initialsOf('Chan Nyein Tun'));
+check('extra whitespace does not produce blanks', initialsOf('  Bao   Nguyen  ') === 'BN',
+  initialsOf('  Bao   Nguyen  '));
+check('an empty name gives an empty string', initialsOf('   ') === '', JSON.stringify(initialsOf('   ')));
+
+// Vietnamese: the group is in Ho Chi Minh City, so stacked tone marks on a
+// Latin base are the common case, not an edge case.
+check('Vietnamese diacritics survive', initialsOf('Đức Anh') === 'ĐA', initialsOf('Đức Anh'));
+
+/**
+ * Burmese is the reason this function exists.
+ *
+ * Each of these begins with a base consonant carrying attached marks. A naive
+ * `name[0]` returns the bare consonant and drops them; `slice(0, 2)` can stop
+ * *inside* the cluster and leave a combining mark with nothing to combine
+ * with, which renders as a dotted circle (◌). What must hold is that the
+ * result is a real prefix of the name and begins with a base consonant —
+ * U+1000..U+102A — rather than a mark.
+ */
+const burmeseNames = ['ကျော်စွာ', 'မြင့်မိုရ်', 'ချမ်းမြေ့', 'အောင်'];
+const startsWithBaseConsonant = (text: string) => /^[\u1000-\u102A]/.test(text);
+
+for (const name of burmeseNames) {
+  const got = initialsOf(name);
+  check(`Burmese ${name} -> ${got} is a prefix of the name`, name.startsWith(got), JSON.stringify(got));
+  check(`Burmese ${name} -> ${got} starts on a base consonant`, startsWithBaseConsonant(got),
+    JSON.stringify(got));
+}
+
+const twoPart = initialsOf('ကျော်စွာ မောင်');
+check('a Burmese two-part name takes a cluster from each',
+  twoPart.length > 2 && startsWithBaseConsonant(twoPart), JSON.stringify(twoPart));
+
+// Astral plane: an emoji is one grapheme, not two code units.
+check('an emoji name is not cut in half', initialsOf('🦵 Legs') !== '\uD83E',
+  JSON.stringify(initialsOf('🦵 Legs')));
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILURE(S)`);
 process.exit(failed === 0 ? 0 : 1);

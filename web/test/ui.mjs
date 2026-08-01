@@ -216,7 +216,9 @@ async function run() {
 
   console.log('\nnavigation');
   await evalJs(`[...document.querySelectorAll('.bottom-nav button')][1].click()`);
-  await waitFor('document.body.innerText.includes("sessions played")', 'history screen loads');
+  // The profile card replaced the old plain header, so this now waits on the
+  // streak rather than the sentence it used to print.
+  await waitFor('!!document.querySelector(".streak-cell")', 'history screen loads');
   await shoot('06-history');
   check('history shows my name', await evalJs(`document.body.innerText.includes('Organizer')`));
 
@@ -251,6 +253,97 @@ async function run() {
     ?.closest('.card').scrollIntoView({ block: 'center' })`);
   await sleep(400);
   await shoot('09-group-link');
+
+  console.log('\nprofile and streak');
+  // The dev database persists between runs, and a previous run leaves a
+  // picture behind. Start from "no picture" so the fallback is actually being
+  // tested rather than whatever the last run happened to leave.
+  await evalJs(`fetch('/api/members/me/avatar', {
+    method: 'DELETE',
+    headers: { Authorization: 'Bearer ' + localStorage.getItem('futsal:token') },
+  }).then((r) => r.status)`);
+  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][1].click()`);
+  await send('Page.reload');
+  await waitFor('document.body.innerText.includes("Streak")', 'the profile card leads History');
+  await sleep(500);
+  await shoot('11-profile');
+  check('it shows a current streak', await evalJs(`document.querySelectorAll('.streak-cell').length === 3`),
+    await evalJs(`document.querySelectorAll('.streak-cell').length`));
+  check('the streak values are numbers',
+    await evalJs(`[...document.querySelectorAll('.streak-value')].every(v => /^\\d+$/.test(v.textContent.trim()))`),
+    await evalJs(`[...document.querySelectorAll('.streak-value')].map(v => v.textContent.trim()).join(',')`));
+  check('it counts matches played of total',
+    await evalJs(`/Played \\d+ of \\d+ matches/.test(document.body.innerText)`),
+    await evalJs(`document.body.innerText.slice(0, 200)`));
+  check('with no picture it falls back to initials',
+    await evalJs(`(() => { const a = document.querySelector('.avatar'); return !a.querySelector('img') && a.textContent.trim().length > 0; })()`),
+    await evalJs(`document.querySelector('.avatar')?.textContent`));
+  check('and offers to change the picture',
+    await evalJs(`!!document.querySelector('.avatar-edit')`));
+
+  // The file picker cannot be driven headlessly, so the upload goes through
+  // the same endpoint the button calls, from the page's own origin and
+  // credentials. What is being proved here is the *render* path: that a real
+  // stored picture comes back down and replaces the initials.
+  const uploaded = await evalJs(`(async () => {
+    const png = Uint8Array.from(atob(
+      'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAFElEQVR42mP8z/C/noEIwDiqkL4KAcLIDAWkFyKrAAAAAElFTkSuQmCC'
+    ), (c) => c.charCodeAt(0));
+    const res = await fetch('/api/members/me/avatar', {
+      method: 'PUT',
+      headers: {
+        Authorization: 'Bearer ' + localStorage.getItem('futsal:token'),
+        'Content-Type': 'image/png',
+      },
+      body: png,
+    });
+    return res.status;
+  })()`);
+  check('a picture can be stored', uploaded === 200, uploaded);
+
+  await send('Page.reload');
+  await waitFor('!!document.querySelector(".streak-cell")', 'history reloads with a picture');
+  await waitFor('!!document.querySelector(".avatar img")', 'the stored picture renders');
+  check('the initials are gone once there is a photo',
+    await evalJs(`document.querySelector('.avatar').textContent.trim() === ''`),
+    await evalJs(`document.querySelector('.avatar').textContent`));
+  await sleep(400);
+  await shoot('13-avatar');
+
+  // And it reaches the places that list people, not just the profile.
+  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][2].click()`);
+  await waitFor('document.body.innerText.includes("Players")', 'roster loads');
+  await sleep(600);
+  check('the roster shows the picture too',
+    await evalJs(`!!document.querySelector('.member-row .avatar img')`),
+    await evalJs(`document.querySelectorAll('.member-row .avatar').length`));
+
+  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][1].click()`);
+  await waitFor('!!document.querySelector(".streak-cell")', 'back on history');
+  await sleep(300);
+
+  // A team-mate's profile is reachable from the session list.
+  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][0].click()`);
+  await waitFor('!!document.querySelector(".conn")', 'back on the session screen');
+  await sleep(500);
+  const openedProfile = await evalJs(`(() => {
+    const b = document.querySelector('.player-name.link');
+    if (!b) return false;
+    b.click();
+    return true;
+  })()`);
+  check('a name on the list opens a profile', openedProfile);
+  if (openedProfile) {
+    await waitFor('location.pathname.startsWith("/profile/")', 'it navigates to /profile/:id');
+    await waitFor('!!document.querySelector(".streak-cell")', 'their streak renders');
+    await sleep(400);
+    await shoot('12-profile-other');
+    check('a team-mate\'s profile hides their money',
+      !(await evalJs('document.body.innerText.includes("You owe")')));
+  }
+  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][0].click()`);
+  await waitFor('!!document.querySelector(".conn")', 'back to the session again');
+  await sleep(400);
 
   console.log('\nthe random announcement');
   await evalJs(`[...document.querySelectorAll('.bottom-nav button')][0].click()`);

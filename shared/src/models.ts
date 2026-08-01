@@ -29,8 +29,30 @@ export const memberSchema = z.object({
   notifyPayment: z.boolean().default(true),
   /** Drives the UI and, crucially, server-written push notifications. */
   language: z.enum(['en', 'my']).default('en'),
+  /**
+   * When the profile picture last changed, or null if there is none. The R2
+   * key stays server-side; this is what the client caches the image against.
+   */
+  avatarUpdatedAt: isoSchema.nullable().default(null),
 });
 export type Member = z.infer<typeof memberSchema>;
+
+/** Attendance run, computed from every past session since the member joined. */
+export const streakSchema = z.object({
+  current: z.number().int().min(0),
+  best: z.number().int().min(0),
+  played: z.number().int().min(0),
+  total: z.number().int().min(0),
+});
+export type StreakStats = z.infer<typeof streakSchema>;
+
+export const memberProfileSchema = z.object({
+  member: memberSchema,
+  streak: streakSchema,
+  /** Still owed across every session, so a profile shows the whole picture. */
+  outstanding: z.number().int().min(0),
+});
+export type MemberProfile = z.infer<typeof memberProfileSchema>;
 
 export const createMemberSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(40),
@@ -150,6 +172,8 @@ export const registrationSchema = z.object({
   sessionId: idSchema,
   memberId: idSchema,
   memberName: z.string(),
+  /** Cache token for the member's picture; null when they have none. */
+  memberAvatarUpdatedAt: isoSchema.nullable().default(null),
   status: registrationStatusSchema,
   /** Monotonic per session; defines display order and waitlist promotion order. */
   position: z.number().int(),

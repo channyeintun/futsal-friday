@@ -361,6 +361,50 @@ Trigger it locally with:
 curl "http://localhost:8787/cdn-cgi/local/scheduled"
 ```
 
+### Streaks and profile pictures
+
+Every member has a profile: their picture, their attendance run, and how much
+they still owe. It leads the **History** tab for yourself, and tapping anyone's
+name on a session opens theirs — a streak is a bragging right, so it is no use
+if only you can see it. Somebody else's profile shows their run and their
+recent matches but none of their money.
+
+A streak counts **consecutive matches played**, most recent first, and the
+rules are chosen to be fair rather than precise:
+
+- **A cancelled session is not a miss.** Nobody played, so nobody's run ends.
+- **Being waitlisted is not a miss either.** You said yes and there was no
+  room; ending your run over the organizer's cap punishes the wrong person. It
+  neither extends nor breaks the streak.
+- **Matches before you joined do not count against you.**
+
+Saying "can't make it", or never answering, breaks it — from the pitch's point
+of view those are the same thing. The maths is a pure function in
+`shared/src/streak.ts`; the query that feeds it lives in `loadMemberProfile`
+and deliberately does *not* reuse `loadMemberHistory`, which keeps only
+sessions you have a row for and so would hand every no-show a perfect record.
+
+Pictures are yours alone to set — an organizer choosing somebody else's photo
+is not a feature anyone asked for. They are compressed in the browser to 256px
+and ~30 KB (the Worker caps them again at 200 KB), stored in the same R2 bucket
+as the payment proofs, and replaced rather than accumulated. R2 keys never
+reach the browser: the client gets an `avatarUpdatedAt` timestamp to cache
+against and reads the image through an authorized route, exactly as it does for
+payment screenshots. No picture falls back to initials on a colour derived from
+the member id — stable per person, stored nowhere. `initialsOf` splits on
+grapheme clusters via `Intl.Segmenter`, because slicing a Burmese name by index
+strands a combining mark and renders a dotted circle.
+
+**Caching** is [TanStack Query](https://tanstack.com/query), and only for these
+two reads — see `web/src/hooks/queries.ts`. It sits *above* the transport:
+everything in `web/src/api` is still plain `fetch` behind the platform seam, so
+that layer stays portable. An avatar is requested by every row of every list,
+which is what makes deduplication and a real cache worth a dependency; the rest
+of the app still uses `useAsync`, which is fine for a screen that loads once.
+The query caches the `Blob` rather than an object URL — a URL has to be revoked
+and the cache has no eviction hook to do it, so each component mints its own
+from the shared blob and revokes on unmount.
+
 ### Hyping the group
 
 Next to *Copy list for chat* on a scheduled session there is **Write an
@@ -629,7 +673,7 @@ ICT date arithmetic (including the UTC-vs-ICT boundary cases where a Thursday
 evening in UTC is already Friday in Ho Chi Minh City) and the money split
 (exact-sum invariants, overrides, rounding).
 
-The API integration suite is 98 checks against real local D1 and R2 — the invite
+The API integration suite is 123 checks against real local D1 and R2 — the invite
 gate, the waitlist and its auto-promotion, the split, the payment state machine,
 proof upload and access control, and the cron. It needs `wrangler dev` running
 and writes to the local database, so run it in a second terminal:

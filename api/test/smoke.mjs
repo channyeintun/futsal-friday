@@ -75,6 +75,50 @@ function seedClaimNonce(memberId) {
   return nonce;
 }
 
+/** Run arbitrary SQL against the local dev database. */
+function sql(command) {
+  execFileSync('npx', ['wrangler', 'd1', 'execute', 'futsal-friday', '--local', '--command', command],
+    { encoding: 'utf8', stdio: 'pipe' });
+}
+
+/**
+ * Fabricate a past attendance record.
+ *
+ * The streak *maths* is unit-tested in /shared; what needs proving here is the
+ * query that feeds it, which is where the judgement calls live — a cancelled
+ * session must not count, a game from before you joined must not count, and a
+ * session with no registration row at all must count as a miss rather than
+ * being skipped.
+ */
+function seedPastSessions(memberId, plan, venueId) {
+  // Previous runs left their own seeds behind, and they land in the same
+  // "recent hours" window — so they would both skew this member's streak and
+  // crowd the real sessions out of the list the cron check reads.
+  // Registrations go with them via ON DELETE CASCADE.
+  sql(`DELETE FROM sessions WHERE id LIKE 'ses_streak_%';`);
+  seedPastSessions.windowStart = new Date(
+    Date.now() - (plan.length + 1) * 3_600_000 - 60_000,
+  ).toISOString();
+  // Hours ago, not weeks: the suite creates its own past sessions, and those
+  // would otherwise sit *after* the seeded ones and read as misses. Owning the
+  // most recent slice of history is what makes the assertions deterministic —
+  // the member's join date is then set to just before this window so nothing
+  // else is inside it.
+  const base = Date.now() - (plan.length + 1) * 3_600_000;
+  plan.forEach((entry, index) => {
+    const startsAt = new Date(base + index * 3_600_000).toISOString();
+    const sessionId = `ses_streak_${index}_${Date.now() % 100000}`;
+    sql(`INSERT INTO sessions (id, venue_id, starts_at, status, max_players, created_at, updated_at)
+         VALUES ('${sessionId}', ${venueId ? `'${venueId}'` : 'NULL'}, '${startsAt}',
+                 '${entry === 'cancelled' ? 'cancelled' : 'completed'}', 12, '${startsAt}', '${startsAt}');`);
+    if (entry === 'in' || entry === 'waitlist') {
+      sql(`INSERT INTO registrations (id, session_id, member_id, status, position, created_at)
+           VALUES ('reg_streak_${index}_${Date.now() % 100000}', '${sessionId}', '${memberId}',
+                   '${entry}', ${index}, '${startsAt}');`);
+    }
+  });
+}
+
 /** Creates a member (as organizer), invites them, and redeems the link. */
 async function addAndLogIn(organizerToken, name) {
   const created = await call('POST', '/members', { token: organizerToken, body: { name } });
@@ -438,6 +482,102 @@ const run = async () => {
     JSON.stringify(reopened.body.members.map((x) => x.name)));
   void erin;
 
+  section('profiles, streaks and pictures');
+  const aliceProfile = await call('GET', `/members/${alice.id}/profile`, { token: alice.token });
+  check('a member can read their own profile', aliceProfile.status === 200, aliceProfile.body);
+  check('it reports a streak', typeof aliceProfile.body?.profile?.streak?.current === 'number',
+    JSON.stringify(aliceProfile.body?.profile?.streak));
+  check('it never leaks the R2 key',
+    !JSON.stringify(aliceProfile.body).includes('avatar_key') &&
+      !JSON.stringify(aliceProfile.body).includes('avatars/'),
+    JSON.stringify(aliceProfile.body).slice(0, 200));
+
+  // Anyone signed in can see anyone's run — a streak is a bragging right, and
+  // these people already see each other on every session screen.
+  const peerProfile = await call('GET', `/members/${organizerId}/profile`, { token: alice.token });
+  check('and can read a team-mate\'s', peerProfile.status === 200, peerProfile.status);
+  const anonProfile = await call('GET', `/members/${alice.id}/profile`);
+  check('but not without signing in', anonProfile.status === 401, anonProfile.status);
+  const ghostProfile = await call('GET', '/members/mem_nope/profile', { token: alice.token });
+  check('an unknown member is a 404', ghostProfile.status === 404, ghostProfile.status);
+
+  const noPicture = await call('GET', `/members/${alice.id}/avatar`, { token: alice.token });
+  check('no picture yet', noPicture.status === 404, noPicture.status);
+  check('and the profile says so', aliceProfile.body.profile.member.avatarUpdatedAt === null,
+    aliceProfile.body.profile.member.avatarUpdatedAt);
+
+  // A one-pixel PNG is a real image as far as the endpoint is concerned.
+  const onePixelPng = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64',
+  );
+  const avatarUpload = await call('PUT', '/members/me/avatar', {
+    token: alice.token,
+    raw: onePixelPng,
+    contentType: 'image/png',
+  });
+  check('uploading a picture works', avatarUpload.status === 200, JSON.stringify(avatarUpload.body).slice(0, 150));
+  check('and stamps a cache token', typeof avatarUpload.body?.member?.avatarUpdatedAt === 'string',
+    avatarUpload.body?.member?.avatarUpdatedAt);
+
+  const fetched = await call('GET', `/members/${alice.id}/avatar`, { token: alice.token });
+  check('the picture reads back', fetched.status === 200, fetched.status);
+  check('as an image', (fetched.headers.get('content-type') ?? '').startsWith('image/'),
+    fetched.headers.get('content-type'));
+  check('and is not cached by shared proxies',
+    (fetched.headers.get('cache-control') ?? '').includes('private'),
+    fetched.headers.get('cache-control'));
+
+  const wrongType = await call('PUT', '/members/me/avatar', {
+    token: alice.token, raw: Buffer.from('not an image'), contentType: 'text/plain',
+  });
+  check('a non-image is refused', wrongType.status === 400, wrongType.body);
+
+  const tooBig = await call('PUT', '/members/me/avatar', {
+    token: alice.token, raw: Buffer.alloc(300_000, 1), contentType: 'image/png',
+  });
+  check('an oversized picture is refused', tooBig.status === 413, tooBig.status);
+
+  // Registrations carry the token so a session list can draw faces in one call.
+  const rosterAfterAvatar = await call('GET', '/members', { token: organizer });
+  const aliceAvatarRow = rosterAfterAvatar.body.members.find((x) => x.id === alice.id);
+  check('the roster carries the cache token', typeof aliceAvatarRow.avatarUpdatedAt === 'string',
+    aliceAvatarRow.avatarUpdatedAt);
+
+  const dropped = await call('DELETE', '/members/me/avatar', { token: alice.token });
+  check('removing a picture works', dropped.status === 200 &&
+    dropped.body.member.avatarUpdatedAt === null, JSON.stringify(dropped.body).slice(0, 120));
+  const goneNow = await call('GET', `/members/${alice.id}/avatar`, { token: alice.token });
+  check('and it is really gone', goneNow.status === 404, goneNow.status);
+
+  section('streaks come from real attendance');
+  // Joined before any of the seeded games, so nothing is filtered out for
+  // pre-dating them.
+  const runner = await addAndLogIn(organizer, `Runner ${stamp}`);
+
+  // Oldest first: played, played, cancelled, missed entirely, played, played.
+  seedPastSessions(runner.id, ['in', 'in', 'cancelled', 'absent', 'in', 'in']);
+  // Joined just before the seeded window, so those six games — and only those
+  // six — are the history this member is judged on.
+  sql(`UPDATE members SET created_at = '${seedPastSessions.windowStart}' WHERE id = '${runner.id}';`);
+  const streaked = await call('GET', `/members/${runner.id}/profile`, { token: runner.token });
+  const st = streaked.body?.profile?.streak;
+  check('a live run counts back from the newest game', st?.current === 2, JSON.stringify(st));
+  check('a session with no registration row breaks it', st?.best === 2, JSON.stringify(st));
+  check('a cancelled session is not a miss', st?.played === 4, JSON.stringify(st));
+  check('and is not counted in the total either', st?.total === 5, JSON.stringify(st));
+
+  // Somebody who joined after those games must not inherit their misses.
+  const rookie = await addAndLogIn(organizer, `Rookie ${stamp}`);
+  const rookieProfile = await call('GET', `/members/${rookie.id}/profile`, { token: rookie.token });
+  check('games from before you joined do not count against you',
+    rookieProfile.body?.profile?.streak?.total === 0,
+    JSON.stringify(rookieProfile.body?.profile?.streak));
+
+  // Hand the world back as it was found: these fabricated games sit in the
+  // most recent slice of history, which the cron section reads.
+  sql(`DELETE FROM sessions WHERE id LIKE 'ses_streak_%';`);
+
   section('realtime plumbing');
   const ticket = await call('POST', '/realtime/ticket', { token: alice.token });
   check('member gets a stream ticket', ticket.status === 200 && !!ticket.body.ticket, ticket.body);
@@ -456,9 +596,12 @@ const run = async () => {
   await new Promise((r) => setTimeout(r, 500));
   const listed = await call('GET', '/sessions', { token: organizer });
   check('cron leaves an upcoming session scheduled', !!listed.body.upcoming, listed.body.upcoming);
-  check('past session was completed',
-    listed.body.recent.some((s) => s.id === past.body.session.id && s.status === 'completed'),
-    listed.body.recent.map((s) => [s.id, s.status]));
+  // Read the session itself rather than hunting for it in `recent`. That list
+  // is windowed, and the dev database accumulates across runs — so a passing
+  // assertion here was really asserting "the database is still small".
+  const completedOne = await call('GET', `/sessions/${past.body.session.id}`, { token: organizer });
+  check('past session was completed', completedOne.body?.session?.status === 'completed',
+    completedOne.body?.session?.status);
 
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {

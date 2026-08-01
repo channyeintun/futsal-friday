@@ -3,9 +3,11 @@ import type {
   Member,
   MemberBalance,
   MemberHistoryEntry,
+  MemberProfile,
   UpdateMemberInput,
 } from '@futsal/shared';
-import { del, get, patch, post } from './client.js';
+import { platform } from '../platform/index.js';
+import { del, get, getBlob, patch, post, request } from './client.js';
 
 export const listMembers = (signal?: AbortSignal) =>
   get<{ members: Member[] }>('/members', signal).then((r) => r.members);
@@ -26,3 +28,37 @@ export const updateMember = (id: string, input: UpdateMemberInput) =>
 
 /** Deactivates rather than deletes — payment history has to survive. */
 export const removeMember = (id: string) => del<{ ok: true }>(`/members/${id}`);
+
+export const memberProfile = (memberId: string, signal?: AbortSignal) =>
+  get<{ profile: MemberProfile }>(`/members/${memberId}/profile`, signal).then((r) => r.profile);
+
+/**
+ * Profile pictures.
+ *
+ * A face at 40px in a list needs far less than a payment screenshot does, so
+ * this compresses harder — square-ish, short edge, low target — and the Worker
+ * caps it again at 200 KB.
+ */
+export async function uploadMyAvatar(file: Blob): Promise<Member> {
+  const compressed = await platform.compressImage(file, {
+    maxDimension: 256,
+    targetBytes: 30_000,
+  });
+  const result = await request<{ member: Member }>('PUT', '/members/me/avatar', {
+    raw: compressed.blob,
+    contentType: compressed.contentType,
+  });
+  return result.member;
+}
+
+export const removeMyAvatar = () =>
+  del<{ member: Member }>('/members/me/avatar').then((r) => r.member);
+
+/**
+ * The bytes, not a URL — an `<img src>` cannot carry a bearer token.
+ *
+ * Callers cache the Blob (see `useAvatar`) and mint the object URL locally, so
+ * the same picture is fetched once no matter how many rows show it.
+ */
+export const memberAvatar = (memberId: string, signal?: AbortSignal) =>
+  getBlob(`/members/${memberId}/avatar`, signal);

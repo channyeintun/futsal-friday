@@ -21,21 +21,51 @@ import { apiError, badRequest, conflict, newId } from '../http.js';
 /** Comfortably above the client's ~150 KB target, far below an original photo. */
 const MAX_BYTES = 1_000_000;
 
-const ALLOWED: Record<string, string> = {
+export const ALLOWED_IMAGE_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
 };
+
+/**
+ * Read an uploaded image off the request, or throw a useful error.
+ *
+ * Shared with the avatar route so both intakes are strict in the same way and
+ * cannot drift apart — the size cap differs, everything else does not.
+ */
+export async function readImageUpload(
+  request: Request,
+  maxBytes: number,
+): Promise<{ body: ArrayBuffer; contentType: string; extension: string }> {
+  const contentType = (request.headers.get('Content-Type') ?? '').split(';')[0]?.trim() ?? '';
+  const extension = ALLOWED_IMAGE_TYPES[contentType];
+  if (!extension) throw badRequest('Upload a JPEG, PNG or WebP image');
+
+  // Reject on the declared length first so an oversized body is not streamed
+  // into the Worker at all; the real check follows, since the header lies.
+  const declared = Number.parseInt(request.headers.get('Content-Length') ?? '', 10);
+  if (Number.isFinite(declared) && declared > maxBytes) throw tooLargeAt(maxBytes);
+
+  const body = await request.arrayBuffer();
+  if (body.byteLength === 0) throw badRequest('Empty upload');
+  if (body.byteLength > maxBytes) throw tooLargeAt(maxBytes);
+
+  return { body, contentType, extension };
+}
+
+function tooLargeAt(maxBytes: number) {
+  return apiError(
+    413,
+    'payload_too_large',
+    `Image is too large — keep it under ${Math.round(maxBytes / 1000)} KB`,
+  );
+}
 
 export const uploadRoutes = new Hono<AppContext>().post('/proof', async (c) => {
   const sessionId = c.req.query('sessionId');
   if (!sessionId) throw badRequest('sessionId query parameter is required');
 
   const identity = c.get('identity');
-  const contentType = (c.req.header('Content-Type') ?? '').split(';')[0]?.trim() ?? '';
-
-  const extension = ALLOWED[contentType];
-  if (!extension) throw badRequest('Upload a JPEG, PNG or WebP image');
 
   // Only somebody who actually owes money for this session can attach a
   // screenshot to it — that also bounds how many objects can ever be written.
@@ -46,14 +76,7 @@ export const uploadRoutes = new Hono<AppContext>().post('/proof', async (c) => {
     .first<{ 1: number }>();
   if (!owes) throw conflict('You have nothing to pay for that session');
 
-  // Reject on the declared length first so an oversized body is not streamed
-  // into the Worker at all; the real check follows, since the header lies.
-  const declared = Number.parseInt(c.req.header('Content-Length') ?? '', 10);
-  if (Number.isFinite(declared) && declared > MAX_BYTES) throw tooLarge();
-
-  const body = await c.req.arrayBuffer();
-  if (body.byteLength === 0) throw badRequest('Empty upload');
-  if (body.byteLength > MAX_BYTES) throw tooLarge();
+  const { body, contentType, extension } = await readImageUpload(c.req.raw, MAX_BYTES);
 
   const key = `proofs/${sessionId}/${identity.memberId}/${newId('img')}.${extension}`;
   await c.env.PROOFS.put(key, body, {
@@ -67,10 +90,3 @@ export const uploadRoutes = new Hono<AppContext>().post('/proof', async (c) => {
   return c.json({ key }, 201);
 });
 
-function tooLarge() {
-  return apiError(
-    413,
-    'payload_too_large',
-    `Image is too large — keep it under ${Math.round(MAX_BYTES / 1000)} KB`,
-  );
-}
