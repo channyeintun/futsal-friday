@@ -799,7 +799,10 @@ organizer's group-link card, and dark mode.
 npm run test:payments -w @futsal/web
 ```
 
-Splitting a bill, overrides, a screenshot upload, and confirm/reject.
+Splitting a bill, overrides, a screenshot upload, and confirm/reject. Seeds the
+finished-but-unbilled session it needs and opens it by id, rather than hunting
+the home list — that list is capped at twelve, so on a well-used dev database a
+freshly seeded session falls off the end. It cleans up after itself.
 
 ```bash
 npm run test:join -w @futsal/web

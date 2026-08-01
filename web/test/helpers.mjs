@@ -107,3 +107,56 @@ export function approveEveryonePending() {
     { cwd: API_DIR, encoding: 'utf8', stdio: 'pipe' },
   );
 }
+
+/**
+ * A finished match with no bill entered yet.
+ *
+ * The payments suite needs one to reach the split form, and used to hope the
+ * dev database happened to contain one — quietly running no assertions at all
+ * when it did not, while still reporting every check green. Seeding it makes
+ * the precondition a fact rather than a wish.
+ *
+ * Placed a couple of hours ago so it is the newest past session and therefore
+ * certain to be inside the twelve the home screen lists.
+ */
+export function localUnsettledSession(memberIds = []) {
+  const id = `ses_test_${randomBytes(6).toString('hex')}`;
+  // Jittered: a partial unique index forbids two non-cancelled sessions
+  // starting at the same instant, and a fixed offset would collide with a
+  // leftover from an interrupted run.
+  const startsAt = new Date(Date.now() - 2 * 3_600_000 - Math.floor(Math.random() * 3_600_000))
+    .toISOString();
+
+  execFileSync(
+    'npx',
+    ['wrangler', 'd1', 'execute', 'futsal-friday', '--local', '--command',
+     // total_charge stays NULL: that is what "not split" means, and what puts
+     // the split form on the payments screen.
+     `INSERT INTO sessions (id, starts_at, status, max_players, created_at, updated_at)
+        VALUES ('${id}', '${startsAt}', 'completed', 12, '${startsAt}', '${startsAt}');`],
+    { cwd: API_DIR, encoding: 'utf8', stdio: 'pipe' },
+  );
+
+  memberIds.forEach((memberId, index) => {
+    execFileSync(
+      'npx',
+      ['wrangler', 'd1', 'execute', 'futsal-friday', '--local', '--command',
+       `INSERT INTO registrations (id, session_id, member_id, status, position, created_at)
+          VALUES ('reg_test_${randomBytes(5).toString('hex')}', '${id}', '${memberId}',
+                  'in', ${index}, '${startsAt}');`],
+      { cwd: API_DIR, encoding: 'utf8', stdio: 'pipe' },
+    );
+  });
+
+  return id;
+}
+
+/** Remove seeded sessions. Registrations and payments go with them. */
+export function clearTestSessions() {
+  execFileSync(
+    'npx',
+    ['wrangler', 'd1', 'execute', 'futsal-friday', '--local', '--command',
+     `DELETE FROM sessions WHERE id LIKE 'ses_test_%';`],
+    { cwd: API_DIR, encoding: 'utf8', stdio: 'pipe' },
+  );
+}

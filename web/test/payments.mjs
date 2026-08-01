@@ -3,7 +3,12 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { localClaimPath, localOrganizerId } from './helpers.mjs';
+import {
+  clearTestSessions,
+  localClaimPath,
+  localOrganizerId,
+  localUnsettledSession,
+} from './helpers.mjs';
 
 const CHROME = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 // Derived from the pid, never fixed. A run that dies without cleaning up (a
@@ -84,8 +89,15 @@ async function run() {
     return false;
   };
 
+  // Seeded before the app loads, not after: the home screen's session list is
+  // cached, so a row inserted mid-run would not appear until something forced
+  // a refetch.
+  clearTestSessions();
+  const organizerId = localOrganizerId();
+  const unsettledId = localUnsettledSession([organizerId]);
+
   console.log('\nsigning in');
-  await send('Page.navigate', { url: `${APP_URL}${localClaimPath(localOrganizerId())}` });
+  await send('Page.navigate', { url: `${APP_URL}${localClaimPath(organizerId)}` });
   await waitFor('!!document.querySelector(".bottom-nav")', 'shell');
   await sleep(1500);
 
@@ -119,39 +131,43 @@ async function run() {
   check('has a copy-status button', /Copy status for chat/.test(text));
 
   console.log('\nunsettled session shows the split form');
-  await js(`[...document.querySelectorAll('.bottom-nav button')][0].click()`);
-  await sleep(1200);
-  const openedUnsplit = await js(`(() => {
-    const rows = [...document.querySelectorAll('button.player-row')];
-    const row = rows.find(r => r.textContent.includes('not split'));
-    if (row) { row.click(); return true; } return false;
+  // Opened by id rather than hunted for on the home screen. That list is
+  // `ORDER BY starts_at DESC LIMIT 12`, and a dev database accumulates enough
+  // finished sessions to push a freshly seeded one off the end — which is how
+  // this section came to skip itself silently in the first place. Seeding the
+  // session *and* addressing it directly makes it run every time.
+  await send('Page.navigate', { url: `${APP_URL}/session/${unsettledId}` });
+  await waitFor(`document.body.innerText.includes('Split the bill')`,
+    'the seeded unsettled session opens');
+  await sleep(500);
+  check('a finished session with no bill offers to split it',
+    await js(`document.body.innerText.includes('Split the bill')`),
+    await js(`document.body.innerText.slice(0, 200)`));
+  const toPay = await js(`(() => {
+    const b = [...document.querySelectorAll('md-outlined-button')].find(x => x.textContent.includes('Split the bill'));
+    if (b) { b.click(); return true; }
+    return false;
   })()`);
-  if (openedUnsplit) {
-    await sleep(1400);
-    const toPay = await js(`(() => {
-      const b=[...document.querySelectorAll('md-outlined-button')].find(x=>x.textContent.includes('Split the bill'));
-      if (b) { b.click(); return true; } return false; })()`);
-    check('offers to split an unsettled session', toPay);
-    if (toPay) {
-      // Material renders labels and supporting text inside a shadow root, so
-      // `innerText` cannot see them — read the element's own properties.
-      await waitFor(
-        `document.querySelector('md-outlined-text-field')?.label === 'Total field charge'`,
-        'split form loads',
-      );
-      await sleep(700);
-      await shoot('12-split');
-      check('split form explains the rounding',
-        await js(`document.body.innerText.includes('nearest 1.000')`));
-      // Type an amount and confirm the live formatting hint.
-      await js(`(() => { const f=document.querySelector('md-outlined-text-field'); f.value='560k';
-        f.dispatchEvent(new Event('input',{bubbles:true,composed:true})); })()`);
-      await sleep(500);
-      const hint = await js(`document.querySelector('md-outlined-text-field')?.supportingText ?? ''`);
-      check('parses shorthand like 560k into 560.000d', hint === '560.000d', hint);
-      await shoot('13-split-typed');
-    }
-  }
+  check('offers to split an unsettled session', toPay);
+
+  // Material renders labels and supporting text inside a shadow root, so
+  // `innerText` cannot see them — read the element's own properties.
+  await waitFor(
+    `document.querySelector('md-outlined-text-field')?.label === 'Total field charge'`,
+    'split form loads',
+  );
+  await sleep(700);
+  await shoot('12-split');
+  check('split form explains the rounding',
+    await js(`document.body.innerText.includes('nearest 1.000')`));
+
+  // Type an amount and confirm the live formatting hint.
+  await js(`(() => { const f=document.querySelector('md-outlined-text-field'); f.value='560k';
+    f.dispatchEvent(new Event('input',{bubbles:true,composed:true})); })()`);
+  await sleep(500);
+  const hint = await js(`document.querySelector('md-outlined-text-field')?.supportingText ?? ''`);
+  check('parses shorthand like 560k into 560.000d', hint === '560.000d', hint);
+  await shoot('13-split-typed');
 
   const errors = events
     .filter((e) => e.method === 'Runtime.exceptionThrown' || (e.method === 'Log.entryAdded' && e.params.entry.level === 'error'))
@@ -159,10 +175,17 @@ async function run() {
     .filter((t) => t && !t.includes('favicon') && !/401/.test(t));
   check('no console errors', errors.length === 0, errors.slice(0, 4).join('\n         '));
 
+  clearTestSessions();
+
   const failed = results.filter((r) => !r).length;
   console.log(`\n${results.length - failed} passed, ${failed} failed`);
   chrome.kill();
   process.exit(failed === 0 ? 0 : 1);
 }
 
-run().catch((e) => { console.error('crashed:', e); chrome.kill(); process.exit(1); });
+run().catch((e) => {
+  console.error('crashed:', e);
+  try { clearTestSessions(); } catch {}
+  chrome.kill();
+  process.exit(1);
+});
