@@ -82,6 +82,28 @@ const overflowing = await js(`(() => {
 })()`);
 check('no element overflows its box', overflowing === '[]', overflowing);
 
+console.log('\nthe Burmese announcement');
+await js(`(()=>{const b=[...document.querySelectorAll('md-text-button')].find(x=>x.textContent.includes('ကြေညာချက် ရေးမယ်'));if(b)b.click()})()`);
+await waitFor(`document.body.innerText.includes('အုပ်စုကို လှုံ့ဆော်မယ်')`, 'announcement dialog opens in Burmese');
+await sleep(500);
+await shoot('04-announce-my');
+const ann = await js(`document.querySelector('md-dialog[open] .summary-preview')?.textContent ?? ''`);
+check('the announcement is in Myanmar script', /[\u1000-\u109F]/.test(ann), ann.slice(0,80).replace(/\n/g,' | '));
+check('it still carries the real kickoff', /\d{2}:\d{2}/.test(ann), ann.slice(0,120).replace(/\n/g,' | '));
+// A bare `monospace` has no Myanmar glyphs on most systems, so the preview
+// needs the same fall-through the rest of the app uses.
+check('the preview font falls through to a Myanmar face',
+  await js(`/Myanmar|Padauk|Noto Sans Myanmar/.test(getComputedStyle(document.querySelector('md-dialog[open] .summary-preview')).fontFamily)`),
+  await js(`getComputedStyle(document.querySelector('md-dialog[open] .summary-preview')).fontFamily`));
+check('the preview does not overflow sideways',
+  await js(`(()=>{const p=document.querySelector('md-dialog[open] .summary-preview');return p.scrollWidth <= p.clientWidth + 2})()`),
+  await js(`(()=>{const p=document.querySelector('md-dialog[open] .summary-preview');return p.scrollWidth+'>'+p.clientWidth})()`));
+check('and gives the stacked diacritics room',
+  await js(`parseFloat(getComputedStyle(document.querySelector('md-dialog[open] .summary-preview')).lineHeight) >= 18`),
+  await js(`getComputedStyle(document.querySelector('md-dialog[open] .summary-preview')).lineHeight`));
+await js(`document.querySelector('md-dialog[open]')?.close()`);
+await sleep(400);
+
 console.log('\nswitch to English and back');
 await js(`[...document.querySelectorAll('.bottom-nav button')][2].click()`);
 await waitFor(`document.body.innerText.includes('ဘာသာစကား')`,'language card in Burmese');

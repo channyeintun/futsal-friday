@@ -252,6 +252,39 @@ async function run() {
   await sleep(400);
   await shoot('09-group-link');
 
+  console.log('\nthe random announcement');
+  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][0].click()`);
+  await waitFor('!!document.querySelector(".conn")', 'back on the session screen');
+  await sleep(600);
+  const openAnnounce = `(() => {
+    const b = [...document.querySelectorAll('md-text-button')].find(x => x.textContent.includes('Write an announcement'));
+    if (b) { b.click(); return true; }
+    return false;
+  })()`;
+  check('the session screen offers an announcement', await evalJs(openAnnounce));
+  await waitFor('document.body.innerText.includes("Hype the group")', 'the announcement dialog opens');
+  await sleep(400);
+
+  const announced = () => evalJs(`document.querySelector('md-dialog[open] .summary-preview')?.textContent ?? ''`);
+  const first = await announced();
+  check('it carries the real kickoff time', first.includes('19:30'), first.slice(0, 200));
+  check('it carries the venue', /Pitch/.test(first), first.slice(0, 200));
+  check('and a link back to the app', first.includes('http'), first.slice(0, 200));
+  await shoot('10-announce');
+
+  // Shuffling must actually produce something else, not redraw the same text.
+  await evalJs(`(() => {
+    const b = [...document.querySelectorAll('md-dialog[open] md-text-button')]
+      .find(x => x.textContent.includes('Another one'));
+    b.click();
+  })()`);
+  await sleep(400);
+  check('shuffling writes a different one', (await announced()) !== first,
+    (await announced()).slice(0, 120));
+
+  await evalJs(`document.querySelector('md-dialog[open]')?.close()`);
+  await sleep(400);
+
   console.log('\ndark mode');
   await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }] });
   await evalJs(`[...document.querySelectorAll('.bottom-nav button')][0].click()`);

@@ -298,6 +298,51 @@ export const en = {
     fallbackBody: 'Your browser blocked the clipboard. Select the text below and copy it by hand.',
   },
 
+  /**
+   * The banter bank for the random chat announcement.
+   *
+   * Each locale writes its own jokes. These are deliberately not translations
+   * of each other — the Burmese list is what a Burmese friend group actually
+   * says to each other, not these lines rendered in Myanmar script.
+   */
+  announce: {
+    title: 'Hype the group',
+    body: 'A random announcement for the chat. Shuffle until one makes you laugh.',
+    open: 'Write an announcement',
+    shuffle: 'Another one',
+    copy: 'Copy announcement',
+    openers: [
+      'Legs itching yet? 🦵',
+      'Futsal Friday is back ⚽',
+      'The pitch is calling. Pick up 📣',
+      'Time to run it back this week!',
+      'Off the sofa, onto the pitch 🛋➡️⚽',
+      'Dig the boots out 👟',
+      'Team sheet is open 📝',
+      'No FIFA this week. The real thing 🎮❌',
+    ],
+    teases: [
+      'Everyone who was "busy" last week — you will need a fresh excuse 😏',
+      'Bad knee, bad back, big meeting. Not accepted this week 🙅',
+      'If nobody calls keeper, everybody is keeper 🥅',
+      'PS: those of you who still owe money. Yes. You 👀',
+      'Said yes and then vanished? There is a list 📋',
+      'Do not think about how you will feel tomorrow morning 💪',
+      'Score once and you get to bring it up all week 🏆',
+      'Last one to arrive buys the water 💧',
+    ],
+    callToAction: [
+      'Tap in now 👇',
+      'Get your name down 👇',
+      'Before the spots go 👇',
+      'You in? 👇',
+    ],
+    nobodyYet: 'Nobody has signed up yet. Someone has to go first 🥇',
+    soFar: (going: number) => `${going} in so far`,
+    spotsLeft: (going: number, left: number) => `${going} in · ${left} spots left`,
+    full: 'We are full — waitlist is open, and people always drop out 🤞',
+  },
+
   /** Plain-text snapshots pasted into the group chat. */
   summary: {
     matchHeader: 'FUTSAL',

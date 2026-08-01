@@ -2,5 +2,6 @@ export * from './models.js';
 export * from './events.js';
 export * from './time.js';
 export * from './money.js';
+export * from './announce.js';
 export * from './summary.js';
 export * from './i18n/index.js';

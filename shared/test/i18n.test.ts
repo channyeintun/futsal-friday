@@ -10,6 +10,7 @@ import { LOCALES, messagesFor, normalizeLocale } from '../src/i18n/index.ts';
 import { en } from '../src/i18n/en.ts';
 import { my } from '../src/i18n/my.ts';
 import { formatKickoff, relativeToNow } from '../src/time.ts';
+import { sessionAnnouncement } from '../src/announce.ts';
 
 let failed = 0;
 const check = (label: string, ok: boolean, detail?: unknown) => {
@@ -128,6 +129,76 @@ check('unknown tags fall back to English', normalizeLocale('fr-FR') === 'en');
 check('null falls back to English', normalizeLocale(null) === 'en');
 check('every declared locale has a catalogue',
   LOCALES.every((l) => typeof messagesFor(l).app.name === 'string'));
+
+
+console.log('\nrandom announcement');
+
+const baseSession = {
+  id: 'ses_1',
+  startsAt: '2026-08-07T12:30:00.000Z',
+  status: 'scheduled' as const,
+  maxPlayers: 12,
+  feePerPerson: 70_000,
+  notes: null,
+  venue: { name: 'Tao Dan', address: '1 Truong Dinh', mapUrl: null },
+};
+const detailWith = (over: Record<string, unknown> = {}, going = 5) =>
+  ({ session: { ...baseSession, ...over }, registrations: [], counts: { in: going, waitlist: 0 } }) as never;
+
+// Sweep the whole random range rather than one lucky seed: every joke in every
+// slot, in both locales. The facts must survive all of them.
+const everyRoll: string[] = [];
+for (const locale of LOCALES) {
+  for (let i = 0; i <= 20; i++) {
+    everyRoll.push(sessionAnnouncement(detailWith(), { locale, random: () => i / 20 }));
+  }
+}
+check('a roll of exactly 1.0 does not fall off the end of a list',
+  everyRoll.every((t) => !t.includes('undefined')),
+  everyRoll.find((t) => t.includes('undefined')));
+check('the kickoff time is in every variant',
+  everyRoll.every((t) => t.includes('19:30')));
+check('the venue is in every variant', everyRoll.every((t) => t.includes('Tao Dan')));
+check('the price is in every variant', everyRoll.every((t) => t.includes('70.000d')));
+check('no variant is empty or a lone header', everyRoll.every((t) => t.split('\n').length >= 7));
+
+// The joke is random; the number of players is not.
+check('nobody signed up says so, never a count',
+  sessionAnnouncement(detailWith({}, 0), { locale: 'en', random: () => 0.5 }).includes('Nobody has signed up'));
+check('a full session says full, not "spots left"', (() => {
+  const t = sessionAnnouncement(detailWith({}, 12), { locale: 'en', random: () => 0.5 });
+  return t.includes('full') && !t.includes('spots left');
+})());
+check('a partial session counts the gap',
+  sessionAnnouncement(detailWith({}, 5), { locale: 'en', random: () => 0.5 }).includes('7 spots left'));
+check('no cap means no phantom spots left', (() => {
+  const t = sessionAnnouncement(detailWith({ maxPlayers: null }, 5), { locale: 'en', random: () => 0.5 });
+  return t.includes('5 in so far') && !t.includes('spots left');
+})());
+
+// A cancelled game is not an occasion for banter.
+const cancelled = sessionAnnouncement(
+  detailWith({ status: 'cancelled', notes: 'Pitch flooded' }),
+  { locale: 'en', random: () => 0.5 },
+);
+check('a cancelled session drops the jokes', !cancelled.includes('👇') && cancelled.includes('CANCELLED'), cancelled);
+check('and keeps the reason why', cancelled.includes('Pitch flooded'));
+
+// The Burmese announcement must be Burmese, not the English bank reused.
+const burmese = LOCALES.flatMap((l) =>
+  l === 'my' ? [sessionAnnouncement(detailWith(), { locale: 'my', random: () => 0.3 })] : []);
+check('Burmese announcements are in Myanmar script',
+  burmese.every((t) => /[\u1000-\u109F]/.test(t)), burmese[0]);
+check('and share no joke text with English', (() => {
+  const enJokes = new Set([...en.announce.openers, ...en.announce.teases, ...en.announce.callToAction]);
+  return [...my.announce.openers, ...my.announce.teases, ...my.announce.callToAction]
+    .every((line) => !enJokes.has(line));
+})());
+check('both banks are the same size', (() => (
+  en.announce.openers.length === my.announce.openers.length &&
+  en.announce.teases.length === my.announce.teases.length &&
+  en.announce.callToAction.length === my.announce.callToAction.length
+))());
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILURE(S)`);
 process.exit(failed === 0 ? 0 : 1);

@@ -21,6 +21,13 @@
     'Myanmar Sangam MN', 'Noto Sans Myanmar', 'Padauk', 'Myanmar Text', sans-serif;
   --md-ref-typeface-plain: system-ui, -apple-system, 'Segoe UI', Roboto,
     'Myanmar Sangam MN', 'Noto Sans Myanmar', 'Padauk', 'Myanmar Text', sans-serif;
+  /*
+   * Same trick for the chat previews. A bare `monospace` has no Myanmar glyphs
+   * on most systems, so a Burmese summary rendered as tofu — the fall-through
+   * keeps Latin and digits monospaced and hands Burmese to a real face.
+   */
+  --ff-typeface-mono: ui-monospace, SFMono-Regular, Menlo,
+    'Myanmar Sangam MN', 'Noto Sans Myanmar', 'Padauk', 'Myanmar Text', monospace;
 
   --md-sys-color-primary: #386a20;
   --md-sys-color-on-primary: #ffffff;
@@ -569,9 +576,11 @@ body {
   border-radius: 12px;
   background: var(--md-sys-color-surface-container-highest);
   color: var(--md-sys-color-on-surface);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--ff-typeface-mono);
   font-size: 0.78rem;
-  line-height: 1.4;
+  /* Roomier than the Latin-only 1.4: Myanmar stacks diacritics above and below
+     the baseline, and a tight leading clips them against the line above. */
+  line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 40vh;

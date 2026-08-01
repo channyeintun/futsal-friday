@@ -361,6 +361,26 @@ Trigger it locally with:
 curl "http://localhost:8787/cdn-cgi/local/scheduled"
 ```
 
+### Hyping the group
+
+Next to *Copy list for chat* on a scheduled session there is **Write an
+announcement** — a random, mildly rude message to paste into the chat when the
+sign-up list is empty and a tidy table of nobody is not going to persuade
+anyone. *Another one* reshuffles.
+
+The jokes live in the locale catalogues (`shared/src/i18n/*.ts`), so each
+language writes its own; the Burmese list is what a Burmese friend group
+actually says, not the English lines rendered in Myanmar script. Only the
+flavour is random — the kickoff, venue, price and headcount are always the real
+ones, and a cancelled session drops the jokes entirely. No model, no API key, no
+network call: it is a phrase bank and `Math.random`, which keeps it free,
+instant, and working offline.
+
+To add a line, append to `announce.openers`, `announce.teases` or
+`announce.callToAction` in **both** catalogues — a test asserts the two banks
+stay the same size, and another asserts no Burmese line is a copy of an English
+one.
+
 ### Who can get in
 
 There is no password and no shared code. Two ways in, both links:

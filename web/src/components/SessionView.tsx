@@ -12,6 +12,7 @@ import { platform } from '../platform/index.js';
 import { navigate } from '../router.js';
 import { useApp } from '../state/app.js';
 import { useLocale, useMessages } from '../state/locale.js';
+import { AnnounceButton } from './AnnounceButton.js';
 import { CopyButton } from './CopyButton.js';
 import { Icon } from './Icon.js';
 import { SessionEditor } from './SessionEditor.js';
@@ -209,6 +210,10 @@ export function SessionView({
       ) : null}
 
       <CopyButton label={m.session.copyList} text={summary} />
+
+      {/* The list is for "here is who is coming"; this is for "come". Only
+          worth offering while there is still a game to talk anyone into. */}
+      {session.status === 'scheduled' ? <AnnounceButton detail={detail} /> : null}
 
       {(session.status === 'completed' || session.totalCharge != null) ? (
         <Button variant="outlined" onClick={() => navigate({ name: 'payments', id: session.id })}>
