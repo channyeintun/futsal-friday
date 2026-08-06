@@ -85,6 +85,7 @@ export interface RegistrationRow {
   member_id: string;
   member_name: string;
   member_avatar_updated_at: string | null;
+  guests: number;
   status: string;
   position: number;
   created_at: string;
@@ -97,6 +98,7 @@ export interface PaymentRow {
   member_name: string;
   amount_due: number;
   amount_override: number | null;
+  guests: number;
   status: string;
   proof_key: string | null;
   note: string | null;
@@ -169,6 +171,7 @@ export const toRegistration = (row: RegistrationRow): Registration => ({
   memberId: row.member_id,
   memberName: row.member_name,
   memberAvatarUpdatedAt: row.member_avatar_updated_at ?? null,
+  guests: row.guests ?? 0,
   status: row.status as Registration['status'],
   position: row.position,
   createdAt: row.created_at,
@@ -181,6 +184,7 @@ export const toPayment = (row: PaymentRow): Payment => ({
   memberName: row.member_name,
   amountDue: row.amount_due,
   amountOverride: row.amount_override,
+  guests: row.guests ?? 0,
   status: row.status as Payment['status'],
   hasProof: row.proof_key !== null,
   note: row.note,
@@ -231,7 +235,7 @@ export async function listRegistrations(
     .prepare(
       `SELECT r.id, r.session_id, r.member_id, m.name AS member_name,
               m.avatar_updated_at AS member_avatar_updated_at,
-              r.status, r.position, r.created_at
+              r.guests, r.status, r.position, r.created_at
          FROM registrations r
          JOIN members m ON m.id = r.member_id
         WHERE r.session_id = ?1
@@ -271,17 +275,33 @@ export async function loadSessionDetail(
   };
 }
 
+/**
+ * Heads, not rows.
+ *
+ * A member who brought two friends is three bodies on a pitch that was hired
+ * for twelve, so every number the cap is compared against counts guests. The
+ * list of names is shorter than `in` whenever anyone brought somebody, which
+ * is why `guests` is returned too — a screen showing "7 playing" over five
+ * rows needs to be able to say why.
+ */
 export function countRegistrations(registrations: readonly Registration[]): {
   in: number;
   waitlist: number;
+  guests: number;
 } {
   let inCount = 0;
   let waitlistCount = 0;
+  let guestCount = 0;
   for (const r of registrations) {
-    if (r.status === 'in') inCount++;
-    else waitlistCount++;
+    const heads = 1 + (r.guests ?? 0);
+    if (r.status === 'in') {
+      inCount += heads;
+      guestCount += r.guests ?? 0;
+    } else {
+      waitlistCount += heads;
+    }
   }
-  return { in: inCount, waitlist: waitlistCount };
+  return { in: inCount, waitlist: waitlistCount, guests: guestCount };
 }
 
 /** Counts straight from SQL, for the paths that do not need the full list. */
@@ -305,7 +325,7 @@ export async function listPayments(db: D1Database, sessionId: string): Promise<P
   const { results } = await db
     .prepare(
       `SELECT p.id, p.session_id, p.member_id, m.name AS member_name, p.amount_due,
-              p.amount_override, p.status, p.proof_key, p.note, p.reject_reason,
+              p.amount_override, p.guests, p.status, p.proof_key, p.note, p.reject_reason,
               p.claimed_at, p.confirmed_at, p.updated_at
          FROM payments p
          JOIN members m ON m.id = p.member_id
@@ -454,7 +474,8 @@ export async function loadMemberHistory(
     .prepare(
       `SELECT ${SESSION_COLUMNS},
               r.status AS reg_status,
-              p.id AS pay_id, p.amount_due, p.amount_override, p.status AS pay_status,
+              p.id AS pay_id, p.amount_due, p.amount_override, p.guests,
+              p.status AS pay_status,
               p.proof_key, p.note, p.reject_reason, p.claimed_at, p.confirmed_at,
               p.updated_at AS pay_updated_at,
               m.name AS member_name
@@ -473,6 +494,7 @@ export async function loadMemberHistory(
         pay_id: string | null;
         amount_due: number | null;
         amount_override: number | null;
+        guests: number | null;
         pay_status: string | null;
         proof_key: string | null;
         note: string | null;
@@ -495,6 +517,7 @@ export async function loadMemberHistory(
           member_name: row.member_name,
           amount_due: row.amount_due ?? 0,
           amount_override: row.amount_override,
+          guests: row.guests ?? 0,
           status: row.pay_status ?? 'unpaid',
           proof_key: row.proof_key,
           note: row.note,

@@ -457,7 +457,14 @@ function PaymentRow({
 
   return (
     <div className="player-row" style={{ flexWrap: 'wrap' }}>
-      <span className="player-name truncate">{payment.memberName}</span>
+      <span className="player-name truncate">
+        {payment.memberName}
+        {/* Why this person owes more than the others. Read from the payment,
+            not from the live registration: the charge records its own basis. */}
+        {payment.guests > 0 ? (
+          <span className="muted"> {m.session.guestChip(payment.guests)}</span>
+        ) : null}
+      </span>
 
       <span className="amount">{formatVnd(payment.amountDue)}</span>
       {payment.amountOverride != null ? (

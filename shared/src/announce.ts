@@ -62,6 +62,8 @@ export function sessionAnnouncement(
   }
 
   lines.push('');
+  // `counts.in` is heads, guests included — the number that decides whether
+  // there is still room.
   lines.push(headcount(counts.in, session.maxPlayers, m));
 
   lines.push('');

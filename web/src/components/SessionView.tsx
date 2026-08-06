@@ -14,6 +14,7 @@ import { useApp } from '../state/app.js';
 import { useLocale, useMessages } from '../state/locale.js';
 import { AnnounceButton } from './AnnounceButton.js';
 import { Avatar } from './Avatar.js';
+import { GuestPicker } from './GuestPicker.js';
 import { CopyButton } from './CopyButton.js';
 import { Icon } from './Icon.js';
 import { SessionEditor } from './SessionEditor.js';
@@ -125,19 +126,31 @@ export function SessionView({
       {session.status === 'cancelled' ? (
         <div className="error-banner">{m.session.wasCancelled}</div>
       ) : registrationOpen ? (
-        <Button
-          variant={me ? 'outlined' : 'filled'}
-          onClick={toggleRegistration}
-          disabled={busy}
-        >
-          {busy
-            ? m.app.working
-            : me
-              ? me.status === 'waitlist'
-                ? m.session.leaveWaitlist
-                : m.session.cantMakeIt
-              : m.session.imIn}
-        </Button>
+        <>
+          <Button
+            variant={me ? 'outlined' : 'filled'}
+            onClick={toggleRegistration}
+            disabled={busy}
+          >
+            {busy
+              ? m.app.working
+              : me
+                ? me.status === 'waitlist'
+                  ? m.session.leaveWaitlist
+                  : m.session.cantMakeIt
+                : m.session.imIn}
+          </Button>
+          {/* Only once you are in. Bringing friends to a session you are not
+              playing in is not a thing, and the cap check needs a spot to
+              measure against. */}
+          {me ? (
+            <GuestPicker
+              sessionId={session.id}
+              guests={me.guests}
+              onChanged={onChanged}
+            />
+          ) : null}
+        </>
       ) : (
         <div className="muted" style={{ textAlign: 'center' }}>
           {m.session.registrationClosed}
@@ -146,7 +159,14 @@ export function SessionView({
 
       <div className="card">
         <div className="row between">
-          <h2 className="card-title">{m.session.playing(counts.in, session.maxPlayers)}</h2>
+          <h2 className="card-title">
+            {m.session.playing(counts.in, session.maxPlayers)}
+            {counts.guests > 0 ? (
+              <span className="muted" style={{ fontSize: '0.8rem', marginLeft: 6 }}>
+                {m.session.guestChip(counts.guests)}
+              </span>
+            ) : null}
+          </h2>
           <ConnectionDot state={connection} />
         </div>
 
@@ -182,6 +202,9 @@ export function SessionView({
                 >
                   {registration.memberName}
                 </button>
+                {registration.guests > 0 ? (
+                  <span className="badge waitlist">{m.session.guestChip(registration.guests)}</span>
+                ) : null}
                 {registration.memberId === identity.memberId ? (
                   <span className="badge paid">{m.session.you}</span>
                 ) : null}

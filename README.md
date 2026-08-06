@@ -361,6 +361,34 @@ Trigger it locally with:
 curl "http://localhost:8787/cdn-cgi/local/scheduled"
 ```
 
+### Guests
+
+Somebody turns up once, or plays every third week, and is never going to
+install anything. Under **I'm in** there is *Bringing anyone?* — pick 0 to 5.
+Guests have no account, no name in the app and no history: they are a number
+attached to whoever brought them, because asking for names would imply a
+record nobody will keep accurate for a person who appears twice a year.
+
+**They take spots.** The cap counts heads, not names, so "Playing 3 / 3" over a
+single row is correct and the row carries a `+2` chip to say why. A party fits
+all-or-nothing — three people cannot half-fit into two spots, and splitting
+them would strand somebody's friend on a waitlist they have no way to be told
+about. Waitlist promotion picks the first party that *fits*: skipping a party
+too big for the gap keeps the pitch full without reordering anybody, and they
+stay first in line for the next opening large enough.
+
+**They cost money.** The bill divides by heads, so whoever brought two friends
+owes three shares, and an override is read as covering that person's whole
+party. The split expands into head-slices, runs the same largest-remainder
+allocation *once*, and groups the slices — the tempting version, one share
+multiplied per party, rounds twice and stops summing to the total. A sweep in
+`shared/test` across ~2,000 totals and eight party shapes pins that: against
+the naive implementation it reports drift of nearly 14.000d on a single bill.
+
+The head count is snapshotted onto the payment row rather than looked up
+later, so "why do I owe 210.000?" stays answerable from the charge itself
+whatever the registration says by the time anybody asks.
+
 ### Who owes what is public
 
 The group-wide unpaid list on **History** is visible to every member, not just
@@ -758,7 +786,7 @@ ICT date arithmetic (including the UTC-vs-ICT boundary cases where a Thursday
 evening in UTC is already Friday in Ho Chi Minh City) and the money split
 (exact-sum invariants, overrides, rounding).
 
-The API integration suite is 149 checks against real local D1 and R2 — the invite
+The API integration suite is 165 checks against real local D1 and R2 — the invite
 gate, the waitlist and its auto-promotion, the split, the payment state machine,
 proof upload and access control, and the cron. It needs `wrangler dev` running
 and writes to the local database, so run it in a second terminal:

@@ -70,6 +70,74 @@ check('overrides sum exact', [...o1.values()].reduce((a, b) => a + b, 0), 500_00
 const o2 = splitWithOverrides(100_000, [{ id: 'a', override: 200_000 }, { id: 'b' }]);
 check('overrides over total -> 0', o2.get('b'), 0);
 
+// --- guests: the split is by heads, not by accounts ---------------------
+const g1 = splitWithOverrides(600_000, [
+  { id: 'a', heads: 1 },
+  { id: 'b', heads: 2 },
+  { id: 'c', heads: 3 },
+]);
+check('guests: 6 heads at 100k', [g1.get('a'), g1.get('b'), g1.get('c')], [100_000, 200_000, 300_000]);
+
+// An override covers the payer's whole party; the rest divides by heads.
+const g2 = splitWithOverrides(500_000, [
+  { id: 'a', heads: 3, override: 200_000 },
+  { id: 'b', heads: 1 },
+  { id: 'c', heads: 2 },
+]);
+check('guests: override covers the party', g2.get('a'), 200_000);
+check('guests: remainder splits by heads', [g2.get('b'), g2.get('c')], [100_000, 200_000]);
+
+// Heads default to 1, so the old call sites keep their old answers.
+const g3 = splitWithOverrides(300_000, [{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
+check('guests: absent heads means one', [g3.get('a'), g3.get('b'), g3.get('c')],
+  [100_000, 100_000, 100_000]);
+
+/**
+ * The invariant, swept rather than sampled.
+ *
+ * Enumerated cases only prove the totals somebody thought to write down. What
+ * must hold for *every* bill is that the parts sum to the whole: a split that
+ * rounds per party instead of grouping slices passes the tidy 600.000-across-6
+ * case above and still loses a thousand dong on the awkward ones.
+ */
+let worstDrift = 0;
+let driftExample = '';
+for (let total = 0; total <= 2_000_000; total += 7_331) {
+  for (const shape of [[1], [1, 1], [3], [1, 2], [2, 2, 1], [1, 1, 1, 5], [4, 3, 2, 1], [5, 5, 5]]) {
+    const payers = shape.map((heads, i) => ({ id: `p${i}`, heads }));
+    const split = splitWithOverrides(total, payers);
+    const sum = [...split.values()].reduce((a, b) => a + b, 0);
+    if (sum !== total && Math.abs(sum - total) > worstDrift) {
+      worstDrift = Math.abs(sum - total);
+      driftExample = `total=${total} shape=${shape.join('+')} sum=${sum}`;
+    }
+    // Nobody may owe a negative amount, whatever the shape.
+    if ([...split.values()].some((v) => v < 0)) {
+      worstDrift = Math.max(worstDrift, 1);
+      driftExample = `negative share: total=${total} shape=${shape.join('+')}`;
+    }
+  }
+}
+check('guests: shares always sum to the total exactly', `${worstDrift} ${driftExample}`.trim(), '0');
+
+// Same sweep with an override in play, which is where a naive fix breaks.
+let overrideDrift = '';
+for (let total = 0; total <= 1_000_000; total += 3_997) {
+  for (const fixedAmount of [0, 50_000, 999_999, 2_000_000]) {
+    const split = splitWithOverrides(total, [
+      { id: 'a', heads: 2, override: fixedAmount },
+      { id: 'b', heads: 1 },
+      { id: 'c', heads: 3 },
+    ]);
+    const sum = [...split.values()].reduce((a, b) => a + b, 0);
+    // Once the override alone exceeds the bill the total is the override, by
+    // design: the others owe nothing rather than a negative.
+    const expected = Math.max(total, Math.min(fixedAmount, Math.max(total, fixedAmount)));
+    if (sum !== expected) overrideDrift = `total=${total} fixed=${fixedAmount} sum=${sum} want=${expected}`;
+  }
+}
+check('guests: overrides never break the sum', overrideDrift, '');
+
 check('formatVnd', formatVnd(1_234_000), '1.234.000d');
 check('formatVnd small', formatVnd(500), '500d');
 check('parseVnd 120k', parseVnd('120k'), 120_000);

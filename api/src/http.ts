@@ -50,6 +50,31 @@ export async function parseBody<T extends z.ZodType>(
   } catch {
     throw badRequest('Expected a JSON body');
   }
+  return validate(schema, raw);
+}
+
+/**
+ * Same, but an absent body is not an error — the schema's defaults stand in.
+ *
+ * For endpoints where every field is optional. `POST /register` took no body
+ * at all before guests existed, and adding one optional field must not turn
+ * every old caller into a 400.
+ */
+export async function parseOptionalBody<T extends z.ZodType>(
+  request: Request,
+  schema: T,
+): Promise<z.infer<T>> {
+  let raw: unknown = {};
+  try {
+    const text = await request.text();
+    if (text.trim()) raw = JSON.parse(text);
+  } catch {
+    throw badRequest('Expected a JSON body');
+  }
+  return validate(schema, raw);
+}
+
+function validate<T extends z.ZodType>(schema: T, raw: unknown): z.infer<T> {
   const result = schema.safeParse(raw);
   if (!result.success) {
     const first = result.error.issues[0];

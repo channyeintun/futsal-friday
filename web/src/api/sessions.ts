@@ -40,8 +40,12 @@ export const updateSession = (id: string, input: UpdateSessionInput) =>
 export const cancelSession = (id: string) =>
   patch<{ session: Session }>(`/sessions/${id}`, { status: 'cancelled' });
 
-export const registerForSession = (id: string) =>
-  post<RegisterResult>(`/sessions/${id}/register`);
+export const registerForSession = (id: string, guests = 0) =>
+  post<RegisterResult>(`/sessions/${id}/register`, { guests });
+
+/** Change how many friends you are bringing, without giving up your spot. */
+export const setSessionGuests = (id: string, guests: number) =>
+  patch<RegisterResult>(`/sessions/${id}/register`, { guests });
 
 export const withdrawFromSession = (id: string) =>
   del<WithdrawResult>(`/sessions/${id}/register`);

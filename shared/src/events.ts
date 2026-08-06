@@ -25,9 +25,16 @@ export function sessionChannel(sessionId: string): string {
 /** Low-traffic channel for "the schedule changed" pings on the home screen. */
 export const LOBBY_CHANNEL = 'lobby';
 
+/**
+ * Heads, not rows. `in` counts everybody standing on the pitch — members and
+ * the guests they brought — because that is what the cap is about. `guests` is
+ * how many of those are guests, so a screen can explain the difference between
+ * "7 playing" and five names on the list.
+ */
 const counts = z.object({
   in: z.number().int(),
   waitlist: z.number().int(),
+  guests: z.number().int().default(0),
 });
 
 /* ------------------------------------------------------------------ schemas */
@@ -41,6 +48,8 @@ export const playerJoinedSchema = z.object({
    * complete, without the picture popping in on the next refresh.
    */
   memberAvatarUpdatedAt: isoSchema.nullable().default(null),
+  /** How many friends they brought; they answer for the spots and the cost. */
+  guests: z.number().int().min(0).default(0),
   status: registrationStatusSchema,
   position: z.number().int(),
   counts,

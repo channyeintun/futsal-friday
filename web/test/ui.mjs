@@ -341,6 +341,70 @@ async function run() {
   await sleep(400);
   await shoot('09-group-link');
 
+  console.log('\nbringing guests');
+  await goToTab(0, 'Playing');
+  await sleep(500);
+  // Only offered once you are in — there is no spot to attach guests to
+  // otherwise, and the cap check needs one to measure against.
+  const registered = await evalJs(`document.body.innerText.includes("Can't make it")`);
+  if (!registered) {
+    await clickByText("I'm in");
+    await waitFor(`document.body.innerText.includes("Can't make it")`, 'registered for the guest test');
+    await sleep(400);
+  }
+  check('the session offers to bring guests',
+    await evalJs(`[...document.querySelectorAll('md-text-button')].some(b => /bringing/i.test(b.textContent))`),
+    await evalJs(`[...document.querySelectorAll('md-text-button')].map(b => b.textContent.trim()).join(' | ')`));
+
+  const beforeHeads = await evalJs(`Number(document.body.innerText.match(/Playing (\\d+)/)?.[1] ?? 0)`);
+
+  await evalJs(`(() => {
+    [...document.querySelectorAll('md-text-button')].find(b => /bringing/i.test(b.textContent)).click();
+  })()`);
+  await waitFor('document.body.innerText.includes("Bringing anyone")', 'the guest dialog opens');
+  await sleep(300);
+  check('it explains that guests cost you money',
+    await evalJs(`document.body.innerText.includes('their share goes on your bill')`));
+  check('it offers a small range, not a keyboard',
+    await evalJs(`document.querySelectorAll('.guest-choice').length === 6`),
+    await evalJs(`document.querySelectorAll('.guest-choice').length`));
+  await shoot('20-guests');
+
+  await evalJs(`document.querySelectorAll('.guest-choice')[2].click()`);
+  await sleep(200);
+  check('choosing 2 says what that means',
+    await evalJs(`document.body.innerText.includes('Me + 2 friends')`),
+    await evalJs(`document.querySelector('md-dialog[open]')?.innerText?.slice(0, 200)`));
+
+  await evalJs(`(() => {
+    [...document.querySelectorAll('md-dialog[open] md-filled-button')]
+      .find(b => b.textContent.includes('Save')).click();
+  })()`);
+  await waitFor(`!document.querySelector('md-dialog[open]')`, 'the dialog closes on save');
+  await waitFor(`document.body.innerText.includes('bringing 2 guests')`, 'the button reflects the party');
+  await sleep(600);
+
+  const afterHeads = await evalJs(`Number(document.body.innerText.match(/Playing (\\d+)/)?.[1] ?? 0)`);
+  check('GUESTS COUNT TOWARD THE PITCH, NOT JUST THE NAME LIST', afterHeads === beforeHeads + 2,
+    `${beforeHeads} -> ${afterHeads}`);
+  check('and the row shows why the numbers differ',
+    await evalJs(`[...document.querySelectorAll('.player-row .badge')].some(b => b.textContent.trim() === '+2')`),
+    await evalJs(`[...document.querySelectorAll('.player-row')].map(r => r.textContent.trim()).join(' | ').slice(0, 200)`));
+  await shoot('21-guests-counted');
+
+  // Put it back so later sections see the roster they expect.
+  await evalJs(`(() => {
+    [...document.querySelectorAll('md-text-button')].find(b => /bringing/i.test(b.textContent)).click();
+  })()`);
+  await waitFor('document.body.innerText.includes("Bringing anyone")', 'reopen to reset');
+  await evalJs(`document.querySelectorAll('.guest-choice')[0].click()`);
+  await evalJs(`(() => {
+    [...document.querySelectorAll('md-dialog[open] md-filled-button')]
+      .find(b => b.textContent.includes('Save')).click();
+  })()`);
+  await waitFor(`!document.querySelector('md-dialog[open]')`, 'reset saved');
+  await sleep(500);
+
   console.log('\nprofile and streak');
   // The dev database persists between runs, and a previous run leaves a
   // picture behind. Start from "no picture" so the fallback is actually being

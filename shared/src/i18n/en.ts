@@ -158,6 +158,19 @@ export const en = {
       max ? `Playing ${count} / ${max}` : `Playing ${count}`,
     nobodyYet: 'Nobody yet. Be the first.',
     you: 'you',
+    bringingGuests: (count: number) =>
+      count === 1 ? 'bringing 1 guest' : `bringing ${count} guests`,
+    guestChip: (count: number) => `+${count}`,
+    guestsTitle: 'Bringing anyone?',
+    guestsBody:
+      'Friends without the app. They take a spot each, and their share goes on your bill.',
+    guestsNone: 'Just me',
+    guestsCount: (count: number) => (count === 1 ? 'Me + 1 friend' : `Me + ${count} friends`),
+    guestsSave: 'Save',
+    guestsFull: 'Not enough room for that many.',
+    guestsFailed: 'Could not change that',
+    playingWithGuests: (players: number, guests: number) =>
+      guests === 1 ? `${players} playing · 1 guest` : `${players} playing · ${guests} guests`,
     waitlistHeading: (count: number) => `Waitlist (${count})`,
     waiting: 'waiting',
     copyList: 'Copy list for chat',
@@ -409,6 +422,7 @@ export const en = {
     matchHeader: 'FUTSAL',
     cancelled: 'CANCELLED',
     perPersonApprox: (amount: string) => `~${amount}/person`,
+    guestSuffix: (count: number) => ` (+${count})`,
     inHeading: (count: number, max?: number | null) => (max ? `IN (${count}/${max})` : `IN (${count})`),
     nobodyYet: '— nobody yet —',
     waitlistHeading: (count: number) => `WAITLIST (${count})`,

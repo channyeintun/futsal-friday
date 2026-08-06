@@ -491,6 +491,79 @@ const run = async () => {
     JSON.stringify(reopened.body.members.map((x) => x.name)));
   void erin;
 
+  section('guests: friends without an account');
+  // A pitch hired for four, so the arithmetic is visible.
+  const guestSession = await call('POST', '/sessions', {
+    token: organizer,
+    body: { startsAt: new Date(Date.now() + 5 * 86_400_000).toISOString(), maxPlayers: 4 },
+  });
+  const gs = guestSession.body.session.id;
+
+  const solo = await call('POST', `/sessions/${gs}/register`, { token: alice.token });
+  check('a member with no guests takes one spot', solo.body?.counts?.in === 1,
+    JSON.stringify(solo.body?.counts));
+
+  const party = await call('POST', `/sessions/${gs}/register`, {
+    token: bob.token, body: { guests: 2 },
+  });
+  check('a party of three takes three', party.body?.counts?.in === 4,
+    JSON.stringify(party.body?.counts));
+  check('and the counts say how many were guests', party.body?.counts?.guests === 2,
+    JSON.stringify(party.body?.counts));
+  check('the registration records the party size', party.body?.registration?.guests === 2,
+    JSON.stringify(party.body?.registration));
+
+  // Full at four heads from two names — the row count would have said two.
+  const overflow = await call('POST', `/sessions/${gs}/register`, { token: carol.token });
+  check('GUESTS FILL THE PITCH, NOT JUST NAMES', overflow.body?.registration?.status === 'waitlist',
+    JSON.stringify(overflow.body?.registration));
+
+  const tooMany = await call('PATCH', `/sessions/${gs}/register`, {
+    token: bob.token, body: { guests: 5 },
+  });
+  check('a party cannot grow past the cap', tooMany.status === 409, tooMany.body);
+  check('and the refusal says how much room is left', /room for/.test(tooMany.body?.error?.message ?? ''),
+    tooMany.body?.error?.message);
+
+  const shrink = await call('PATCH', `/sessions/${gs}/register`, {
+    token: bob.token, body: { guests: 0 },
+  });
+  check('bringing fewer frees the spots', shrink.body?.counts?.in <= 3,
+    JSON.stringify(shrink.body?.counts));
+  const afterShrink = await call('GET', `/sessions/${gs}`, { token: organizer });
+  const carolNow = afterShrink.body.registrations.find((r) => r.memberId === carol.id);
+  check('and promotes whoever was waiting', carolNow?.status === 'in', JSON.stringify(carolNow));
+
+  const capGuests = await call('POST', `/sessions/${gs}/register`, {
+    token: dave.body.member.id ? organizer : organizer, body: { guests: 9 },
+  });
+  check('an absurd party size is rejected outright', capGuests.status === 400, capGuests.status);
+
+  // The money. Two heads for Bob, one each for Alice and Carol = 4 shares.
+  await call('PATCH', `/sessions/${gs}/register`, { token: bob.token, body: { guests: 1 } });
+  const settled = await call('POST', `/sessions/${gs}/settle`, {
+    token: organizer, body: { totalCharge: 400_000 },
+  });
+  check('settling a session with guests works', settled.status === 200, settled.body);
+
+  const bill = await call('GET', `/sessions/${gs}/payments`, { token: organizer });
+  const byName = Object.fromEntries(bill.body.payments.map((p) => [p.memberId, p]));
+  check('the guest-bringer is billed for two heads', byName[bob.id]?.amountDue === 200_000,
+    JSON.stringify(byName[bob.id]));
+  check('everybody else for one', byName[alice.id]?.amountDue === 100_000,
+    JSON.stringify(byName[alice.id]));
+  check('and the charge records what it was computed from', byName[bob.id]?.guests === 1,
+    JSON.stringify(byName[bob.id]));
+
+  const billed = bill.body.payments.reduce((sum, p) => sum + p.amountDue, 0);
+  check('THE SHARES STILL SUM TO THE BILL EXACTLY', billed === 400_000, `${billed} of 400000`);
+
+  // An awkward total is where a per-party rounding bug would show up.
+  await call('POST', `/sessions/${gs}/settle`, { token: organizer, body: { totalCharge: 333_333 } });
+  const odd = await call('GET', `/sessions/${gs}/payments`, { token: organizer });
+  const oddTotal = odd.body.payments.reduce((sum, p) => sum + p.amountDue, 0);
+  check('and on a total that does not divide evenly', oddTotal === 333_333, `${oddTotal} of 333333`);
+
   section('self-add and the waiting room');
   const selfAdd = await call('POST', '/auth/group/self-add', {
     body: { nonce: nonceOf(rotated.body.invite.url), name: `Walkin ${stamp}` },

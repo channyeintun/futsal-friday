@@ -4,6 +4,7 @@ import {
   sessionChannel,
   updateSessionSchema,
   LOBBY_CHANNEL,
+  registerSchema,
 } from '@futsal/shared';
 import { Hono } from 'hono';
 import {
@@ -18,7 +19,15 @@ import {
   toSession,
 } from '../db.js';
 import type { AppContext } from '../env.js';
-import { badRequest, conflict, newId, notFound, nowIso, parseBody } from '../http.js';
+import {
+  badRequest,
+  conflict,
+  newId,
+  notFound,
+  nowIso,
+  parseBody,
+  parseOptionalBody,
+} from '../http.js';
 import { requireOrganizer } from '../middleware.js';
 import { isUniqueViolation } from './members.js';
 
@@ -182,18 +191,24 @@ export const sessionRoutes = new Hono<AppContext>()
       throw conflict('Registration has closed for this session', 'registration_closed');
     }
 
+    const { guests } = await parseOptionalBody(c.req.raw, registerSchema);
     const timestamp = nowIso();
 
     // One statement so the cap check, the position and the insert cannot be
     // interleaved with a competing registration. The UNIQUE(session_id,
     // member_id) index is the backstop if two requests race here.
+    //
+    // The cap is measured in heads, and a party is all-or-nothing: three
+    // people cannot half-fit into two spots, and splitting them would leave
+    // somebody's friend on a waitlist they have no way to be told about.
     const result = await c.env.DB.prepare(
-      `INSERT INTO registrations (id, session_id, member_id, status, position, created_at)
-       SELECT ?1, ?2, ?3,
+      `INSERT INTO registrations
+         (id, session_id, member_id, guests, status, position, created_at)
+       SELECT ?1, ?2, ?3, ?6,
               CASE
                 WHEN ?4 IS NULL THEN 'in'
-                WHEN (SELECT COUNT(*) FROM registrations
-                       WHERE session_id = ?2 AND status = 'in') < ?4 THEN 'in'
+                WHEN (SELECT COALESCE(SUM(1 + guests), 0) FROM registrations
+                       WHERE session_id = ?2 AND status = 'in') + 1 + ?6 <= ?4 THEN 'in'
                 ELSE 'waitlist'
               END,
               COALESCE((SELECT MAX(position) FROM registrations WHERE session_id = ?2), 0) + 1,
@@ -202,7 +217,7 @@ export const sessionRoutes = new Hono<AppContext>()
           SELECT 1 FROM registrations WHERE session_id = ?2 AND member_id = ?3
         )`,
     )
-      .bind(newId('reg'), sessionId, identity.memberId, session.maxPlayers, timestamp)
+      .bind(newId('reg'), sessionId, identity.memberId, session.maxPlayers, timestamp, guests)
       .run();
 
     const registrations = await listRegistrations(c.env.DB, sessionId);
@@ -218,6 +233,7 @@ export const sessionRoutes = new Hono<AppContext>()
         memberId: identity.memberId,
         memberName: identity.name,
         memberAvatarUpdatedAt: mine.memberAvatarUpdatedAt,
+        guests: mine.guests,
         status: mine.status,
         position: mine.position,
         counts,
@@ -226,6 +242,70 @@ export const sessionRoutes = new Hono<AppContext>()
     }
 
     return c.json({ registration: mine, counts, changed });
+  })
+
+  /**
+   * Change how many friends you are bringing, without losing your spot.
+   *
+   * Bounded by the cap on the way up: three extra heads cannot appear in two
+   * remaining spots. Going down always works, and frees the difference for
+   * whoever is waiting — so the promotion sweep runs afterwards.
+   */
+  .patch('/:id/register', async (c) => {
+    const sessionId = c.req.param('id');
+    const identity = c.get('identity');
+    const { guests } = await parseOptionalBody(c.req.raw, registerSchema);
+
+    const session = await getSessionRow(c.env.DB, sessionId);
+    if (!session) throw notFound('No such session');
+    if (!isRegistrationOpen(session)) {
+      throw conflict('Registration has closed for this session', 'registration_closed');
+    }
+
+    const before = await listRegistrations(c.env.DB, sessionId);
+    const mine = before.find((r) => r.memberId === identity.memberId);
+    if (!mine) throw conflict('Register yourself first');
+
+    // Only a spot on the pitch is capped; a longer waitlist entry costs
+    // nobody anything.
+    if (mine.status === 'in' && session.maxPlayers !== null) {
+      const othersHeads = before
+        .filter((r) => r.status === 'in' && r.memberId !== identity.memberId)
+        .reduce((sum, r) => sum + 1 + r.guests, 0);
+      if (othersHeads + 1 + guests > session.maxPlayers) {
+        throw conflict(
+          `There is only room for ${Math.max(0, session.maxPlayers - othersHeads - 1)} more`,
+          'session_full',
+        );
+      }
+    }
+
+    const timestamp = nowIso();
+    await c.env.DB.prepare(
+      `UPDATE registrations SET guests = ?3 WHERE session_id = ?1 AND member_id = ?2`,
+    )
+      .bind(sessionId, identity.memberId, guests)
+      .run();
+
+    // Bringing fewer friends may have opened a spot somebody is waiting for.
+    if (guests < mine.guests) await promoteFromWaitlist(c.env.DB, sessionId, session.maxPlayers);
+
+    const after = await listRegistrations(c.env.DB, sessionId);
+    const updated = after.find((r) => r.memberId === identity.memberId);
+    const counts = countRegistrations(after);
+
+    // A party size change reshuffles the list and may promote somebody, which
+    // is more than the `player.joined` patch can express — so viewers refetch.
+    await c.get('pubsub').emit(sessionChannel(sessionId), 'session.updated', {
+      sessionId,
+      status: session.status as 'scheduled' | 'cancelled' | 'completed',
+      startsAt: session.startsAt,
+      venueId: session.venueId,
+      reason: 'edited',
+      at: timestamp,
+    });
+
+    return c.json({ registration: updated, counts, changed: guests !== mine.guests });
   })
 
   /** Withdraw, promoting the first waitlisted player into the freed spot. */
@@ -289,16 +369,25 @@ function promoteStatement(
   sessionId: string,
   maxPlayers: number | null,
 ): D1PreparedStatement {
+  // The first waitlisted party that *fits*, not simply the first.
+  //
+  // A party of three behind two free spots cannot be promoted whole, and
+  // splitting it is not on the table — so the spots would sit empty while a
+  // solo player waits behind them. Skipping to whoever fits keeps the pitch
+  // full without ever reordering anybody: positions are untouched, and the
+  // skipped party is still first in line for the next opening big enough.
   return db
     .prepare(
       `UPDATE registrations
           SET status = 'in'
-        WHERE id = (SELECT id FROM registrations
-                     WHERE session_id = ?1 AND status = 'waitlist'
-                     ORDER BY position ASC LIMIT 1)
-          AND (?2 IS NULL
-               OR (SELECT COUNT(*) FROM registrations
-                    WHERE session_id = ?1 AND status = 'in') < ?2)`,
+        WHERE id = (
+          SELECT w.id FROM registrations w
+           WHERE w.session_id = ?1 AND w.status = 'waitlist'
+             AND (?2 IS NULL
+                  OR (SELECT COALESCE(SUM(1 + guests), 0) FROM registrations
+                       WHERE session_id = ?1 AND status = 'in') + 1 + w.guests <= ?2)
+           ORDER BY w.position ASC LIMIT 1
+        )`,
     )
     .bind(sessionId, maxPlayers);
 }

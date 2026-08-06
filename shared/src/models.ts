@@ -173,6 +173,12 @@ export type UpdateSessionInput = z.infer<typeof updateSessionSchema>;
 export const registrationStatusSchema = z.enum(['in', 'waitlist']);
 export type RegistrationStatus = z.infer<typeof registrationStatusSchema>;
 
+/** Sign up, optionally bringing friends. */
+export const registerSchema = z.object({
+  guests: z.number().int().min(0).max(5).default(0),
+});
+export type RegisterInput = z.infer<typeof registerSchema>;
+
 export const registrationSchema = z.object({
   id: idSchema,
   sessionId: idSchema,
@@ -180,6 +186,11 @@ export const registrationSchema = z.object({
   memberName: z.string(),
   /** Cache token for the member's picture; null when they have none. */
   memberAvatarUpdatedAt: isoSchema.nullable().default(null),
+  /**
+   * Friends brought along who have no account. They take spots and cost money;
+   * this member answers for both.
+   */
+  guests: z.number().int().min(0).max(5).default(0),
   status: registrationStatusSchema,
   /** Monotonic per session; defines display order and waitlist promotion order. */
   position: z.number().int(),
@@ -202,6 +213,11 @@ export const paymentSchema = z.object({
   amountDue: vndSchema,
   /** Organizer's manual per-person amount, when set. */
   amountOverride: vndSchema.nullable(),
+  /**
+   * Guests this charge was computed for, snapshotted when the bill was split.
+   * Keeps the amount explainable from the payment alone.
+   */
+  guests: z.number().int().min(0).default(0),
   status: paymentStatusSchema,
   /** True when a screenshot exists; the object key itself stays server-side. */
   hasProof: z.boolean(),
@@ -247,8 +263,11 @@ export const sessionDetailSchema = z.object({
   session: sessionSchema,
   registrations: z.array(registrationSchema),
   counts: z.object({
+    /** Heads on the pitch: members plus the guests they brought. */
     in: z.number().int(),
     waitlist: z.number().int(),
+    /** How many of `in` are guests, so a screen can say why the numbers differ. */
+    guests: z.number().int().default(0),
   }),
   /** Whether registration is still open (before kickoff, not cancelled). */
   registrationOpen: z.boolean(),

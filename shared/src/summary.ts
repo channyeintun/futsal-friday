@@ -47,13 +47,19 @@ export function registrationSummary(detail: SessionDetail, options: SummaryOptio
   if (playing.length === 0) {
     lines.push(`  ${m.summary.nobodyYet}`);
   } else {
-    playing.forEach((r, i) => lines.push(`${i + 1}. ${r.memberName}`));
+    // "3. Bao (+2)" — the head count has to add up for whoever reads this in
+    // the chat and counts names against the number at the top.
+    playing.forEach((r, i) =>
+      lines.push(`${i + 1}. ${r.memberName}${r.guests > 0 ? m.summary.guestSuffix(r.guests) : ''}`),
+    );
   }
 
   if (waiting.length > 0) {
     lines.push('');
     lines.push(m.summary.waitlistHeading(counts.waitlist));
-    waiting.forEach((r, i) => lines.push(`${i + 1}. ${r.memberName}`));
+    waiting.forEach((r, i) =>
+      lines.push(`${i + 1}. ${r.memberName}${r.guests > 0 ? m.summary.guestSuffix(r.guests) : ''}`),
+    );
   }
 
   if (session.notes) {
@@ -106,7 +112,12 @@ export function paymentsSummary(
   if (unpaid.length > 0) {
     lines.push('');
     lines.push(`❌ ${m.summary.notYet(unpaid.length)}`);
-    unpaid.map((p) => `${p.memberName} — ${formatVnd(p.amountDue)}`).forEach((l) => lines.push(l));
+    unpaid
+      .map(
+        (p) =>
+          `${p.memberName}${p.guests > 0 ? m.summary.guestSuffix(p.guests) : ''} — ${formatVnd(p.amountDue)}`,
+      )
+      .forEach((l) => lines.push(l));
   }
 
   if (options.appUrl) {

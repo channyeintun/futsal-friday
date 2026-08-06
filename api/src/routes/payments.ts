@@ -271,9 +271,16 @@ async function applySplit(
   for (const p of existing) overrides.set(p.memberId, p.amountOverride);
   for (const [memberId, amount] of newOverrides) overrides.set(memberId, amount);
 
+  // Weighted by heads: whoever brought friends pays for them. An override is
+  // read as covering that person's whole party, which is what "Bao pays
+  // 200.000" means when Bao arrived with two mates.
   const shares = splitWithOverrides(
     totalCharge,
-    players.map((p) => ({ id: p.memberId, override: overrides.get(p.memberId) ?? null })),
+    players.map((p) => ({
+      id: p.memberId,
+      override: overrides.get(p.memberId) ?? null,
+      heads: 1 + (p.guests ?? 0),
+    })),
     granularity,
   );
 
@@ -281,13 +288,18 @@ async function applySplit(
   const statements = players.map((player) =>
     db
       .prepare(
+        // `guests` is snapshotted, not looked up later: the charge has to stay
+        // explainable on its own. "Why do I owe 210.000?" is answered by the
+        // row saying it was billed for three heads, whatever the registration
+        // says by the time anybody asks.
         `INSERT INTO payments
-           (id, session_id, member_id, amount_due, amount_override, status,
+           (id, session_id, member_id, amount_due, amount_override, guests, status,
             created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, 'unpaid', ?6, ?6)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?7, 'unpaid', ?6, ?6)
          ON CONFLICT (session_id, member_id) DO UPDATE SET
            amount_due = excluded.amount_due,
            amount_override = excluded.amount_override,
+           guests = excluded.guests,
            updated_at = excluded.updated_at`,
       )
       .bind(
@@ -297,6 +309,7 @@ async function applySplit(
         shares.get(player.memberId) ?? 0,
         overrides.get(player.memberId) ?? null,
         timestamp,
+        player.guests ?? 0,
       ),
   );
 

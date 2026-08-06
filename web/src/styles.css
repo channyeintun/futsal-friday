@@ -795,3 +795,31 @@ body {
     animation: none !important;
   }
 }
+
+/* ------------------------------------------------------------------- guests */
+
+.guest-choices {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.guest-choice {
+  flex: 1;
+  min-width: 44px;
+  /* A 44px target: this is a row of small buttons on a phone. */
+  min-height: 44px;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: 12px;
+  background: none;
+  color: var(--md-sys-color-on-surface);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.guest-choice.is-chosen {
+  background: var(--md-sys-color-primary);
+  border-color: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+}
