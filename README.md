@@ -35,6 +35,9 @@ See [Who can get in](#who-can-get-in).
 - **Registration.** One button to join or drop out. Live list in registration
   order, an optional player cap, and a waitlist that promotes automatically
   when somebody withdraws. Closes at kickoff.
+- **Who turned up.** Signing up is a promise; arriving is what the bill is
+  divided by. After kickoff anyone can mark themselves a no-show and the
+  organizer can mark anybody, and the split follows the people who played.
 - **Payments.** The organizer enters the total charge; it splits equally among
   the players who actually played, with per-person overrides. Members mark
   themselves paid and can attach a transfer screenshot; the organizer confirms
@@ -66,6 +69,7 @@ futsal-friday/
 │   ├── i18n/         message catalogues; English is the source of truth
 │   ├── time.ts       Asia/Ho_Chi_Minh arithmetic, localised names
 │   ├── money.ts      integer-dong splitting
+│   ├── attendance.ts who actually played, and what that costs
 │   ├── vietqr.ts     EMVCo/NAPAS transfer payloads
 │   └── summary.ts    the chat-pasteable text
 ├── api/         Hono on Cloudflare Workers
@@ -394,6 +398,54 @@ The head count is snapshotted onto the payment row rather than looked up
 later, so "why do I owe 210.000?" stays answerable from the charge itself
 whatever the registration says by the time anybody asks.
 
+### Who turned up
+
+Registering and arriving used to be the same fact, and both the money and the
+streaks were wrong because of it. Somebody who tapped "I'm in" and then never
+came was billed a full share — which meant everybody who *did* play was
+under-charged by exactly that much — and their attendance streak survived a
+game they were not at.
+
+`registrations.attended` is now the decider, and it is **nullable on purpose**.
+The failure modes are not symmetrical:
+
+- If *arriving* needs a tap, every player who forgets one drops out of the
+  split and the people who did tap cover them. A wrong bill every week, caused
+  by inaction.
+- If *not arriving* needs a tap, the only wrong bills are the weeks somebody
+  no-shows and nobody says so — rarer, self-correcting the moment anyone
+  notices, and no worse than the behaviour it replaced.
+
+So the presumption is presence, and you mark the exceptions. Typically that is
+nought to two taps a week rather than twelve. `NULL` also stays distinguishable
+from `0`, which is what lets the settle screen say whether anyone has actually
+checked the roster rather than presenting a presumption as a headcount.
+
+    NULL  nobody has said       -> presumed from status
+    1     explicitly arrived    -> counted, whatever the status
+    0     explicitly a no-show  -> not counted, whatever the status
+
+Marking a *waitlisted* player as arrived is deliberately expressible: when
+somebody no-shows without withdrawing, the reserve who stepped onto the pitch
+was never promoted, and they still owe for the game they played.
+
+Anybody may mark themselves; only an organizer may mark somebody else, which is
+what makes it work in practice — the person who did not come is exactly the
+person who will not open the app to say so. Guests get the same treatment as a
+count rather than a boolean, because turning up with one of the two friends you
+promised is the common case. The server accepts a mark at any time even though
+the screen only offers it after kickoff: re-settling recomputes every share
+from scratch, so a correction days later still produces the right bill.
+
+**The total stays the total.** The pitch is rented by the hour, so a bill of
+`fee × arrived` would collect less than the organizer actually paid on a thin
+week and leave them out of pocket. What changed is the *divisor*, not the
+arithmetic: the same total, divided among the people who were on the pitch, so
+a no-show's share is absorbed by the players rather than billed to a man who
+stayed home. `sessions.fee_per_person` — inherited week to week — prefills the
+total as a suggestion and shows the per-head figure live, so the usual week is
+one tap with nothing retyped.
+
 ### Paying, and the QR
 
 The organizer stores one set of bank details for the whole group
@@ -426,6 +478,16 @@ ship private schemes that break between releases and cover one bank each. The
 dynamic QR *is* the sanctioned mechanism for this on the NAPAS rails — it
 reaches the same prefilled transfer screen, works in every bank's app, and
 does not rot. Zalo's version of the feature works the same way underneath.
+
+**And the amount cannot be edited.** EMVCo tag 01 nominally offers the choice:
+`"12"` is a one-off bill, `"11"` a reusable code whose amount is a suggestion.
+Tested against BIDV and Zalo, both prefill the amount and lock the field
+whichever marker is set, so `"12"` is what we send — the honest description of
+a bill for one person for one session. `amountEditable` survives as a flag
+because the distinction is real in the spec and the behaviour is the bank's to
+change, but nothing honours it today. The way to make the number right is
+therefore to bill the right number in the first place, which is what the
+attendance marking above is for.
 
 Account details stay in plain text above the code as well. The QR is the fast
 path; a number you can read and copy is the one that works when somebody is

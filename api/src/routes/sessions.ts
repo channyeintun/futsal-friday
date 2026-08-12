@@ -1,7 +1,9 @@
 import {
   type Registration,
   createSessionSchema,
+  markAttendanceSchema,
   sessionChannel,
+  totalArrivedHeads,
   updateSessionSchema,
   LOBBY_CHANNEL,
   registerSchema,
@@ -22,6 +24,7 @@ import type { AppContext } from '../env.js';
 import {
   badRequest,
   conflict,
+  forbidden,
   newId,
   notFound,
   nowIso,
@@ -357,7 +360,84 @@ export const sessionRoutes = new Hono<AppContext>()
     });
 
     return c.json({ counts: countRegistrations(after), changed: true, promoted });
-  });
+  })
+
+  /* --------------------------------------------------------- attendance */
+
+  /**
+   * Say who turned up.
+   *
+   * Anybody may mark themselves. Only an organizer may mark somebody else, which
+   * is what makes this usable in practice: the person who did not come is
+   * exactly the person who will not open the app to say so.
+   *
+   * Deliberately not gated on kickoff having passed. The screen only offers it
+   * after the whistle, but a clock check here would reject a late correction to
+   * a game last week — and correcting the record afterwards is most of the
+   * point. Re-settling recomputes every share from scratch, so a fix hours later
+   * still produces the right bill.
+   */
+  .post('/:id/attendance', async (c) => {
+    const sessionId = c.req.param('id');
+    const identity = c.get('identity');
+    const input = await parseBody(c.req.raw, markAttendanceSchema);
+
+    const subject = input.memberId ?? identity.memberId;
+    if (subject !== identity.memberId && !identity.isOrganizer) {
+      throw forbidden('Only an organizer can mark somebody else');
+    }
+
+    const session = await getSessionRow(c.env.DB, sessionId);
+    if (!session) throw notFound('No such session');
+    if (session.status === 'cancelled') throw conflict('That session was cancelled');
+
+    const before = await listRegistrations(c.env.DB, sessionId);
+    const target = before.find((r) => r.memberId === subject);
+    if (!target) throw notFound('They are not on the list for that session');
+
+    // Absent fields mean "leave alone", so the two halves of this — whether they
+    // came, and how many friends came with them — can be sent independently.
+    const attended = input.attended === undefined ? target.attended : input.attended;
+    const guestsArrived =
+      input.guestsArrived === undefined ? target.guestsArrived : input.guestsArrived;
+
+    if (guestsArrived != null && guestsArrived > target.guests) {
+      throw badRequest(`They only registered ${target.guests} guest(s)`);
+    }
+
+    const timestamp = nowIso();
+    await c.env.DB.prepare(
+      `UPDATE registrations
+          SET attended = ?3, guests_arrived = ?4,
+              attendance_marked_at = ?5, attendance_marked_by = ?6
+        WHERE session_id = ?1 AND member_id = ?2`,
+    )
+      .bind(
+        sessionId,
+        subject,
+        attended == null ? null : attended ? 1 : 0,
+        guestsArrived,
+        timestamp,
+        identity.memberId,
+      )
+      .run();
+
+    const after = await listRegistrations(c.env.DB, sessionId);
+
+    await c.get('pubsub').emit(sessionChannel(sessionId), 'player.attendance', {
+      sessionId,
+      memberId: subject,
+      memberName: target.memberName,
+      attended,
+      guestsArrived,
+      arrivedHeads: totalArrivedHeads(after),
+      byMemberId: identity.memberId,
+      at: timestamp,
+    });
+
+    return c.json({ registrations: after, arrivedHeads: totalArrivedHeads(after) });
+  })
+;
 
 /**
  * Promote the longest-waiting player, if the cap allows. The head of the

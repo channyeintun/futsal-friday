@@ -86,6 +86,8 @@ export interface RegistrationRow {
   member_name: string;
   member_avatar_updated_at: string | null;
   guests: number;
+  attended: number | null;
+  guests_arrived: number | null;
   status: string;
   position: number;
   created_at: string;
@@ -172,6 +174,10 @@ export const toRegistration = (row: RegistrationRow): Registration => ({
   memberName: row.member_name,
   memberAvatarUpdatedAt: row.member_avatar_updated_at ?? null,
   guests: row.guests ?? 0,
+  // SQLite has no boolean, and the three states are load-bearing: null is
+  // "unmarked", which is not the same as "marked absent".
+  attended: row.attended == null ? null : row.attended === 1,
+  guestsArrived: row.guests_arrived ?? null,
   status: row.status as Registration['status'],
   position: row.position,
   createdAt: row.created_at,
@@ -235,7 +241,8 @@ export async function listRegistrations(
     .prepare(
       `SELECT r.id, r.session_id, r.member_id, m.name AS member_name,
               m.avatar_updated_at AS member_avatar_updated_at,
-              r.guests, r.status, r.position, r.created_at
+              r.guests, r.attended, r.guests_arrived,
+              r.status, r.position, r.created_at
          FROM registrations r
          JOIN members m ON m.id = r.member_id
         WHERE r.session_id = ?1
@@ -423,7 +430,7 @@ export async function loadMemberProfile(
       // ones are excluded rather than treated as misses: nobody played, so
       // nobody's run should end. `starts_at` rather than `status` decides
       // whether it has happened, so a late cron cannot resurrect a streak.
-      `SELECT s.id, s.starts_at, r.status AS reg_status
+      `SELECT s.id, s.starts_at, r.status AS reg_status, r.attended AS reg_attended
          FROM sessions s
          LEFT JOIN registrations r ON r.session_id = s.id AND r.member_id = ?1
         WHERE s.status != 'cancelled'
@@ -433,12 +440,17 @@ export async function loadMemberProfile(
         LIMIT 200`,
     )
     .bind(memberId, nowIso, row.created_at)
-    .all<{ id: string; starts_at: string; reg_status: string | null }>();
+    .all<{
+      id: string;
+      starts_at: string;
+      reg_status: string | null;
+      reg_attended: number | null;
+    }>();
 
   const entries: StreakEntry[] = results.map((session) => ({
     sessionId: session.id,
     startsAt: session.starts_at,
-    attendance: toAttendance(session.reg_status),
+    attendance: toAttendance(session.reg_status, session.reg_attended),
   }));
 
   const owed = await db
@@ -458,7 +470,21 @@ export async function loadMemberProfile(
 }
 
 /** No registration row at all reads the same as "out": they were not there. */
-function toAttendance(status: string | null): Attendance {
+/**
+ * What one past session says about somebody's run.
+ *
+ * A streak is supposed to mean "turned up N weeks running", and until
+ * attendance existed it meant "said yes N weeks running" — so a no-show kept a
+ * streak for a game they never came to, which is the opposite of the point.
+ *
+ * `attended` is the decider where it has been set; where it has not, the old
+ * presumption stands and a registration still reads as playing. So histories
+ * from before this existed are unchanged, and only games somebody actually
+ * marked can break a run.
+ */
+function toAttendance(status: string | null, attended: number | null): Attendance {
+  if (status === null) return 'missed';
+  if (attended != null) return attended === 1 ? 'in' : 'missed';
   if (status === 'in') return 'in';
   if (status === 'waitlist') return 'waitlist';
   return 'missed';

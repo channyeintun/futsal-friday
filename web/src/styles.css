@@ -184,6 +184,68 @@ body {
   line-height: 1.6;
 }
 
+/*
+ * Display type, which is where this actually hurt.
+ *
+ * The line box comes from the *first* font in the stack — `system-ui`, whose
+ * content area is about 1.17em — while the Burmese glyphs are drawn from
+ * Myanmar Sangam MN further down the list, whose content area is 1.60em.
+ * Measured on an iPhone: the glyphs need roughly 37% more vertical room than
+ * the box they are given. At body sizes the 1.75 leading above absorbs it. The
+ * headline and the hero date set their own tight leading (1.15 and 1.1) for
+ * Latin, so Burmese overflowed and collided with the line beneath — the header
+ * subtitle was struck through by the descender of the title above it.
+ *
+ * Hence a floor of 1.5 wherever leading was tightened, and a smaller size:
+ * Burmese sets denser than Latin at the same font-size, so matching sizes does
+ * not match apparent weight.
+ */
+:lang(my) .topbar h1 {
+  font-size: 1.35rem;
+  line-height: 1.55;
+  /* Negative tracking crowds the stacked marks into their neighbours. */
+  letter-spacing: normal;
+}
+
+:lang(my) .topbar .topbar-sub {
+  line-height: 1.7;
+}
+
+/*
+ * The hero date, which is the string that wraps.
+ *
+ * "သောကြာ 14 သြဂုတ်၊ 19:30" at 2.1rem is wider than any phone, so it broke to
+ * two lines and then collided at 1.1 leading. Measured against the real
+ * container, the largest size that keeps it on one line is about 1.9rem at
+ * 414px and 1.4rem at 320px — very nearly linear in the viewport, which is
+ * what the middle term tracks. The clamp still allows a wrap for a longer day
+ * name, and the leading means a wrap now costs a second line rather than a
+ * mangled one.
+ */
+:lang(my) .hero .when {
+  font-size: clamp(1.35rem, 8.6vw - 5px, 1.9rem);
+  line-height: 1.5;
+  letter-spacing: normal;
+}
+
+:lang(my) .pay-amount,
+:lang(my) .streak-value,
+:lang(my) .amount {
+  line-height: 1.5;
+  letter-spacing: normal;
+}
+
+/*
+ * `.truncate` on a flex child means `nowrap` plus `overflow: hidden`, which for
+ * a Burmese date cuts mid-syllable and can leave a stray mark. The profile's
+ * match history is the one place a whole date lands in one, so it wraps to two
+ * lines instead — the same trade already made for player names.
+ */
+:lang(my) .grow.truncate {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 /* Let long unbroken Burmese wrap instead of overflowing its container. */
 :lang(my) .card-sub,
 :lang(my) .muted,
@@ -1058,6 +1120,86 @@ md-outlined-text-field {
   background: var(--md-sys-color-primary);
   border-color: var(--md-sys-color-primary);
   color: var(--md-sys-color-on-primary);
+}
+
+/* ------------------------------------------------------------ attendance */
+
+/*
+ * Said once above the roster instead of as a hint on every row: twelve copies
+ * of the same sentence is what makes a list feel like a form.
+ */
+.attend-note {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--ff-radius-row);
+  background: var(--md-sys-color-surface-container-highest);
+  font-size: 0.85rem;
+}
+
+/*
+ * Quiet when the answer is the presumed one.
+ *
+ * The normal week is one where everybody turned up and nobody touched
+ * anything, and that roster has to keep looking like a roster — so an unmarked
+ * row is a faint outline rather than a filled tick demanding attention. Colour
+ * arrives only when somebody is actually marked absent, because that is the
+ * state that changes what people owe.
+ */
+.attend-toggle,
+.attend-guests {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  /* 32px rather than the 44px of a primary control: this sits at the end of a
+     dense row, and the row's own name button is the large target. */
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--ff-radius-pill);
+  background: none;
+  color: var(--md-sys-color-on-surface-variant);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.attend-toggle.is-unmarked {
+  /* Presumed, not confirmed — visible but not asserting anything. */
+  opacity: 0.55;
+}
+
+.attend-toggle.is-absent {
+  border-color: var(--md-sys-color-error);
+  color: var(--md-sys-color-error);
+  opacity: 1;
+}
+
+.attend-toggle:not(.is-absent):not(.is-unmarked) {
+  border-color: var(--ff-paid);
+  color: var(--ff-paid);
+}
+
+.attend-guests.is-changed {
+  border-color: var(--ff-paid);
+  color: var(--ff-paid);
+}
+
+.attend-toggle:disabled,
+.attend-guests:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Burmese needs the room; the label is a word rather than a glyph. */
+.attend-toggle:lang(my),
+.attend-guests:lang(my) {
+  font-size: 0.68rem;
+  line-height: 1.5;
+  min-height: 34px;
 }
 
 /* A hairline between two adjacent destructive controls, so they do not read

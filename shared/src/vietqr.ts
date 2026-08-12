@@ -3,9 +3,9 @@
  *
  * Vietnam's bank-transfer QR is NAPAS's VietQR, which is the EMVCo "QR Code
  * Specification for Payment Systems — Merchant-Presented Mode" with a NAPAS
- * block inside it. Every major Vietnamese banking app reads one, and a
- * *dynamic* payload carries the amount, so the payer's app opens with the
- * recipient and the sum already filled in.
+ * block inside it. Every major Vietnamese banking app reads one, and the
+ * payload carries the amount, so the payer's app opens with the recipient and
+ * the sum already filled in.
  *
  * That is the reason this exists rather than a deep link. The `vietqr://pay`
  * scheme that would open a banking app with an amount is documented by VietQR
@@ -20,7 +20,7 @@
  * ASCII.
  *
  *   00  payload format indicator      "01"
- *   01  point of initiation           "11" static, "12" dynamic (has an amount)
+ *   01  point of initiation           "11" static, "12" dynamic — see below
  *   38  merchant account information  the NAPAS block
  *         00  GUID                    "A000000727"
  *         01  beneficiary
@@ -33,6 +33,27 @@
  *   62  additional data
  *         08  purpose of transaction  the transfer note
  *   63  CRC                           four uppercase hex digits
+ *
+ * ## Why the amount is a suggestion, not a fixed bill
+ *
+ * Tag 01 is the lever. "12" means dynamic — one QR for one transaction — and
+ * banking apps read that as a bill: they fill the amount in and *lock the
+ * field*. "11" means static, a code that gets reused, so an amount alongside
+ * it is a suggested figure the payer can still edit before confirming.
+ *
+ * In theory that second mode lets somebody round up or settle two weeks at
+ * once without abandoning the scan. In practice it does not exist: tested
+ * against BIDV and Zalo, both prefill the amount and lock the field whichever
+ * marker is set. The amount in a VietQR is simply not negotiable on these
+ * rails, so "12" is what we send — it is the honest description of what this
+ * is, a bill for one person for one session.
+ *
+ * `amountEditable` stays because the distinction is real in the spec and the
+ * behaviour is the bank's to change, not ours. If an app ever does honour it,
+ * this is one boolean.
+ *
+ * The way to make the number right is therefore to bill the right number in
+ * the first place — which is what attendance marking is for.
  */
 
 /** NAPAS's registered application identifier. Constant for every VietQR. */
@@ -53,6 +74,12 @@ export interface VietQrInput {
   amount?: number;
   /** Transfer note. Latin only in practice — see `sanitizeReference`. */
   reference?: string;
+  /**
+   * Ask for an amount the payer can edit. Defaults to false, because no
+   * Vietnamese app tested actually honours it — see the note above. Has no
+   * effect when there is no amount.
+   */
+  amountEditable?: boolean;
 }
 
 /** `tag` + zero-padded length + value. The whole format is this one shape. */
@@ -129,10 +156,13 @@ export function buildVietQrPayload(input: VietQrInput): string {
 
   const reference = input.reference ? sanitizeReference(input.reference) : '';
 
+  // "12" fills the amount in and locks it; "11" asks for it to stay editable,
+  // which nothing honours. See the note at the top of the file.
+  const locked = amount !== null && input.amountEditable !== true;
+
   const body =
     field('00', '01') +
-    // "12" is not decoration: an app seeing "11" may ignore the amount.
-    field('01', amount === null ? '11' : '12') +
+    field('01', locked ? '12' : '11') +
     field('38', napas) +
     field('53', CURRENCY_VND) +
     (amount === null ? '' : field('54', String(amount))) +

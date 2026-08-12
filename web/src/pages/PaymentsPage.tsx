@@ -1,10 +1,13 @@
 import {
   type Payment,
   type PaymentSummary,
+  attendanceChecked,
   formatVnd,
   parseVnd,
   paymentsSummary,
   sessionChannel,
+  suggestedTotal,
+  totalArrivedHeads,
 } from '@futsal/shared';
 import { useCallback, useState } from 'react';
 import {
@@ -91,6 +94,7 @@ export function PaymentsPage({ sessionId }: { sessionId: string }) {
   });
 
   const session = sessionState.data?.session ?? null;
+  const registrations = sessionState.data?.registrations ?? [];
   const summary = paymentsState.data;
 
   if (!session || !summary) {
@@ -107,6 +111,9 @@ export function PaymentsPage({ sessionId }: { sessionId: string }) {
         identity.isOrganizer ? (
           <SettleCard
             sessionId={sessionId}
+            arrivedHeads={totalArrivedHeads(registrations)}
+            suggested={suggestedTotal(session.feePerPerson, registrations)}
+            attendanceChecked={attendanceChecked(registrations)}
             onSettled={() => {
               reloadPayments();
               void queryClient.invalidateQueries({ queryKey: queryKeys.session(sessionId) });
@@ -204,14 +211,28 @@ export function PaymentsPage({ sessionId }: { sessionId: string }) {
 
 function SettleCard({
   sessionId,
+  arrivedHeads,
+  suggested,
+  attendanceChecked: checked,
   onSettled,
 }: {
   sessionId: string;
+  /** Heads down as having played — what the total will actually be split by. */
+  arrivedHeads: number;
+  /** The standing per-person fee times those heads, or null if there is none. */
+  suggested: number | null;
+  /** Whether anybody has confirmed the roster, as opposed to it being presumed. */
+  attendanceChecked: boolean;
   onSettled(): void;
 }) {
   const { toast } = useApp();
   const m = useMessages();
-  const [total, setTotal] = useState('');
+  // Prefilled from the standing fee, because the usual week is the usual
+  // price: the organizer's job is then to notice when it is *not*, rather
+  // than to retype the same number every Friday. Still a plain editable
+  // field — the pitch is rented by the hour, so the total is the truth and
+  // the fee is only a good guess at it.
+  const [total, setTotal] = useState(suggested === null ? '' : String(suggested));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -239,13 +260,25 @@ function SettleCard({
     <div className="card">
       <h2 className="card-title">{m.payments.splitTitle}</h2>
       <p className="card-sub">{m.payments.splitBody}</p>
+      <div className="row between">
+        <span className="muted">{m.payments.splittingBetween(arrivedHeads)}</span>
+        {!checked ? (
+          <span className="badge waitlist">{m.session.attendanceUnchecked}</span>
+        ) : null}
+      </div>
       {error ? <ErrorBanner>{error}</ErrorBanner> : null}
       <TextField
         label={m.payments.totalCharge}
         value={total}
         onChange={setTotal}
         inputMode="numeric"
-        supportingText={parsed !== null ? formatVnd(parsed) : m.payments.enterAmount}
+        supportingText={
+          parsed !== null
+            ? arrivedHeads > 0
+              ? m.payments.eachWorksOutAt(formatVnd(parsed), formatVnd(Math.round(parsed / arrivedHeads)))
+              : formatVnd(parsed)
+            : m.payments.enterAmount
+        }
       />
       <Button onClick={submit} disabled={busy}>
         {busy ? m.payments.splitting : m.payments.splitIt}

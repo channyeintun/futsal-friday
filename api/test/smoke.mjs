@@ -99,6 +99,19 @@ function seedPastSessions(memberId, plan, venueId) {
   seedPastSessions.windowStart = new Date(
     Date.now() - (plan.length + 1) * 3_600_000 - 60_000,
   ).toISOString();
+  // And anything *else* sitting in the window we are about to claim.
+  //
+  // The streak is computed over every session between the member's join date
+  // and now, not merely the ones seeded here — so a past session left behind
+  // by another suite (the browser tests seed `ses_test_%` ones and only clean
+  // up at their own exit) lands inside the window with no registration row and
+  // reads as a missed game. That shifts `current` and `total` by one and makes
+  // this fixture depend on what ran before it.
+  sql(
+    `DELETE FROM sessions
+      WHERE starts_at >= '${seedPastSessions.windowStart}'
+        AND starts_at < '${new Date().toISOString()}';`,
+  );
   // Hours ago, not weeks: the suite creates its own past sessions, and those
   // would otherwise sit *after* the seeded ones and read as misses. Owning the
   // most recent slice of history is what makes the assertions deterministic —
@@ -111,10 +124,16 @@ function seedPastSessions(memberId, plan, venueId) {
     sql(`INSERT INTO sessions (id, venue_id, starts_at, status, max_players, created_at, updated_at)
          VALUES ('${sessionId}', ${venueId ? `'${venueId}'` : 'NULL'}, '${startsAt}',
                  '${entry === 'cancelled' ? 'cancelled' : 'completed'}', 12, '${startsAt}', '${startsAt}');`);
-    if (entry === 'in' || entry === 'waitlist') {
-      sql(`INSERT INTO registrations (id, session_id, member_id, status, position, created_at)
+    // `noshow` is a registration that says "in" with attendance saying
+    // otherwise — the case the whole feature exists for.
+    const registered =
+      entry === 'in' || entry === 'waitlist' ? entry : entry === 'noshow' ? 'in' : null;
+    if (registered) {
+      sql(`INSERT INTO registrations
+             (id, session_id, member_id, status, position, created_at, attended)
            VALUES ('reg_streak_${index}_${Date.now() % 100000}', '${sessionId}', '${memberId}',
-                   '${entry}', ${index}, '${startsAt}');`);
+                   '${registered}', ${index}, '${startsAt}',
+                   ${entry === 'noshow' ? 0 : 'NULL'});`);
     }
   });
 }
@@ -611,6 +630,112 @@ const run = async () => {
   const oddTotal = odd.body.payments.reduce((sum, p) => sum + p.amountDue, 0);
   check('and on a total that does not divide evenly', oddTotal === 333_333, `${oddTotal} of 333333`);
 
+  section('who actually turned up');
+  // A pitch for 600.000 and three names on the list, so a missing head is
+  // 200.000 of difference — visible, not a rounding artefact.
+  const attSession = await call('POST', '/sessions', {
+    token: organizer,
+    body: { startsAt: new Date(Date.now() + 6 * 86_400_000).toISOString(), feePerPerson: 100_000 },
+  });
+  const as = attSession.body.session.id;
+  for (const who of [alice, bob, carol]) {
+    await call('POST', `/sessions/${as}/register`, { token: who.token });
+  }
+
+  // Nothing marked: must bill exactly as it did before attendance existed.
+  await call('POST', `/sessions/${as}/settle`, { token: organizer, body: { totalCharge: 600_000 } });
+  const unmarked = await call('GET', `/sessions/${as}/payments`, { token: organizer });
+  check('an unchecked roster splits as it always did',
+    unmarked.body.payments.every((p) => p.amountDue === 200_000),
+    JSON.stringify(unmarked.body.payments.map((p) => p.amountDue)));
+
+  const roster0 = await call('GET', `/sessions/${as}`, { token: organizer });
+  check('and every registration starts unmarked, not absent',
+    roster0.body.registrations.every((r) => r.attended === null),
+    JSON.stringify(roster0.body.registrations.map((r) => r.attended)));
+
+  // Carol did not come. Alice says so — and must not be allowed to.
+  const notMyMark = await call('POST', `/sessions/${as}/attendance`, {
+    token: alice.token, body: { memberId: carol.id, attended: false },
+  });
+  check('A MEMBER CANNOT MARK SOMEBODY ELSE ABSENT', notMyMark.status === 403, notMyMark.status);
+
+  const selfMark = await call('POST', `/sessions/${as}/attendance`, {
+    token: carol.token, body: { attended: false },
+  });
+  check('but can mark themselves', selfMark.status === 200, selfMark.body);
+  check('and the head count drops', selfMark.body?.arrivedHeads === 2, selfMark.body?.arrivedHeads);
+
+  const resettled = await call('POST', `/sessions/${as}/settle`, {
+    token: organizer, body: { totalCharge: 600_000 },
+  });
+  check('re-settling works', resettled.status === 200, resettled.body);
+  const afterNoShow = await call('GET', `/sessions/${as}/payments`, { token: organizer });
+  const owed = Object.fromEntries(afterNoShow.body.payments.map((p) => [p.memberId, p.amountDue]));
+  check('THE NO-SHOW IS NOT BILLED', owed[carol.id] === undefined, JSON.stringify(owed));
+  check('and the two who played carry the whole pitch',
+    owed[alice.id] === 300_000 && owed[bob.id] === 300_000, JSON.stringify(owed));
+  const stillSums = afterNoShow.body.payments.reduce((s, p) => s + p.amountDue, 0);
+  check('the bill is still exactly what the pitch cost', stillSums === 600_000, stillSums);
+
+  // The organizer overrules, because the no-show will not open the app.
+  const byOrganizer = await call('POST', `/sessions/${as}/attendance`, {
+    token: organizer, body: { memberId: carol.id, attended: true },
+  });
+  check('an organizer can mark anybody', byOrganizer.status === 200, byOrganizer.body);
+  check('and the head count comes back', byOrganizer.body?.arrivedHeads === 3,
+    byOrganizer.body?.arrivedHeads);
+
+  // Unmarking is a third state, not a synonym for absent.
+  await call('POST', `/sessions/${as}/attendance`, {
+    token: carol.token, body: { attended: null },
+  });
+  const cleared = await call('GET', `/sessions/${as}`, { token: organizer });
+  const carolRow = cleared.body.registrations.find((r) => r.memberId === carol.id);
+  check('clearing a mark returns it to unmarked, not absent', carolRow?.attended === null,
+    JSON.stringify(carolRow));
+
+  // Somebody not on the list at all.
+  const stranger = await call('POST', `/sessions/${as}/attendance`, {
+    token: organizer, body: { memberId: 'mem_nobody', attended: true },
+  });
+  check('marking somebody who never signed up is refused', stranger.status === 404, stranger.status);
+
+  // Guests who did not come. A session of its own: settling marks a session
+  // completed, and registration — including changing the party size — closes
+  // with it.
+  const guestArrival = await call('POST', '/sessions', {
+    token: organizer,
+    body: { startsAt: new Date(Date.now() + 7 * 86_400_000).toISOString() },
+  });
+  const ag = guestArrival.body.session.id;
+  await call('POST', `/sessions/${ag}/register`, { token: alice.token });
+  await call('POST', `/sessions/${ag}/register`, { token: bob.token, body: { guests: 2 } });
+
+  const tooManyGuests = await call('POST', `/sessions/${ag}/attendance`, {
+    token: bob.token, body: { guestsArrived: 4 },
+  });
+  check('cannot claim more guests arrived than were registered',
+    tooManyGuests.status === 400, tooManyGuests.body);
+  const oneCame = await call('POST', `/sessions/${ag}/attendance`, {
+    token: bob.token, body: { guestsArrived: 1 },
+  });
+  check('bringing one of two friends is expressible', oneCame.status === 200, oneCame.body);
+  check('and counts three heads, not four', oneCame.body?.arrivedHeads === 3,
+    oneCame.body?.arrivedHeads);
+
+  await call('POST', `/sessions/${ag}/settle`, { token: organizer, body: { totalCharge: 600_000 } });
+  const guestBill = await call('GET', `/sessions/${ag}/payments`, { token: organizer });
+  const guestOwed = Object.fromEntries(guestBill.body.payments.map((p) => [p.memberId, p]));
+  check('the man who brought one friend pays for two',
+    guestOwed[bob.id]?.amountDue === 400_000, JSON.stringify(guestOwed[bob.id]));
+  check('and the friend who stayed home is not billed',
+    guestOwed[alice.id]?.amountDue === 200_000, JSON.stringify(guestOwed[alice.id]));
+  check('AND THE CHARGE RECORDS THE GUESTS THAT CAME, NOT THOSE PROMISED',
+    guestOwed[bob.id]?.guests === 1, JSON.stringify(guestOwed[bob.id]));
+  const guestSum = guestBill.body.payments.reduce((s, p) => s + p.amountDue, 0);
+  check('and that bill sums exactly too', guestSum === 600_000, guestSum);
+
   section('self-add and the waiting room');
   const selfAdd = await call('POST', '/auth/group/self-add', {
     body: { nonce: nonceOf(rotated.body.invite.url), name: `Walkin ${stamp}` },
@@ -783,6 +908,18 @@ const run = async () => {
   check('a session with no registration row breaks it', st?.best === 2, JSON.stringify(st));
   check('a cancelled session is not a miss', st?.played === 4, JSON.stringify(st));
   check('and is not counted in the total either', st?.total === 5, JSON.stringify(st));
+
+  // Signing up is not the same as turning up. Before attendance existed this
+  // member would have had a run of four, because the sign-up sheet said so.
+  const ghost = await addAndLogIn(organizer, `Ghost ${stamp}`);
+  seedPastSessions(ghost.id, ['in', 'in', 'noshow', 'in']);
+  sql(`UPDATE members SET created_at = '${seedPastSessions.windowStart}' WHERE id = '${ghost.id}';`);
+  const ghostSt = (await call('GET', `/members/${ghost.id}/profile`, { token: ghost.token }))
+    .body?.profile?.streak;
+  check('A REGISTERED NO-SHOW BREAKS THE STREAK', ghostSt?.current === 1, JSON.stringify(ghostSt));
+  check('and does not count as a game played', ghostSt?.played === 3, JSON.stringify(ghostSt));
+  check('but still counts in the total, unlike a cancellation', ghostSt?.total === 4,
+    JSON.stringify(ghostSt));
 
   // Somebody who joined after those games must not inherit their misses.
   const rookie = await addAndLogIn(organizer, `Rookie ${stamp}`);

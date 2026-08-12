@@ -83,6 +83,11 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
                 memberName,
                 memberAvatarUpdatedAt,
                 guests,
+                // Nobody has said whether they turned up — they only just
+                // signed up. Unmarked reads as present for a player, which is
+                // the same thing the server would send back.
+                attended: null,
+                guestsArrived: null,
                 status,
                 position,
                 createdAt: event.data.at,
@@ -118,6 +123,28 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
                 registrations,
                 counts,
                 me: memberId === viewerId ? null : current.me,
+              };
+            });
+            return;
+          }
+
+          case 'player.attendance': {
+            const { memberId, attended, guestsArrived } = event.data;
+            flash(memberId);
+            patch((current) => {
+              if (current.session.id !== event.data.sessionId) return current;
+              // Attendance never changes who is on the list or the counts —
+              // those are about spots reserved, not heads that turned up — so
+              // this is a field update and nothing more.
+              const registrations = current.registrations.map((r) =>
+                r.memberId === memberId ? { ...r, attended, guestsArrived } : r,
+              );
+              return {
+                ...current,
+                registrations,
+                me: current.me?.memberId === memberId
+                  ? { ...current.me, attended, guestsArrived }
+                  : current.me,
               };
             });
             return;

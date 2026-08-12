@@ -46,7 +46,7 @@ export const my: Messages = {
 
   pay: {
     title: 'ငွေပေးနည်း',
-    body: 'ဘဏ်အက်ပ်နဲ့ စကင်ဖတ်ပါ — ပမာဏကို ကုဒ်ထဲ ထည့်ပြီးသားပါ။',
+    body: 'ဘဏ်အက်ပ်နဲ့ စကင်ဖတ်ပါ — ပမာဏကို ကျူအာကုဒ်ထဲ ထည့်ပြီးသားပါ။',
     bank: 'ဘဏ်',
     accountNumber: 'အကောင့်နံပါတ်',
     accountName: 'အကောင့်အမည်',
@@ -55,7 +55,7 @@ export const my: Messages = {
     copyAmount: 'ပမာဏ ကူးမည်',
     copied: 'ကူးပြီးပါပြီ',
     scanHint:
-      'ဒီဖုန်းကနေပဲ ပေးမလား? ကုဒ်ကို ဖန်သားပြင်ဓာတ်ပုံ ရိုက်ပြီး ဘဏ်အက်ပ်ထဲက ဓာတ်ပုံများမှ ရွေးပါ။',
+      'ဒီဖုန်းကနေပဲ ပေးမလား? ကျူအာကုဒ်ကို ဖန်သားပြင်ဓာတ်ပုံ ရိုက်ပြီး ဘဏ်အက်ပ်ထဲက ဓာတ်ပုံများမှ ရွေးပါ။',
     youOweThis: (amount) => `သင် ပေးရန် ${amount}`,
     nothingSet: 'စီစဉ်သူက ငွေပေးချေမှု အချက်အလက် မထည့်ရသေးပါ။',
     editTitle: 'ငွေပေးချေမှု အချက်အလက်',
@@ -66,7 +66,7 @@ export const my: Messages = {
     save: 'သိမ်းမည်',
     remove: 'အချက်အလက် ဖယ်မည်',
     confirmRemove: 'ငွေပေးချေမှု အချက်အလက် ဖယ်မလား?',
-    confirmRemoveBody: 'ပြန်မထည့်မချင်း အဖွဲ့သားများ အကောင့်နံပါတ်နဲ့ ကုဒ်ကို မမြင်ရတော့ပါ။',
+    confirmRemoveBody: 'ပြန်မထည့်မချင်း အဖွဲ့သားများ အကောင့်နံပါတ်နဲ့ ကျူအာကုဒ်ကို မမြင်ရတော့ပါ။',
     pickBank: 'ဘဏ်',
     noteLabel: 'ထပ်ပြောစရာ ရှိလား',
     notePlaceholder: 'ဥပမာ — လွှဲတဲ့အခါ နာမည်ထည့်ပါ',
@@ -210,6 +210,26 @@ export const my: Messages = {
     playingWithGuests: (players, guests) => `${players} ယောက် ကစားမည် · ဧည့်သည် ${guests} ဦး`,
     waitlistHeading: (count) => `စောင့်ဆိုင်းစာရင်း (${count})`,
     waiting: 'စောင့်ဆဲ',
+    /* --------------------------------------------------- who turned up */
+    attendanceTitle: 'ဘယ်သူတွေ ကစားခဲ့လဲ?',
+    attendanceBody:
+      'သီးခြား မမှတ်ထားလျှင် စာရင်းထဲက အားလုံးကို ရေတွက်ပါမည်။ မလာသူများကိုသာ မှတ်ပါ — သူတို့ရဲ့ ဝေစုကို လာသူများက ခွဲယူပါမည်။',
+    attendanceUnchecked: 'မည်သူမျှ မစစ်ဆေးရသေးပါ',
+    attendanceCount: (heads) => `${heads} ဦး ကစားခဲ့`,
+    iWasThere: 'ကျွန်ုပ် လာခဲ့သည်',
+    iMissedIt: 'ကျွန်ုပ် မလာခဲ့ပါ',
+    didNotPlay: 'မကစားခဲ့',
+    played: 'ကစားခဲ့',
+    markAbsent: 'မလာဟု မှတ်မည်',
+    markPresent: 'ကစားခဲ့ဟု မှတ်မည်',
+    unmark: 'ဖျက်မည်',
+    guestsArrivedTitle: 'သူငယ်ချင်း ဘယ်နှစ်ဦး လာခဲ့လဲ?',
+    guestsArrivedBody: (registered) =>
+      `${registered} ဦး ဟု ရေးထားသည်။ လာသူများကိုသာ ငွေတောင်းပါမည်။`,
+    guestsArrivedNone: 'တစ်ဦးမှ မလာပါ',
+    guestsArrivedCount: (count) => `${count} ဦး လာခဲ့`,
+    guestsArrivedChip: (came, registered) => `${registered} ဦးမှ ${came} ဦး`,
+    attendanceFailed: 'သိမ်း၍ မရပါ',
     copyList: 'စာရင်းကို ကူးမည်',
     splitTheBill: 'ငွေခွဲမည်',
     edit: 'ပြင်မည်',
@@ -281,6 +301,8 @@ export const my: Messages = {
     everyone: (count) => `အားလုံး (${count})`,
     nothingToSplit: 'ခွဲစရာ မရှိသေးပါ။',
     copyStatus: 'အခြေအနေကို ကူးမည်',
+    splittingBetween: (heads) => `ကစားခဲ့သူ ${heads} ဦးအကြား`,
+    eachWorksOutAt: (total, each) => `${total} — တစ်ဦးလျှင် ${each} ခန့်`,
     splitTitle: 'ငွေခွဲမည်',
     splitBody:
       'ကွင်းခ စုစုပေါင်းကို ရိုက်ထည့်ပါ။ ကစားခဲ့သူများကြားတွင်သာ ခွဲဝေပါမည် — စောင့်ဆိုင်းစာရင်း မပါဝင်ပါ — ပြီးလျှင် 1.000d နှင့် အနီးစပ်ဆုံး ဝိုင်းပါမည်။',

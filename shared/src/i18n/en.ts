@@ -35,7 +35,7 @@ export const en = {
 
   pay: {
     title: 'How to pay',
-    body: 'Scan with your banking app — the amount is already in the code.',
+    body: 'Scan with your banking app — the amount is already in the QR.',
     bank: 'Bank',
     accountNumber: 'Account number',
     accountName: 'Account name',
@@ -44,7 +44,7 @@ export const en = {
     copyAmount: 'Copy amount',
     copied: 'Copied',
     scanHint:
-      'Paying from this phone? Screenshot the code, then pick it from your photos in your banking app.',
+      'Paying from this phone? Screenshot the QR, then pick it from your photos in your banking app.',
     youOweThis: (amount: string) => `You owe ${amount}`,
     nothingSet: 'The organizer has not added payment details yet.',
     // Organizer editor.
@@ -56,7 +56,7 @@ export const en = {
     save: 'Save',
     remove: 'Remove details',
     confirmRemove: 'Remove the payment details?',
-    confirmRemoveBody: 'The group loses the account number and the scan code until you add them again.',
+    confirmRemoveBody: 'The group loses the account number and the QR until you add them again.',
     pickBank: 'Bank',
     noteLabel: 'Anything else to say',
     notePlaceholder: 'e.g. put your name in the transfer note',
@@ -206,6 +206,26 @@ export const en = {
       guests === 1 ? `${players} playing · 1 guest` : `${players} playing · ${guests} guests`,
     waitlistHeading: (count: number) => `Waitlist (${count})`,
     waiting: 'waiting',
+    /* --------------------------------------------------- who turned up */
+    attendanceTitle: 'Who played?',
+    attendanceBody:
+      'Everyone on the list counts unless you say otherwise. Only mark the people who did not turn up — their share goes to whoever did.',
+    attendanceUnchecked: 'Nobody has checked this yet',
+    attendanceCount: (heads: number) => (heads === 1 ? '1 played' : `${heads} played`),
+    iWasThere: 'I was there',
+    iMissedIt: 'I missed it',
+    didNotPlay: 'did not play',
+    played: 'played',
+    markAbsent: 'Mark as no-show',
+    markPresent: 'Mark as played',
+    unmark: 'Clear',
+    guestsArrivedTitle: 'How many friends came?',
+    guestsArrivedBody: (registered: number) =>
+      `You put down ${registered}. Only the ones who turned up are billed.`,
+    guestsArrivedNone: 'None came',
+    guestsArrivedCount: (count: number) => (count === 1 ? '1 came' : `${count} came`),
+    guestsArrivedChip: (came: number, registered: number) => `${came} of ${registered}`,
+    attendanceFailed: 'Could not save that',
     copyList: 'Copy list for chat',
     splitTheBill: 'Split the bill',
     edit: 'Edit',
@@ -277,6 +297,9 @@ export const en = {
     everyone: (count: number) => `Everyone (${count})`,
     nothingToSplit: 'Nothing to split yet.',
     copyStatus: 'Copy status for chat',
+    splittingBetween: (heads: number) =>
+      heads === 1 ? 'Between 1 who played' : `Between ${heads} who played`,
+    eachWorksOutAt: (total: string, each: string) => `${total} — about ${each} each`,
     splitTitle: 'Split the bill',
     splitBody:
       'Enter what the pitch cost in total. It is divided between everyone who was in — not the waitlist — and rounded to the nearest 1.000d.',

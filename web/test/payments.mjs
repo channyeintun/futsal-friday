@@ -168,7 +168,15 @@ async function run() {
     f.dispatchEvent(new Event('input',{bubbles:true,composed:true})); })()`);
   await sleep(500);
   const hint = await js(`document.querySelector('md-outlined-text-field')?.supportingText ?? ''`);
-  check('parses shorthand like 560k into 560.000d', hint === '560.000d', hint);
+  check('parses shorthand like 560k into 560.000d', hint.startsWith('560.000d'), hint);
+  // The hint also does the division, so the organizer can see what they are
+  // about to charge each person before committing to it — and how many people
+  // that is, which is now the arrived count rather than the sign-up sheet.
+  check('and says what that works out at per head', / — about [\d.]+d each$/.test(hint), hint);
+  const between = await js(`[...document.querySelectorAll('.muted')]
+    .map((n) => n.textContent).find((t) => /who played/.test(t ?? '')) ?? ''`);
+  check('THE SPLIT FORM COUNTS WHO PLAYED, NOT WHO SIGNED UP',
+    /Between \d+ who played/.test(between), between);
   await shoot('13-split-typed');
 
   const errors = events

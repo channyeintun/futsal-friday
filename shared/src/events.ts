@@ -66,6 +66,27 @@ export const playerLeftSchema = z.object({
   at: isoSchema,
 });
 
+/**
+ * Somebody said who turned up.
+ *
+ * Carries the resulting head count so the settle screen can update the
+ * suggested charge without a refetch — attendance is usually marked by several
+ * people at once, in the ten minutes around kickoff.
+ */
+export const playerAttendanceSchema = z.object({
+  sessionId: idSchema,
+  memberId: idSchema,
+  memberName: z.string(),
+  /** `null` puts it back to unmarked. */
+  attended: z.boolean().nullable(),
+  guestsArrived: z.number().int().min(0).max(5).nullable(),
+  /** Heads now down as having played, across the whole session. */
+  arrivedHeads: z.number().int().min(0),
+  /** Who marked it — not always the person it is about. */
+  byMemberId: idSchema,
+  at: isoSchema,
+});
+
 export const paymentClaimedSchema = z.object({
   sessionId: idSchema,
   memberId: idSchema,
@@ -110,6 +131,7 @@ export const realtimeSchema = {
   player: {
     joined: playerJoinedSchema,
     left: playerLeftSchema,
+    attendance: playerAttendanceSchema,
   },
   payment: {
     claimed: paymentClaimedSchema,
@@ -128,6 +150,7 @@ export type RealtimeSchema = typeof realtimeSchema;
 export interface EventPayloadMap {
   'player.joined': z.infer<typeof playerJoinedSchema>;
   'player.left': z.infer<typeof playerLeftSchema>;
+  'player.attendance': z.infer<typeof playerAttendanceSchema>;
   'payment.claimed': z.infer<typeof paymentClaimedSchema>;
   'payment.confirmed': z.infer<typeof paymentConfirmedSchema>;
   'payment.rejected': z.infer<typeof paymentRejectedSchema>;
@@ -140,6 +163,7 @@ export type EventPayload<K extends EventName> = EventPayloadMap[K];
 export const EVENT_NAMES = [
   'player.joined',
   'player.left',
+  'player.attendance',
   'payment.claimed',
   'payment.confirmed',
   'payment.rejected',
@@ -164,6 +188,9 @@ export type EventCatalogueIsConsistent = Assert<
   Exact<EventPayloadMap['player.joined'], z.infer<typeof realtimeSchema.player.joined>>
 > &
   Assert<Exact<EventPayloadMap['player.left'], z.infer<typeof realtimeSchema.player.left>>> &
+  Assert<
+    Exact<EventPayloadMap['player.attendance'], z.infer<typeof realtimeSchema.player.attendance>>
+  > &
   Assert<Exact<EventPayloadMap['payment.claimed'], z.infer<typeof realtimeSchema.payment.claimed>>> &
   Assert<
     Exact<EventPayloadMap['payment.confirmed'], z.infer<typeof realtimeSchema.payment.confirmed>>

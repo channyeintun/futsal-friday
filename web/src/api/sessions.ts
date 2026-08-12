@@ -49,3 +49,20 @@ export const setSessionGuests = (id: string, guests: number) =>
 
 export const withdrawFromSession = (id: string) =>
   del<WithdrawResult>(`/sessions/${id}/register`);
+
+export interface AttendanceResult {
+  registrations: Registration[];
+  arrivedHeads: number;
+}
+
+/**
+ * Say who turned up.
+ *
+ * Omitting `memberId` marks yourself, which is all a non-organizer may do.
+ * Omitting a field leaves it alone, so "I was there" and "only one of my two
+ * friends came" are separate taps rather than one combined write.
+ */
+export const markAttendance = (
+  id: string,
+  body: { memberId?: string; attended?: boolean | null; guestsArrived?: number | null },
+) => post<AttendanceResult>(`/sessions/${id}/attendance`, body);

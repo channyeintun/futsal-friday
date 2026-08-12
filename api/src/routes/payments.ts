@@ -2,6 +2,9 @@ import {
   DEFAULT_GRANULARITY,
   LOBBY_CHANNEL,
   type Session,
+  arrivedGuests,
+  arrivedHeads,
+  arrivedOnly,
   claimPaymentSchema,
   overridePaymentSchema,
   reviewPaymentSchema,
@@ -262,9 +265,12 @@ async function applySplit(
   granularity: number = DEFAULT_GRANULARITY,
 ): Promise<void> {
   const registrations = await listRegistrations(db, session.id);
-  // Waitlisted people never played, so they never owe anything.
-  const players = registrations.filter((r) => r.status === 'in');
-  if (players.length === 0) throw conflict('Nobody was registered for that session');
+  // Who was on the pitch, not who said they would be. Unmarked still means
+  // present for anyone who was `in`, so a roster nobody checked splits exactly
+  // as it always did; the difference is that a no-show can now be excluded,
+  // and a reserve who played can be included.
+  const players = arrivedOnly(registrations);
+  if (players.length === 0) throw conflict('Nobody is down as having played that session');
 
   const existing = await listPayments(db, session.id);
   const overrides = new Map<string, number | null>();
@@ -279,7 +285,7 @@ async function applySplit(
     players.map((p) => ({
       id: p.memberId,
       override: overrides.get(p.memberId) ?? null,
-      heads: 1 + (p.guests ?? 0),
+      heads: arrivedHeads(p),
     })),
     granularity,
   );
@@ -309,7 +315,10 @@ async function applySplit(
         shares.get(player.memberId) ?? 0,
         overrides.get(player.memberId) ?? null,
         timestamp,
-        player.guests ?? 0,
+        // The guests actually billed for, not the guests registered. Snapshot
+        // what the split was computed from or the amount stops being
+        // explainable the moment somebody edits the roster.
+        arrivedGuests(player),
       ),
   );
 

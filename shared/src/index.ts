@@ -3,6 +3,7 @@ export * from './events.js';
 export * from './time.js';
 export * from './money.js';
 export * from './announce.js';
+export * from './attendance.js';
 export * from './banks.js';
 export * from './invite.js';
 export * from './names.js';

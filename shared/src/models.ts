@@ -218,11 +218,34 @@ export const registrationSchema = z.object({
    */
   guests: z.number().int().min(0).max(5).default(0),
   status: registrationStatusSchema,
+  /**
+   * Whether they actually turned up. `null` means nobody has said, which is
+   * read as present for `in` and absent for `waitlist` — see `attendance.ts`.
+   * Kept distinct from `false` so the settle screen can tell an unchecked
+   * roster from a confirmed one.
+   */
+  attended: z.boolean().nullable().default(null),
+  /** How many guests came. `null` means "as registered", not none. */
+  guestsArrived: z.number().int().min(0).max(5).nullable().default(null),
   /** Monotonic per session; defines display order and waitlist promotion order. */
   position: z.number().int(),
   createdAt: isoSchema,
 });
 export type Registration = z.infer<typeof registrationSchema>;
+
+/**
+ * Say who turned up.
+ *
+ * `memberId` is only honoured for an organizer; everyone else may mark
+ * themselves and nobody else. Every field is optional so the two halves —
+ * "I was there" and "only one of my two friends came" — can be sent apart.
+ */
+export const markAttendanceSchema = z.object({
+  memberId: idSchema.optional(),
+  attended: z.boolean().nullable().optional(),
+  guestsArrived: z.number().int().min(0).max(5).nullable().optional(),
+});
+export type MarkAttendanceInput = z.infer<typeof markAttendanceSchema>;
 
 /* ----------------------------------------------------------------- payment */
 

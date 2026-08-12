@@ -15,6 +15,10 @@ import { computeStreak, type StreakEntry } from '../src/streak.ts';
 import { initialsOf } from '../src/names.ts';
 import { parseInvite } from '../src/invite.ts';
 import { buildVietQrPayload, crc16, sanitizeReference } from '../src/vietqr.ts';
+import {
+  arrivedHeads, arrivedOnly, attendanceChecked, didAttend, suggestedTotal,
+} from '../src/attendance.ts';
+import { splitWithOverrides } from '../src/money.ts';
 
 let failed = 0;
 const check = (label: string, ok: boolean, detail?: unknown) => {
@@ -359,7 +363,15 @@ const dynamic = buildVietQrPayload({
 const top = parseTlv(dynamic);
 check('a built payload verifies its own checksum',
   crc16(dynamic.slice(0, -4)) === dynamic.slice(-4), dynamic.slice(-4));
-check('it is marked dynamic so the amount is honoured', top['01'] === '12', top['01']);
+// Tag 01 decides whether the payer can change the figure. "12" is a fixed bill
+// and banking apps grey the field out. "11" asks for an editable amount, which
+// BIDV and Zalo both ignore — so a bill for one person is marked "12".
+check('an amount makes it a dynamic, fixed bill', top['01'] === '12', top['01']);
+const editable = parseTlv(buildVietQrPayload({
+  bankBin: '970436', accountNumber: '0881000458086', amount: 70_000, amountEditable: true,
+}));
+check('asking for an editable amount marks it static', editable['01'] === '11', editable['01']);
+check('an editable payload carries the same amount', editable['54'] === '70000', editable['54']);
 check('the amount is integer dong, no decimal point', top['54'] === '70000', top['54']);
 check('currency is VND', top['53'] === '704', top['53']);
 check('country is VN', top['58'] === 'VN', top['58']);
@@ -379,6 +391,13 @@ check('without an amount it is marked static', staticQr['01'] === '11', staticQr
 check('and carries no amount field', staticQr['54'] === undefined, staticQr['54']);
 check('a zero amount is treated as no amount',
   parseTlv(buildVietQrPayload({ bankBin: '970436', accountNumber: '123456', amount: 0 }))['01'] === '11');
+// `amountEditable` only means anything when there is an amount to mark.
+check('no amount plus amountEditable is still static and empty', (() => {
+  const q = parseTlv(buildVietQrPayload({
+    bankBin: '970436', accountNumber: '123456', amountEditable: true,
+  }));
+  return q['01'] === '11' && q['54'] === undefined;
+})());
 
 // Rubbish in must not silently produce a QR that sends money nowhere.
 const rejects = (fn: () => unknown) => {
@@ -412,6 +431,98 @@ for (const account of ['1234', '0881000458086', '1234567890123456789']) {
   }
 }
 check('payloads stay well formed across account and amount sizes', badLength === '', badLength);
+
+console.log('\nWho actually played');
+
+// The presumption, which is the whole design: not marking anything must leave
+// the bill exactly as it was before attendance existed.
+check('a player nobody marked is presumed to have arrived',
+  didAttend({ status: 'in' }) === true);
+check('a waitlister nobody marked is presumed absent',
+  didAttend({ status: 'waitlist' }) === false);
+check('an explicit no-show is absent however they registered',
+  didAttend({ status: 'in', attended: false }) === false);
+check('a waitlister who played is present — the reserve who was never promoted',
+  didAttend({ status: 'waitlist', attended: true }) === true);
+
+check('an unmarked solo player is one head', arrivedHeads({ status: 'in' }) === 1);
+check('an unmarked party bills for everyone registered',
+  arrivedHeads({ status: 'in', guests: 2 }) === 3);
+check('A NO-SHOW IS WORTH NOTHING',
+  arrivedHeads({ status: 'in', guests: 2, attended: false }) === 0);
+check('bringing one fewer friend than planned bills for one fewer',
+  arrivedHeads({ status: 'in', guests: 2, guestsArrived: 1 }) === 2);
+check('guests cannot exceed the number registered',
+  arrivedHeads({ status: 'in', guests: 1, guestsArrived: 4 }) === 2);
+check('guests cannot go negative',
+  arrivedHeads({ status: 'in', guests: 2, guestsArrived: -3 }) === 1);
+check('an absent member whose guests still came bills only the guests',
+  arrivedHeads({ status: 'in', guests: 2, attended: false, guestsArrived: 2 }) === 2);
+check('a waitlisted party that played counts in full',
+  arrivedHeads({ status: 'waitlist', guests: 1, attended: true }) === 2);
+
+const roster = [
+  { id: 'a', status: 'in' as const },
+  { id: 'b', status: 'in' as const, guests: 2 },
+  { id: 'c', status: 'in' as const, attended: false },
+  { id: 'd', status: 'waitlist' as const },
+  { id: 'e', status: 'waitlist' as const, attended: true },
+];
+check('only the people who played are billed',
+  arrivedOnly(roster).map((r) => r.id).join(',') === 'a,b,e',
+  arrivedOnly(roster).map((r) => r.id).join(','));
+check('an untouched roster reports itself unchecked',
+  attendanceChecked([{ status: 'in' }, { status: 'in', guests: 1 }]) === false);
+check('one mark is enough to count as checked', attendanceChecked(roster) === true);
+
+check('the suggested total is the standing fee times heads that turned up',
+  suggestedTotal(70_000, roster) === 70_000 * 5, String(suggestedTotal(70_000, roster)));
+check('no standing fee means no suggestion', suggestedTotal(null, roster) === null);
+check('nobody there means no suggestion',
+  suggestedTotal(70_000, [{ status: 'in', attended: false }]) === null);
+
+// The point of the whole feature: the same pitch bill, divided by the people
+// who were actually on the pitch.
+const billed = arrivedOnly(roster);
+const shares = splitWithOverrides(
+  700_000,
+  billed.map((r) => ({ id: r.id, override: null, heads: arrivedHeads(r) })),
+);
+const paid = [...shares.values()].reduce((a, b) => a + b, 0);
+check('THE SPLIT STILL SUMS TO THE PITCH BILL EXACTLY', paid === 700_000, String(paid));
+check('the no-show is not charged', shares.get('c') === undefined, String(shares.get('c')));
+check('the reserve who played is charged', (shares.get('e') ?? 0) > 0, String(shares.get('e')));
+check('the party of three pays three shares',
+  (shares.get('b') ?? 0) === 3 * (shares.get('a') ?? 0),
+  `${shares.get('b')} vs 3 x ${shares.get('a')}`);
+
+// Against the old behaviour, which billed the sign-up sheet. Here the reserve
+// stepped into the no-show's place, so the *per-head* figure happens to match
+// — the difference that matters is which names are on the bill at all.
+const naive = splitWithOverrides(
+  700_000,
+  roster.filter((r) => r.status === 'in').map((r) => ({ id: r.id, override: null, heads: 1 + (r.guests ?? 0) })),
+);
+check('billing the sign-up sheet charges the man who never came',
+  naive.get('c') !== undefined && shares.get('c') === undefined);
+check('and misses the man who played', naive.get('e') === undefined && shares.get('e') !== undefined);
+
+// And when nobody replaces the no-show, the people who played carry his share.
+const thin = [
+  { id: 'a', status: 'in' as const },
+  { id: 'b', status: 'in' as const },
+  { id: 'c', status: 'in' as const },
+  { id: 'd', status: 'in' as const, attended: false },
+];
+const arrivedShares = splitWithOverrides(600_000,
+  arrivedOnly(thin).map((r) => ({ id: r.id, override: null, heads: arrivedHeads(r) })));
+const signedUpShares = splitWithOverrides(600_000,
+  thin.map((r) => ({ id: r.id, override: null, heads: 1 })));
+check('a no-show nobody replaced raises everyone else\'s share',
+  arrivedShares.get('a') === 200_000 && signedUpShares.get('a') === 150_000,
+  `arrived ${arrivedShares.get('a')} vs signed-up ${signedUpShares.get('a')}`);
+check('and the total is still exactly the pitch bill',
+  [...arrivedShares.values()].reduce((x, y) => x + y, 0) === 600_000);
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILURE(S)`);
 process.exit(failed === 0 ? 0 : 1);

@@ -1,9 +1,11 @@
 import {
   type SessionDetail,
+  attendanceChecked,
   formatKickoff,
   formatVnd,
   registrationSummary,
   relativeToNow,
+  totalArrivedHeads,
 } from '@futsal/shared';
 import { useState } from 'react';
 import type { ConnectionState } from '../api/realtime.js';
@@ -13,6 +15,7 @@ import { navigate } from '../router.js';
 import { useApp } from '../state/app.js';
 import { useLocale, useMessages } from '../state/locale.js';
 import { AnnounceButton } from './AnnounceButton.js';
+import { AttendanceToggle } from './AttendanceToggle.js';
 import { Avatar } from './Avatar.js';
 import { GuestPicker } from './GuestPicker.js';
 import { CopyButton } from './CopyButton.js';
@@ -45,6 +48,19 @@ export function SessionView({
 
   const playing = registrations.filter((r) => r.status === 'in');
   const waiting = registrations.filter((r) => r.status === 'waitlist');
+
+  /**
+   * Attendance is only offered once the game has kicked off.
+   *
+   * Asking beforehand would be asking people to predict themselves, and the
+   * answer they gave at lunchtime is exactly the one that goes stale. The
+   * server accepts a mark at any time — a correction days later still has to
+   * work — but the screen only raises the question when it can be answered.
+   */
+  const kickedOff = new Date(session.startsAt).getTime() <= Date.now();
+  const showAttendance = kickedOff && session.status !== 'cancelled';
+  const arrived = totalArrivedHeads(registrations);
+  const checked = attendanceChecked(registrations);
 
   const toggleRegistration = async () => {
     if (busy) return;
@@ -170,6 +186,21 @@ export function SessionView({
           <ConnectionDot state={connection} />
         </div>
 
+        {/* Said once, above the list, rather than as a hint on every row. */}
+        {showAttendance && playing.length > 0 ? (
+          <div className="attend-note">
+            <div className="row between" style={{ gap: 8 }}>
+              <strong>{m.session.attendanceTitle}</strong>
+              <span className={checked ? 'badge paid' : 'badge waitlist'}>
+                {checked ? m.session.attendanceCount(arrived) : m.session.attendanceUnchecked}
+              </span>
+            </div>
+            <p className="muted" style={{ margin: 0 }}>
+              {m.session.attendanceBody}
+            </p>
+          </div>
+        ) : null}
+
         {playing.length === 0 ? (
           <p className="empty">{m.session.nobodyYet}</p>
         ) : (
@@ -207,6 +238,14 @@ export function SessionView({
                 ) : null}
                 {registration.memberId === identity.memberId ? (
                   <span className="badge paid">{m.session.you}</span>
+                ) : null}
+                {showAttendance ? (
+                  <AttendanceToggle
+                    sessionId={session.id}
+                    registration={registration}
+                    canMarkOthers={identity.isOrganizer}
+                    onChanged={onChanged}
+                  />
                 ) : null}
               </div>
             ))}
