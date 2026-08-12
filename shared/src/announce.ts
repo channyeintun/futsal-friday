@@ -1,5 +1,4 @@
 import { type Locale, messagesFor } from './i18n/index.js';
-import { formatVnd } from './money.js';
 import type { SessionDetail } from './models.js';
 import { formatKickoff } from './time.js';
 
@@ -12,8 +11,8 @@ import { formatKickoff } from './time.js';
  *
  * The jokes come out of the locale catalogue rather than being translated at
  * runtime, because a Burmese joke is not an English joke with the words
- * swapped. Only the flavour is random; the kickoff, venue and price are always
- * the real ones, so a funny message is still a correct message.
+ * swapped. Only the flavour is random; the kickoff, venue and pitch rate are
+ * always the real ones, so a funny message is still a correct message.
  */
 
 export interface AnnounceOptions {
@@ -57,8 +56,17 @@ export function sessionAnnouncement(
     lines.push(`📍 ${session.venue.name}${session.venue.address ? ` — ${session.venue.address}` : ''}`);
     if (session.venue.mapUrl) lines.push(`🗺 ${session.venue.mapUrl}`);
   }
-  if (session.feePerPerson != null) {
-    lines.push(`💰 ${m.summary.perPersonApprox(formatVnd(session.feePerPerson))}`);
+  // The pitch's hourly rate, not a share.
+  //
+  // A per-person figure cannot be honest before the game: it depends on how
+  // long they book — one hour some weeks, two the next — and on how many
+  // actually turn up. Posting "~70.000d each" to fifteen people is a promise
+  // the app has no way to keep, and the number it was quoting came from the
+  // *previous* session anyway, copied forward by the cron. What the organizer
+  // genuinely set, and what does not move week to week, is the pitch's price
+  // per hour.
+  if (session.venue?.priceNote) {
+    lines.push(`💰 ${session.venue.priceNote}`);
   }
 
   lines.push('');

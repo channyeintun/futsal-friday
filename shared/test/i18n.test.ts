@@ -148,7 +148,7 @@ const baseSession = {
   maxPlayers: 12,
   feePerPerson: 70_000,
   notes: null,
-  venue: { name: 'Tao Dan', address: '1 Truong Dinh', mapUrl: null },
+  venue: { name: 'Tao Dan', address: '1 Truong Dinh', mapUrl: null, priceNote: '600.000d/hour' },
 };
 const detailWith = (over: Record<string, unknown> = {}, going = 5) =>
   ({ session: { ...baseSession, ...over }, registrations: [], counts: { in: going, waitlist: 0 } }) as never;
@@ -167,7 +167,15 @@ check('a roll of exactly 1.0 does not fall off the end of a list',
 check('the kickoff time is in every variant',
   everyRoll.every((t) => t.includes('19:30')));
 check('the venue is in every variant', everyRoll.every((t) => t.includes('Tao Dan')));
-check('the price is in every variant', everyRoll.every((t) => t.includes('70.000d')));
+// The pitch's hourly rate, which the organizer set and which does not move.
+check('the hourly pitch rate is in every variant',
+  everyRoll.every((t) => t.includes('600.000d/hour')));
+// And never a per-person figure: the group books one hour some weeks and two
+// the next, so a share cannot be honest before the game is played. The number
+// that used to be quoted here was last week's, copied forward by the cron.
+check('AND NO PER-PERSON PRICE IS PROMISED',
+  everyRoll.every((t) => !t.includes('70.000d') && !/\/person|တစ်ယောက် ~/.test(t)),
+  everyRoll.find((t) => t.includes('70.000d') || /\/person|တစ်ယောက် ~/.test(t)));
 check('no variant is empty or a lone header', everyRoll.every((t) => t.split('\n').length >= 7));
 
 // The joke is random; the number of players is not.

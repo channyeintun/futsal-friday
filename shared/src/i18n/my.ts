@@ -189,7 +189,6 @@ export const my: Messages = {
     cancelled: 'ပွဲပျက်',
     finished: 'ပွဲပြီး',
     noVenue: 'ကွင်း မဆုံးဖြတ်ရသေးပါ',
-    perPerson: (amount) => `တစ်ယောက် ~${amount}`,
     openMap: 'မြေပုံ ဖွင့်မည်',
     wasCancelled: 'ဤပွဲကို ဖျက်လိုက်ပါပြီ။',
     imIn: 'ကစားမည်',
@@ -492,7 +491,6 @@ export const my: Messages = {
   summary: {
     matchHeader: 'ဖူဆယ်',
     cancelled: 'ပွဲပျက်',
-    perPersonApprox: (amount) => `တစ်ယောက် ~${amount}`,
     guestSuffix: (count) => ` (+${count})`,
     inHeading: (count, max) => (max ? `ကစားမည် (${count}/${max})` : `ကစားမည် (${count})`),
     nobodyYet: '— ဘယ်သူမှ မရှိသေး —',

@@ -181,7 +181,6 @@ export const en = {
     cancelled: 'Cancelled',
     finished: 'Finished',
     noVenue: 'Venue not decided yet',
-    perPerson: (amount: string) => `~${amount} each`,
     openMap: 'Open map',
     wasCancelled: 'This session was cancelled.',
     imIn: "I'm in",
@@ -499,7 +498,6 @@ export const en = {
   summary: {
     matchHeader: 'FUTSAL',
     cancelled: 'CANCELLED',
-    perPersonApprox: (amount: string) => `~${amount}/person`,
     guestSuffix: (count: number) => ` (+${count})`,
     inHeading: (count: number, max?: number | null) => (max ? `IN (${count}/${max})` : `IN (${count})`),
     nobodyYet: '— nobody yet —',

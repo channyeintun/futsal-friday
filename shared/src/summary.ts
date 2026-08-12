@@ -35,8 +35,10 @@ export function registrationSummary(detail: SessionDetail, options: SummaryOptio
     lines.push(`📍 ${session.venue.name}${session.venue.address ? ` — ${session.venue.address}` : ''}`);
     if (session.venue.mapUrl) lines.push(`🗺 ${session.venue.mapUrl}`);
   }
-  if (session.feePerPerson != null) {
-    lines.push(`💰 ${m.summary.perPersonApprox(formatVnd(session.feePerPerson))}`);
+  // The pitch's hourly rate rather than a per-person share — see the note in
+  // `announce.ts`: a share cannot be known before the game is played.
+  if (session.venue?.priceNote) {
+    lines.push(`💰 ${session.venue.priceNote}`);
   }
 
   const playing = registrations.filter((r) => r.status === 'in');

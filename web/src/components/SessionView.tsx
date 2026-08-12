@@ -125,8 +125,11 @@ export function SessionView({
           <span className="where">{m.session.noVenue}</span>
         )}
 
-        {session.feePerPerson != null ? (
-          <span className="where">{m.session.perPerson(formatVnd(session.feePerPerson))}</span>
+        {/* The pitch's hourly rate, not a per-person guess. What a head costs
+            depends on how long they book and how many turn up, neither of
+            which is known yet — see the note in `announce.ts`. */}
+        {session.venue?.priceNote ? (
+          <span className="where">{session.venue.priceNote}</span>
         ) : null}
       </section>
 

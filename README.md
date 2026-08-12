@@ -449,6 +449,24 @@ stayed home. `sessions.fee_per_person` — inherited week to week — prefills t
 total as a suggestion and shows the per-head figure live, so the usual week is
 one tap with nothing retyped.
 
+### The chat never quotes a per-person price
+
+The announcement and the roster summary used to carry `~70.000d/person`, and
+the session screen said the same. It could not be true. The group books one
+hour some weeks and two the next, and the share also depends on how many
+actually turn up — neither is known when the message is written. Worse, the
+figure was `sessions.fee_per_person`, which the cron copies forward from the
+*previous* game, so what got posted to fifteen people was last week's price
+presented as this week's.
+
+They now show the venue's `price_note` — "600.000d/hour" — which is a thing
+the organizer actually set, and which does not move week to week. What a head
+costs is settled after the game, on the split screen, where the real total is
+known and the arrival count is in.
+
+`fee_per_person` still exists and still prefills that split, where it is a
+starting point somebody reads and edits rather than a promise made to a chat.
+
 ### Paying, and the QR
 
 The organizer stores one set of bank details for the whole group
