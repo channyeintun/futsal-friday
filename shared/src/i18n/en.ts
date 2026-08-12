@@ -120,6 +120,9 @@ export const en = {
       count === 1 ? '1 person still to join' : `${count} people still to join`,
     everyoneJoined: 'Everyone has joined.',
     rotateWarning: 'Replacing it stops the copy already in the chat from working.',
+    confirmRotate: 'Replace the group link?',
+    confirmRotateBody:
+      'The link already in the chat stops working straight away. Anybody who has not joined yet will need the new one.',
     couldNotRotate: 'Could not replace the link',
     copyLink: 'Copy link',
     reissue: 'New link',
@@ -300,6 +303,15 @@ export const en = {
     players: (count: number) => `Players (${count})`,
     addPlayer: 'Add a player',
     name: 'Name',
+    confirmRemoveMember: (name: string) => `Remove ${name} from the group?`,
+    confirmRemoveMemberBody:
+      'They stop appearing on the roster and cannot sign in. Their past matches and payments are kept. Getting them back means inviting them again.',
+    confirmRetireVenue: (name: string) => `Retire ${name}?`,
+    confirmRetireVenueBody:
+      'It stops being offered for new sessions. Sessions already played there keep it.',
+    confirmSignOut: 'Sign out on this device?',
+    confirmSignOutBody:
+      'You will need an invite link to get back in — there is no password to type.',
     removeNote:
       'Removing someone keeps their past sessions and payments — they just stop appearing on the sign-in list.',
     couldNotAdd: 'Could not add that person',
@@ -313,6 +325,7 @@ export const en = {
     priceNote: 'Price note',
     priceNoteHint: 'e.g. 600.000d/hour',
     retired: '(retired)',
+    retireVenue: 'Retire venue',
     couldNotSaveVenue: 'Could not save that venue',
     couldNotRetireVenue: 'Could not retire that venue',
     extraSession: 'Extra session',

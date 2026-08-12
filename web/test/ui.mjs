@@ -316,6 +316,97 @@ async function run() {
     await evalJs(`document.body.innerText.includes('Walkin UI-Test')`),
     await evalJs(`document.body.innerText.slice(0, 300)`));
 
+  console.log('\nevery destructive action asks first');
+  // The hazard this guards: the roster puts a sign-out control next to a
+  // remove control. If only one of them confirms, there is no way to learn
+  // from the interface which taps are safe to explore.
+  await goToTab(2, 'Players');
+  await sleep(600);
+
+  const noDialogOpen = () => evalJs(`!document.querySelector('md-dialog[open]')`);
+  const closeDialog = async () => {
+    await evalJs(`document.querySelector('md-dialog[open]')?.close()`);
+    await sleep(350);
+  };
+
+  const guarded = async (label, clickExpr) => {
+    check(`${label}: nothing open beforehand`, await noDialogOpen());
+    const clicked = await evalJs(clickExpr);
+    if (!clicked) {
+      check(`${label} asks before acting`, false, 'control not found');
+      return;
+    }
+    await sleep(500);
+    const opened = await evalJs(`!!document.querySelector('md-dialog[open]')`);
+    check(`${label} asks before acting`, opened,
+      await evalJs('document.body.innerText.slice(0, 160)'));
+    await closeDialog();
+  };
+
+  await guarded('removing a member', `(() => {
+    const row = document.querySelector('.member-row');
+    const b = [...row.querySelectorAll('md-text-button')]
+      .find((x) => x.getAttribute('aria-label') === 'Remove');
+    if (!b) return false;
+    b.scrollIntoView({ block: 'center' });
+    b.click();
+    return true;
+  })()`);
+
+  await guarded('signing their devices out', `(() => {
+    const row = document.querySelector('.member-row');
+    const b = [...row.querySelectorAll('md-text-button')]
+      .find((x) => (x.getAttribute('aria-label') ?? '').includes('Sign out'));
+    if (!b) return false;
+    b.scrollIntoView({ block: 'center' });
+    b.click();
+    return true;
+  })()`);
+
+  await guarded('replacing the group link', `(() => {
+    const b = [...document.querySelectorAll('md-text-button')]
+      .find((x) => x.textContent.includes('Replace link'));
+    if (!b) return false;
+    b.scrollIntoView({ block: 'center' });
+    b.click();
+    return true;
+  })()`);
+
+  await guarded('signing yourself out', `(() => {
+    const b = [...document.querySelectorAll('md-outlined-button')]
+      .find((x) => /Sign out/.test(x.textContent));
+    if (!b) return false;
+    b.scrollIntoView({ block: 'center' });
+    b.click();
+    return true;
+  })()`);
+
+  await guarded('retiring a venue', `(() => {
+    const b = [...document.querySelectorAll('md-text-button')]
+      .find((x) => x.getAttribute('aria-label') === 'Retire venue');
+    if (!b) return false;
+    b.scrollIntoView({ block: 'center' });
+    b.click();
+    return true;
+  })()`);
+
+  // And cancelling out of one must leave the world alone.
+  const playersBefore = await evalJs(`document.body.innerText.match(/Players \\((\\d+)\\)/)?.[1]`);
+  await evalJs(`(() => {
+    const row = document.querySelector('.member-row');
+    [...row.querySelectorAll('md-text-button')]
+      .find((x) => x.getAttribute('aria-label') === 'Remove')?.click();
+  })()`);
+  await sleep(400);
+  await evalJs(`(() => {
+    [...document.querySelectorAll('md-dialog[open] md-text-button')]
+      .find((b) => b.textContent.includes('Cancel'))?.click();
+  })()`);
+  await sleep(700);
+  check('backing out of a confirmation changes nothing',
+    (await evalJs(`document.body.innerText.match(/Players \\((\\d+)\\)/)?.[1]`)) === playersBefore,
+    `${playersBefore} -> ${await evalJs(`document.body.innerText.match(/Players \\((\\d+)\\)/)?.[1]`)}`);
+
   console.log('\nthe group invite card');
   check('the group link card is on the setup screen',
     await evalJs('document.body.innerText.includes("Group invite link")'));

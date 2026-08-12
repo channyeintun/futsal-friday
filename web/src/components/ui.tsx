@@ -228,6 +228,15 @@ interface ButtonProps {
    * takes something away should not look as inviting as one that adds.
    */
   danger?: boolean;
+  /**
+   * The language of the *label*, when it differs from the app's. The language
+   * switcher offers each language in its own script, so its Burmese option is
+   * Burmese even while everything around it is English — and Myanmar needs
+   * more room under the baseline than Latin does.
+   */
+  lang?: string;
+  /** For buttons whose visible content is an icon. */
+  ariaLabel?: string;
 }
 
 /*
@@ -252,11 +261,15 @@ export function Button({
   variant = 'filled',
   type = 'button',
   danger,
+  lang,
+  ariaLabel,
 }: ButtonProps) {
   const props = {
     onClick,
     disabled,
     type,
+    ...(lang ? { lang } : {}),
+    ...(ariaLabel ? { 'aria-label': ariaLabel } : {}),
     ...(danger ? { style: DANGER_TOKENS } : {}),
   };
 

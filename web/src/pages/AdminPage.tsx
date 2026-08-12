@@ -4,6 +4,7 @@ import { createMember, removeMember, updateMember } from '../api/members.js';
 import { createSession } from '../api/sessions.js';
 import { createVenue, retireVenue, updateVenue } from '../api/venues.js';
 import { Avatar } from '../components/Avatar.js';
+import { ConfirmButton } from '../components/ConfirmButton.js';
 import { Icon } from '../components/Icon.js';
 import { GroupInviteCard, MemberInviteControls, MyDeviceCard } from '../components/InviteLink.js';
 import { PendingApprovals } from '../components/PendingApprovals.js';
@@ -35,10 +36,16 @@ export function AdminPage() {
           <h2 className="card-title">{m.admin.signedInAs(identity.name)}</h2>
           <p className="card-sub">{m.admin.organizersOnly}</p>
         </div>
-        <Button variant="outlined" onClick={signOut}>
+        <ConfirmButton
+          variant="outlined"
+          headline={m.admin.confirmSignOut}
+          body={m.admin.confirmSignOutBody}
+          confirmLabel={m.admin.signOut}
+          onConfirm={signOut}
+        >
           <Icon name="logout" size={18} slot="icon" />
           {m.admin.signOut}
-        </Button>
+        </ConfirmButton>
       </>
     );
   }
@@ -58,10 +65,16 @@ export function AdminPage() {
       <VenuesCard state={venues} />
       <ManualSessionCard />
 
-      <Button variant="outlined" onClick={signOut}>
+      <ConfirmButton
+        variant="outlined"
+        headline={m.admin.confirmSignOut}
+        body={m.admin.confirmSignOutBody}
+        confirmLabel={m.admin.signOut}
+        onConfirm={signOut}
+      >
         <Icon name="logout" size={18} slot="icon" />
         {m.admin.signOutAs(identity.name)}
-      </Button>
+      </ConfirmButton>
     </>
   );
 }
@@ -144,9 +157,18 @@ function MembersCard({ state }: { state: ReturnType<typeof useMembers> }) {
           </div>
           <div className="row wrap" style={{ gap: 4, justifyContent: 'flex-end' }}>
             <MemberInviteControls member={member} onChanged={() => void state.refetch()} />
-            <Button variant="text" onClick={() => remove(member)}>
+            {/* Separated from the sign-out control beside it: the two are both
+                destructive and were previously indistinguishable. */}
+            <span className="control-divider" aria-hidden="true" />
+            <ConfirmButton
+              ariaLabel={m.app.remove}
+              headline={m.admin.confirmRemoveMember(member.name)}
+              body={m.admin.confirmRemoveMemberBody}
+              confirmLabel={m.app.remove}
+              onConfirm={() => remove(member)}
+            >
               <Icon name="close" size={16} />
-            </Button>
+            </ConfirmButton>
           </div>
         </div>
       ))}
@@ -260,9 +282,15 @@ function VenuesCard({ state }: { state: ReturnType<typeof useVenues> }) {
             <Icon name="edit" size={16} />
           </Button>
           {venue.active ? (
-            <Button variant="text" onClick={() => retire(venue)}>
+            <ConfirmButton
+              ariaLabel={m.admin.retireVenue}
+              headline={m.admin.confirmRetireVenue(venue.name)}
+              body={m.admin.confirmRetireVenueBody}
+              confirmLabel={m.app.remove}
+              onConfirm={() => retire(venue)}
+            >
               <Icon name="close" size={16} />
-            </Button>
+            </ConfirmButton>
           ) : null}
         </div>
       ))}
@@ -313,6 +341,7 @@ function LanguageCard() {
         {LOCALES.map((code) => (
           <Button
             key={code}
+            lang={code}
             variant={code === locale ? 'filled' : 'outlined'}
             onClick={() => setLocale(code)}
           >

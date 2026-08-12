@@ -468,6 +468,24 @@ Avatars are cached as `Blob`s rather than object URLs — a URL has to be revoke
 and the cache has no eviction hook to do it, so each component mints its own
 from the shared blob and revokes on unmount.
 
+### Destructive actions
+
+Everything that cannot be undone from inside the app goes through
+`ConfirmButton`, which pairs the control with a dialog naming the consequence.
+Five of them used to fire on a single tap: removing a member, retiring a
+venue, replacing the group link, and signing out (either button).
+
+The inconsistency mattered more than any one gap. The roster put a sign-out
+control immediately beside a remove control — one asked, one did not — so
+there was no way to learn from the interface which taps were safe to explore.
+Those two are also no longer both a bare cross: the sign-out one takes a
+logout glyph, they are separated by a hairline, and both carry an accessible
+name where the first previously had none at all.
+
+A browser test asserts each of the five opens a dialog and that backing out
+changes nothing. It was checked by unguarding one on purpose and watching it
+fail, so it cannot quietly stop testing anything.
+
 ### The look
 
 Dark by default, modelled on the FotMob screenshots in `examples/`. The shape

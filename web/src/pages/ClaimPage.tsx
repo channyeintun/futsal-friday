@@ -140,6 +140,7 @@ export function SignInNeeded({
           {LOCALES.map((code) => (
             <Button
               key={code}
+              lang={code}
               variant={code === locale ? 'tonal' : 'text'}
               onClick={() => setLocale(code)}
             >

@@ -212,17 +212,27 @@ body {
 }
 
 /* Burmese words are longer than their English equivalents; give buttons room. */
-:lang(my) md-filled-button,
-:lang(my) md-outlined-button,
-:lang(my) md-filled-tonal-button,
-:lang(my) md-text-button {
+/*
+ * Matched on the element itself, not on an ancestor.
+ *
+ * `:lang(my) md-filled-button` only fires when something *above* the button is
+ * Burmese, which is not the case for the language switcher: it offers
+ * "မြန်မာ" while the app is still in English, so the label kept the Latin
+ * line-height and Myanmar's below-baseline marks were clipped by the line box.
+ * `md-filled-button:lang(my)` covers both — a button that inherits Burmese
+ * from the document, and one tagged `lang="my"` on its own.
+ */
+md-filled-button:lang(my),
+md-outlined-button:lang(my),
+md-filled-tonal-button:lang(my),
+md-text-button:lang(my) {
   --md-filled-button-label-text-line-height: 1.6rem;
   --md-outlined-button-label-text-line-height: 1.6rem;
   --md-filled-tonal-button-label-text-line-height: 1.6rem;
   --md-text-button-label-text-line-height: 1.6rem;
 }
 
-:lang(my) .bottom-nav button {
+.bottom-nav button:lang(my) {
   font-size: 0.72rem;
   line-height: 1.5;
 }
@@ -1048,4 +1058,13 @@ md-outlined-text-field {
   background: var(--md-sys-color-primary);
   border-color: var(--md-sys-color-primary);
   color: var(--md-sys-color-on-primary);
+}
+
+/* A hairline between two adjacent destructive controls, so they do not read
+   as one repeated button. */
+.control-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 2px;
+  background: var(--md-sys-color-outline-variant);
 }

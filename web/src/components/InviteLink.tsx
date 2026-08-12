@@ -11,6 +11,8 @@ import {
 import { platform } from '../platform/index.js';
 import { useApp } from '../state/app.js';
 import { useLocale } from '../state/locale.js';
+import { ConfirmButton } from './ConfirmButton.js';
+import { Icon } from './Icon.js';
 import { Button, Dialog, ErrorBanner } from './ui.js';
 
 /**
@@ -128,11 +130,24 @@ export function MemberInviteControls({
         {member.claimedAt || member.hasPendingLink ? m.invite.reissue : m.invite.copyLink}
       </Button>
 
-      {/* Revoking your own access from the device you are using would lock you
-          out; "add another device" is the right tool for moving yourself. */}
+      {/*
+        Revoking your own access from the device you are using would lock you
+        out; "add another device" is the right tool for moving yourself.
+
+        A logout glyph, not a cross. This sits next to the roster's remove
+        button, and two crosses side by side read as one control repeated —
+        with nothing but a confirmation dialog to tell you which destructive
+        thing you just chose.
+      */}
       {member.claimedAt && member.id !== identity.memberId ? (
-        <Button variant="text" onClick={() => setConfirmRemove(true)} disabled={busy}>
-          ×
+        <Button
+          variant="text"
+          danger
+          ariaLabel={m.invite.removeAccess}
+          onClick={() => setConfirmRemove(true)}
+          disabled={busy}
+        >
+          <Icon name="logout" size={16} />
         </Button>
       ) : null}
 
@@ -256,9 +271,15 @@ export function GroupInviteCard() {
             {m.invite.expires(formatKickoff(invite.expiresAt, locale))}
           </p>
           <Button onClick={copy}>{m.invite.copyGroupLink}</Button>
-          <Button variant="text" onClick={rotate} disabled={busy}>
+          <ConfirmButton
+            headline={m.invite.confirmRotate}
+            body={m.invite.confirmRotateBody}
+            confirmLabel={m.invite.rotateGroupLink}
+            onConfirm={rotate}
+            disabled={busy}
+          >
             {m.invite.rotateGroupLink}
-          </Button>
+          </ConfirmButton>
           <p className="muted" style={{ margin: 0 }}>
             {m.invite.rotateWarning}
           </p>

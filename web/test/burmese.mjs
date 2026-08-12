@@ -62,7 +62,7 @@ await sleep(2000);
 await shoot('02-home-my');
 
 const body = await js('document.body.innerText');
-check('nav is in Burmese', body.includes('ပွဲ') && body.includes('မှတ်တမ်း') && body.includes('ဆက်တင်'), body.slice(-60).replace(/\n/g,' | '));
+check('nav is in Burmese', body.includes('ပွဲ') && body.includes('မှတ်တမ်း') && body.includes('ပြင်ဆင်မှု'), body.slice(-60).replace(/\n/g,' | '));
 check('register button is in Burmese', body.includes('ကစားမည်'), body.slice(0,120).replace(/\n/g,' | '));
 check('weekday rendered in Burmese', /တနင်္ဂနွေ|တနင်္လာ|အင်္ဂါ|ဗုဒ္ဓဟူး|ကြာသပတေး|သောကြာ|စနေ/.test(body), body.slice(0,120).replace(/\n/g,' | '));
 check('no raw catalogue keys leaked', !/\b(session|payments|admin|reminders)\.[a-zA-Z]/.test(body), body.slice(0,200));
