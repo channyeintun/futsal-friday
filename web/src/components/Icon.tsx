@@ -13,6 +13,7 @@ export type IconName =
   | 'history'
   | 'tune'
   | 'copy'
+  | 'trophy'
   | 'check'
   | 'close'
   | 'add'
@@ -24,7 +25,9 @@ export type IconName =
   | 'person'
   | 'clock'
   | 'bell'
-  | 'share';
+  | 'share'
+  | 'expand'
+  | 'collapse';
 
 const PATHS: Record<IconName, React.ReactNode> = {
   ball: (
@@ -67,6 +70,14 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M15 5.5A1.5 1.5 0 0 0 13.5 4H6a2 2 0 0 0-2 2v7.5A1.5 1.5 0 0 0 5.5 15" />
     </>
   ),
+  // A cup: two handles, a bowl, a stem and a base.
+  trophy: (
+    <>
+      <path d="M7 4h10v5a5 5 0 0 1-10 0z" />
+      <path d="M7 5H4v2a3 3 0 0 0 3 3M17 5h3v2a3 3 0 0 1-3 3" />
+      <path d="M12 14v4M9 20h6" />
+    </>
+  ),
   check: <path d="m4.5 12.5 5 5 10-11" />,
   close: <path d="M6 6l12 12M18 6L6 18" />,
   add: <path d="M12 5v14M5 12h14" />,
@@ -105,6 +116,26 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <path d="M6 9a6 6 0 1 1 12 0c0 3.4.8 5.3 1.6 6.3.4.5 0 1.2-.6 1.2H5c-.6 0-1-.7-.6-1.2C5.2 14.3 6 12.4 6 9z" />
       <path d="M10 20a2.2 2.2 0 0 0 4 0" />
+    </>
+  ),
+  /*
+   * The pair on the "who owes what" list: arrows out to two opposite corners,
+   * and the same arrows pulled back in. Not a chevron, which would promise
+   * that something hidden is about to be revealed — nothing is hidden here,
+   * the same list is simply given the whole screen.
+   */
+  expand: (
+    <>
+      <path d="M14 4h6v6" />
+      <path d="M10 20H4v-6" />
+      <path d="M20 4l-7 7M4 20l7-7" />
+    </>
+  ),
+  collapse: (
+    <>
+      <path d="M20 10h-6V4" />
+      <path d="M4 14h6v6" />
+      <path d="M13 11l7-7M11 13l-7 7" />
     </>
   ),
   // iOS share sheet glyph, used in the "Add to Home Screen" hint.

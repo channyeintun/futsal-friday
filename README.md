@@ -46,6 +46,12 @@ See [Who can get in](#who-can-get-in).
   who still owes sees it on the payment screen alongside a VietQR with their
   own amount and a transfer reference already encoded, so paying is scan,
   check, confirm — no typing an account number off a screenshot.
+- **Goals.** Say how many you scored after a game; your total sits on your
+  profile. Self-reported, like attendance — the organizer can correct anybody.
+- **Form at a glance.** A row of small squares beside each name on the session
+  list: the last eight games, filled where they played. A contribution graph
+  for turning up.
+- **Leaderboard.** Two rankings — games in a row, and goals scored.
 - **Dashboards.** Who has paid, who hasn't, running totals per session, and
   outstanding balance per member across all sessions.
 - **Copy summary.** One tap produces a plain-text snapshot of the registration
@@ -448,6 +454,40 @@ a no-show's share is absorbed by the players rather than billed to a man who
 stayed home. `sessions.fee_per_person` — inherited week to week — prefills the
 total as a suggestion and shows the per-head figure live, so the usual week is
 one tap with nothing retyped.
+
+### Goals, form and the ranking
+
+Goals live on the **registration**, not in a table of their own: a goal belongs
+to one person in one match, which is exactly what a registration row already
+is. A separate table would buy the ability to record *when* each went in, which
+nobody is going to type on a phone after playing for an hour. Capped at 30 —
+futsal scores run high and a hat-trick is unremarkable, but a number past
+thirty is a typo, and an uncapped integer would put whoever typed it top of the
+leaderboard for ever.
+
+The **form squares** are one row of eight, oldest on the left, and they earn
+the comparison to a contribution graph for the same reason that works: you read
+a *pattern* without reading a number. "Four filled then a gap" says more than
+"streak: 0", because it also says they were here until last week. A game from
+before somebody joined is an empty square rather than a miss.
+
+They come from **one query for the whole roster**, not one per player — the
+home screen draws a row beside every name, and per-member requests would be a
+dozen round trips on the screen people open most. It is loaded separately from
+the session detail so the hero paints without waiting on a roster-wide history
+read.
+
+The **streak ranking cannot be a `SUM`.** A streak is "how many in a row,
+counting back from the newest", which needs the sequence — so the server reads
+a bounded slice of history and runs the same `computeStreak` the profile uses,
+rather than inventing a second definition in SQL that would drift from the
+first. It sorts before paging, so a page boundary cannot reorder anybody, and
+ranks keep counting across pages.
+
+Both queries join against the session window rather than listing session ids as
+bound parameters. **D1 refuses more than 100 of those**, and a 120-game history
+window is exactly the sort of thing that works in testing and fails once a
+group has played for two years.
 
 ### The chat never quotes a per-person price
 

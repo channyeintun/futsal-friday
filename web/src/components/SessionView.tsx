@@ -14,8 +14,11 @@ import { platform } from '../platform/index.js';
 import { navigate } from '../router.js';
 import { useApp } from '../state/app.js';
 import { useLocale, useMessages } from '../state/locale.js';
+import { useRecentForm } from '../hooks/queries.js';
 import { AnnounceButton } from './AnnounceButton.js';
 import { AttendanceToggle } from './AttendanceToggle.js';
+import { FormSquares } from './FormSquares.js';
+import { GoalsButton } from './GoalsButton.js';
 import { Avatar } from './Avatar.js';
 import { GuestPicker } from './GuestPicker.js';
 import { CopyButton } from './CopyButton.js';
@@ -57,6 +60,12 @@ export function SessionView({
    * server accepts a mark at any time — a correction days later still has to
    * work — but the screen only raises the question when it can be answered.
    */
+  // Loaded alongside rather than inside the session read, so the hero paints
+  // without waiting on a roster-wide history query.
+  const form = useRecentForm();
+  const formFor = (memberId: string) =>
+    form.data?.form.find((entry) => entry.memberId === memberId)?.recent ?? [];
+
   const kickedOff = new Date(session.startsAt).getTime() <= Date.now();
   const showAttendance = kickedOff && session.status !== 'cancelled';
   const arrived = totalArrivedHeads(registrations);
@@ -213,6 +222,7 @@ export function SessionView({
                 key={registration.memberId}
                 className={[
                   'player-row',
+                  'wrap',
                   registration.memberId === identity.memberId ? 'is-me' : '',
                   recentlyChanged.has(registration.memberId) ? 'flash' : '',
                 ]
@@ -242,13 +252,36 @@ export function SessionView({
                 {registration.memberId === identity.memberId ? (
                   <span className="badge paid">{m.session.you}</span>
                 ) : null}
+                {/* Their recent form, at the end of the name. */}
+                <FormSquares recent={formFor(registration.memberId)} />
+
+                {/*
+                  The post-match controls go on their own line.
+                  
+                  A name, eight squares, a goal count and an attendance toggle
+                  do not fit across a phone: measured at 414px the name was
+                  being truncated to two characters. Wrapping costs a line on
+                  the one screen where the row has anything to do, and keeps
+                  the name — the thing the row is actually about — readable.
+                */}
                 {showAttendance ? (
-                  <AttendanceToggle
-                    sessionId={session.id}
-                    registration={registration}
-                    canMarkOthers={identity.isOrganizer}
-                    onChanged={onChanged}
-                  />
+                  <div
+                    className="row wrap"
+                    style={{ width: '100%', gap: 6, justifyContent: 'flex-end' }}
+                  >
+                    <GoalsButton
+                      sessionId={session.id}
+                      registration={registration}
+                      canRecordOthers={identity.isOrganizer}
+                      onChanged={onChanged}
+                    />
+                    <AttendanceToggle
+                      sessionId={session.id}
+                      registration={registration}
+                      canMarkOthers={identity.isOrganizer}
+                      onChanged={onChanged}
+                    />
+                  </div>
                 ) : null}
               </div>
             ))}

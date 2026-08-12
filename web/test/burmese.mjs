@@ -83,7 +83,8 @@ const overflowing = await js(`(() => {
 check('no element overflows its box', overflowing === '[]', overflowing);
 
 console.log('\nthe Burmese profile card');
-await js(`[...document.querySelectorAll('.bottom-nav button')][1].click()`);
+// By label, not by index: adding a tab must not silently send this somewhere else.
+await js(`[...document.querySelectorAll('.bottom-nav button')].find(b=>/မှတ်တမ်း/.test(b.textContent))?.click()`);
 await waitFor(`!!document.querySelector('.streak-cell')`, 'profile card renders in Burmese');
 await sleep(600);
 await shoot('05-profile-my');
@@ -110,7 +111,7 @@ check('the avatar renders something, picture or initials',
     return !!a && (!!a.querySelector('img') || a.textContent.trim().length > 0);
   })()`),
   await js(`document.querySelector('.avatar')?.outerHTML?.slice(0, 120)`));
-await js(`[...document.querySelectorAll('.bottom-nav button')][0].click()`);
+await js(`[...document.querySelectorAll('.bottom-nav button')].find(b=>/ပွဲ/.test(b.textContent))?.click()`);
 await waitFor(`!!document.querySelector('.conn')`, 'back to the session screen');
 await sleep(500);
 
@@ -137,7 +138,7 @@ await js(`document.querySelector('md-dialog[open]')?.close()`);
 await sleep(400);
 
 console.log('\nswitch to English and back');
-await js(`[...document.querySelectorAll('.bottom-nav button')][2].click()`);
+await js(`[...document.querySelectorAll('.bottom-nav button')].find(b=>/ပြင်ဆင်မှု/.test(b.textContent))?.click()`);
 await waitFor(`document.body.innerText.includes('ဘာသာစကား')`,'language card in Burmese');
 await sleep(600);
 await shoot('03-setup-my');
@@ -152,7 +153,7 @@ check('switched back to Burmese', await js(`document.documentElement.lang === 'm
 check('choice persisted to storage', await js(`localStorage.getItem('futsal:locale') === 'my'`), await js(`localStorage.getItem('futsal:locale')`));
 
 console.log('\npayments screen in Burmese');
-await js(`[...document.querySelectorAll('.bottom-nav button')][0].click()`);
+await js(`[...document.querySelectorAll('.bottom-nav button')].find(b=>/ပွဲ/.test(b.textContent))?.click()`);
 await sleep(1500);
 await shoot('05-session-my');
 

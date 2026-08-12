@@ -2,6 +2,7 @@ import {
   type Registration,
   createSessionSchema,
   markAttendanceSchema,
+  recordGoalsSchema,
   sessionChannel,
   totalArrivedHeads,
   updateSessionSchema,
@@ -493,6 +494,45 @@ export const sessionRoutes = new Hono<AppContext>()
     });
 
     return c.json({ registrations: after, arrivedHeads: totalArrivedHeads(after) });
+  })
+
+  /**
+   * "I scored two."
+   *
+   * Same shape and same rule as attendance — anybody may speak for themselves,
+   * only an organizer may speak for somebody else — because it is the same
+   * kind of fact about the same row: something only known once the game has
+   * been played, and reported by the person who knows it.
+   *
+   * Not gated on having been marked present. Somebody scores, then somebody
+   * else marks them absent by mistake; refusing the goal at that point would
+   * make the correction order matter, and it should not.
+   */
+  .post('/:id/goals', async (c) => {
+    const sessionId = c.req.param('id');
+    const identity = c.get('identity');
+    const input = await parseBody(c.req.raw, recordGoalsSchema);
+
+    const subject = input.memberId ?? identity.memberId;
+    if (subject !== identity.memberId && !identity.isOrganizer) {
+      throw forbidden('Only an organizer can record somebody else\'s goals');
+    }
+
+    const session = await getSessionRow(c.env.DB, sessionId);
+    if (!session) throw notFound('No such session');
+    if (session.status === 'cancelled') throw conflict('That session was cancelled');
+
+    const updated = await c.env.DB.prepare(
+      `UPDATE registrations SET goals = ?3 WHERE session_id = ?1 AND member_id = ?2`,
+    )
+      .bind(sessionId, subject, input.goals)
+      .run();
+    if ((updated.meta?.changes ?? 0) === 0) {
+      throw notFound('They are not on the list for that session');
+    }
+
+    const after = await listRegistrations(c.env.DB, sessionId);
+    return c.json({ registrations: after });
   })
 ;
 

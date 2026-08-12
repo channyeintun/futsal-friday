@@ -429,6 +429,25 @@ md-outlined-text-field {
   display: flex;
   flex-direction: column;
   background: var(--md-sys-color-background);
+
+  /*
+   * How much of the viewport the header and the floating nav take between
+   * them — so a card can be told to fill exactly what is left.
+   *
+   * The two heights are measured and written onto this element by `Shell`,
+   * because neither is a constant: both bars size themselves from their
+   * contents, and Burmese sets taller than Latin in both. The literals here
+   * are the Latin measurements, which stand in for the first frame and for a
+   * browser with no `ResizeObserver`.
+   *
+   * The rest is the fixed furniture between the last card and the bottom of
+   * the screen: `.content`'s bottom padding and the nav's top margin, then the
+   * gap the nav floats above.
+   */
+  --ff-chrome-h: calc(
+    var(--ff-topbar-h, 68px) + var(--ff-nav-h, 58px) + 8px + 8px + var(--ff-nav-inset) +
+      env(safe-area-inset-bottom)
+  );
 }
 
 /*
@@ -582,6 +601,35 @@ md-outlined-text-field {
   color: var(--md-sys-color-on-surface-variant);
 }
 
+/*
+ * A control that belongs to a card rather than to the page.
+ *
+ * `.icon-button` is the wrong thing here: it is filled with
+ * `surface-container`, which is exactly a card's own background, so inside one
+ * it disappears. This takes the step above instead, and is smaller — 36px
+ * rather than 40px — because it sits beside a heading as a second thought,
+ * not as the reason the card exists.
+ */
+.card-action {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--ff-radius-pill);
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: pointer;
+}
+
+/* Lit while it is holding the screen open, so the state reads at a glance. */
+.card-action[aria-expanded='true'] {
+  color: var(--md-sys-color-on-surface);
+}
+
 .row {
   display: flex;
   align-items: center;
@@ -690,6 +738,31 @@ md-outlined-text-field {
   flex: 1;
   min-width: 0;
   font-weight: 600;
+}
+
+/*
+ * A floor on the name, once there is anything else competing for the row.
+ *
+ * `min-width: 0` above is what normally lets a flex child shrink so its
+ * ellipsis can do its job — but with a badge and a row of form squares
+ * alongside, "can shrink" became "shrank to nothing", and the name vanished
+ * entirely at 414px. The squares and the badge are fixed-width, so the name is
+ * the only thing that gives; it needs a floor rather than none.
+ */
+.player-row .player-name {
+  min-width: 5.5rem;
+}
+
+/*
+ * The roster row wraps once it has post-match controls in it.
+ *
+ * `.wrap` is only defined as `.row.wrap`, so putting the bare class on a
+ * `.player-row` silently did nothing — measured: `flex-wrap: nowrap` and a
+ * 425px row inside a 334px card. With wrapping the overflow becomes a second
+ * line, which is what the extra line was for.
+ */
+.player-row.wrap {
+  flex-wrap: wrap;
 }
 
 /* Highlights a row that just changed, so a live update is noticed. */
@@ -1184,6 +1257,150 @@ md-outlined-text-field {
   top: 0;
   left: 0;
   width: 100%;
+}
+
+/* ----------------------------------------------------------- form squares */
+
+/*
+ * The little row of games beside a name.
+ *
+ * Sizes are in px rather than em on purpose: these are a graphic, not text,
+ * and they should stay the same size whether the row's font is English or
+ * Burmese — which sets larger at the same font-size and would otherwise
+ * inflate the squares on one locale only.
+ */
+.form-squares {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+  flex: 0 0 auto;
+  /* Keeps the row from being squeezed by a long name beside it. */
+  margin-left: 4px;
+}
+
+.form-square {
+  /* 7px, not 9. Eight of them plus a Burmese "you" badge and a name floor
+     came to 328px inside a 314px row — the difference is exactly this. */
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  /* The empty state: a game that happened before they joined. Faint enough to
+     read as "nothing here" rather than as a miss. */
+  background: var(--md-sys-color-outline-variant);
+}
+
+/* Played. The one state worth spending the accent on. */
+.form-square.is-in {
+  background: var(--ff-paid);
+}
+
+/* Said yes and did not come, or never answered. */
+.form-square.is-missed {
+  background: var(--md-sys-color-outline);
+}
+
+/* Wanted in, no room. Not their fault, so not a miss — but not a game either. */
+.form-square.is-waitlist {
+  background: var(--ff-pending);
+  opacity: 0.65;
+}
+
+.form-square.is-none {
+  background: var(--md-sys-color-outline-variant);
+  opacity: 0.45;
+}
+
+/* --------------------------------------------------------- leaderboard */
+
+.rank-cell {
+  min-width: 26px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* The top three, because a leaderboard nobody can read at a glance is a table. */
+.rank-cell.is-podium {
+  color: var(--ff-paid);
+}
+
+.board-switch {
+  display: flex;
+  gap: 8px;
+}
+
+.board-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  min-width: 34px;
+  text-align: right;
+}
+
+/* ------------------------------------------------------- who owes what */
+
+/*
+ * The debt list, which has two sizes.
+ *
+ * Collapsed it is a peek — five rows or so — because it is the third card on
+ * the screen and the two above it are about you, not about everyone. Expanded
+ * it takes the whole gap between the header and the nav, which is what the
+ * control beside its heading is for.
+ *
+ * Both states are `max-height` on the *card*, not on the scroller, and both
+ * are plain lengths — which is what makes the change animate. The scroller is
+ * then the flex child that gives way (see below), so the heading and the line
+ * under it keep their space and the list absorbs the difference.
+ *
+ * A cap the list does not reach costs nothing: `max-height` is a ceiling, so a
+ * group of four still renders as four rows and a short card.
+ */
+.owes-list {
+  max-height: min(420px, 52vh);
+  max-height: min(420px, 52dvh);
+  /*
+   * Short, in the same easing as the screen-to-screen cross-fade. A little
+   * longer than that 180ms because this moves several hundred pixels rather
+   * than fading in place, and an instant jump of that size loses the thread of
+   * which list grew into which.
+   */
+  transition: max-height 220ms cubic-bezier(0.2, 0, 0, 1);
+  /* Keeps `scrollIntoView` from parking the card's heading behind the sticky
+     header — see the pinning effect in `HistoryPage`. */
+  scroll-margin-top: var(--ff-topbar-h, 68px);
+}
+
+/*
+ * Exactly the room between the header and the nav.
+ *
+ * That figure is load-bearing twice over: it is the height the list grows to,
+ * and — because this card is the last thing on the page — it is also what
+ * makes scrolling it up under the header land perfectly, with the bottom row
+ * finishing flush above the nav and nothing left to scroll.
+ */
+.owes-list.is-expanded {
+  max-height: calc(100vh - var(--ff-chrome-h));
+  max-height: calc(100dvh - var(--ff-chrome-h));
+}
+
+/*
+ * The list gives way, and only the list.
+ *
+ * `min-height: 0` overrides the automatic minimum that would otherwise stop a
+ * flex item shrinking below its contents — and its contents here are the
+ * virtualizer's full scroll height, which for a large group is thousands of
+ * pixels. The heading and the caption keep theirs, so shrinking the card
+ * shrinks the rows rather than crushing the text above them.
+ */
+.owes-list .virtual-scroller {
+  max-height: none;
+  min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .owes-list {
+    transition: none;
+  }
 }
 
 /* ------------------------------------------------------------ attendance */

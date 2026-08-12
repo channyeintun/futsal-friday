@@ -163,6 +163,12 @@ function StreakRow({ profile }: { profile: MemberProfile }) {
           <div className="streak-value">{profile.streak.played}</div>
           <div className="streak-label">{m.profile.played}</div>
         </div>
+        {/* Goals sit with the streak because they answer the same question in
+            the other direction: turning up, and what you did once there. */}
+        <div className="streak-cell">
+          <div className="streak-value">{profile.goals}</div>
+          <div className="streak-label">{m.goals.total}</div>
+        </div>
       </div>
       <p className="muted" style={{ margin: 0 }}>
         {current > 0 ? m.profile.keepItUp(current) : m.profile.noStreak}

@@ -47,6 +47,35 @@ export const listBalances = (
   return get<BalancePage>(`/members/balances${query.size ? `?${query}` : ''}`, signal);
 };
 
+export interface FormEntry {
+  memberId: string;
+  recent: ('in' | 'missed' | 'waitlist' | 'none')[];
+}
+
+/** Recent form for the whole roster, in one call. */
+export const listForm = (signal?: AbortSignal) =>
+  get<{ window: number; form: FormEntry[] }>('/members/form', signal);
+
+export interface LeaderboardRow {
+  member: Member;
+  streak: { current: number; best: number; played: number; total: number };
+  goals: number;
+  rank: number;
+}
+
+export const listLeaderboard = (
+  opts: { board: 'streak' | 'goals'; cursor?: string | null; limit?: number },
+  signal?: AbortSignal,
+) => {
+  const query = new URLSearchParams({ board: opts.board });
+  if (opts.cursor) query.set('cursor', opts.cursor);
+  if (opts.limit) query.set('limit', String(opts.limit));
+  return get<{ board: string; entries: LeaderboardRow[]; nextCursor: string | null }>(
+    `/members/leaderboard?${query}`,
+    signal,
+  );
+};
+
 export const memberHistory = (memberId: string, signal?: AbortSignal) =>
   get<{ history: MemberHistoryEntry[] }>(`/members/${memberId}/history`, signal).then(
     (r) => r.history,

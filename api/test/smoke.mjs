@@ -436,6 +436,82 @@ const run = async () => {
   const fresh = await call('POST', '/auth/claim', { body: { nonce: nonceOf(second.body.url) } });
   check('the newest link still works', fresh.status === 200, fresh.body);
 
+  section('goals, form and the ranking');
+  // A game two hours old with three players in it, so goals can be recorded
+  // against something the screen would also allow.
+  // Created in the future and then moved back: registration closes at kickoff,
+  // so a session that is already two hours old cannot be signed up for — but
+  // goals only make sense on one that has been played.
+  const goalSession = await call('POST', '/sessions', {
+    token: organizer,
+    body: { startsAt: new Date(Date.now() + 4 * 86_400_000).toISOString() },
+  });
+  const gsid = goalSession.body.session.id;
+  for (const who of [alice, bob, carol]) {
+    await call('POST', `/sessions/${gsid}/register`, { token: who.token });
+  }
+  sql(`UPDATE sessions SET starts_at = '${new Date(Date.now() - 2 * 3_600_000).toISOString()}'
+        WHERE id = '${gsid}';`);
+
+  const notMyGoals = await call('POST', `/sessions/${gsid}/goals`, {
+    token: alice.token, body: { memberId: bob.id, goals: 9 },
+  });
+  check('A MEMBER CANNOT RECORD SOMEBODY ELSE\'S GOALS', notMyGoals.status === 403, notMyGoals.status);
+
+  check('but can record their own',
+    (await call('POST', `/sessions/${gsid}/goals`, { token: alice.token, body: { goals: 3 } })).status === 200);
+  check('an organizer can record anybody\'s',
+    (await call('POST', `/sessions/${gsid}/goals`, {
+      token: organizer, body: { memberId: bob.id, goals: 1 },
+    })).status === 200);
+  check('an absurd tally is refused',
+    (await call('POST', `/sessions/${gsid}/goals`, { token: alice.token, body: { goals: 99 } })).status === 400);
+  check('and somebody not on the list is a 404',
+    (await call('POST', `/sessions/${gsid}/goals`, {
+      token: organizer, body: { memberId: 'mem_nobody', goals: 1 },
+    })).status === 404);
+
+  const withGoals = await call('GET', `/sessions/${gsid}`, { token: organizer });
+  const aliceReg = withGoals.body.registrations.find((r) => r.memberId === alice.id);
+  check('the registration carries the goals', aliceReg?.goals === 3, JSON.stringify(aliceReg));
+
+  const scoredProfile = await call('GET', `/members/${alice.id}/profile`, { token: alice.token });
+  check('and the profile totals them up', scoredProfile.body?.profile?.goals >= 3,
+    scoredProfile.body?.profile?.goals);
+
+  const form = await call('GET', '/members/form', { token: alice.token });
+  check('form comes back for the whole roster in one call',
+    Array.isArray(form.body?.form) && form.body.form.length > 0, form.body?.window);
+  const aliceForm = form.body.form.find((f) => f.memberId === alice.id);
+  check('each entry is exactly the window wide',
+    aliceForm?.recent?.length === form.body.window, JSON.stringify(aliceForm)?.slice(0, 120));
+  check('and every square is a state the UI knows',
+    form.body.form.every((f) => f.recent.every((x) => ['in', 'missed', 'waitlist', 'none'].includes(x))));
+
+  const goalBoard = await call('GET', '/members/leaderboard?board=goals&limit=5', { token: alice.token });
+  check('the goals board ranks from one', goalBoard.body?.entries?.[0]?.rank === 1,
+    JSON.stringify(goalBoard.body?.entries?.[0]?.rank));
+  check('BIGGEST TALLY FIRST',
+    goalBoard.body.entries.every((e, i) => i === 0 || goalBoard.body.entries[i - 1].goals >= e.goals),
+    JSON.stringify(goalBoard.body.entries.map((e) => e.goals)));
+  check('and nobody on zero is listed', goalBoard.body.entries.every((e) => e.goals > 0),
+    JSON.stringify(goalBoard.body.entries.map((e) => e.goals)));
+
+  const streakBoard = await call('GET', '/members/leaderboard?board=streak&limit=5', { token: alice.token });
+  check('the streak board is ordered by the run',
+    streakBoard.body.entries.every((e, i) => i === 0 ||
+      streakBoard.body.entries[i - 1].streak.current >= e.streak.current),
+    JSON.stringify(streakBoard.body.entries.map((e) => e.streak.current)));
+  // Ranks have to keep counting across a page boundary, or the second page
+  // starts at 1 again and the board says two people are winning.
+  if (streakBoard.body.nextCursor) {
+    const second = await call(
+      'GET', `/members/leaderboard?board=streak&limit=5&cursor=${streakBoard.body.nextCursor}`,
+      { token: alice.token });
+    check('RANKS KEEP COUNTING ONTO THE NEXT PAGE', second.body?.entries?.[0]?.rank === 6,
+      second.body?.entries?.[0]?.rank);
+  }
+
   section('the long lists are paginated');
   // Past fixtures, newest first.
   const pastPage = await call('GET', '/sessions/past?limit=5', { token: organizer });
