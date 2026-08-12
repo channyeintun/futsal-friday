@@ -424,6 +424,25 @@ md-outlined-text-field {
   display: flex;
   flex-direction: column;
   background: var(--md-sys-color-background);
+
+  /*
+   * How much of the viewport the header and the floating nav take between
+   * them — so a card can be told to fill exactly what is left.
+   *
+   * The two heights are measured and written onto this element by `Shell`,
+   * because neither is a constant: both bars size themselves from their
+   * contents, and Burmese sets taller than Latin in both. The literals here
+   * are the Latin measurements, which stand in for the first frame and for a
+   * browser with no `ResizeObserver`.
+   *
+   * The rest is the fixed furniture between the last card and the bottom of
+   * the screen: `.content`'s bottom padding and the nav's top margin, then the
+   * gap the nav floats above.
+   */
+  --ff-chrome-h: calc(
+    var(--ff-topbar-h, 68px) + var(--ff-nav-h, 58px) + 8px + 8px + var(--ff-nav-inset) +
+      env(safe-area-inset-bottom)
+  );
 }
 
 /*
@@ -575,6 +594,35 @@ md-outlined-text-field {
   margin: 0;
   font-size: 0.85rem;
   color: var(--md-sys-color-on-surface-variant);
+}
+
+/*
+ * A control that belongs to a card rather than to the page.
+ *
+ * `.icon-button` is the wrong thing here: it is filled with
+ * `surface-container`, which is exactly a card's own background, so inside one
+ * it disappears. This takes the step above instead, and is smaller — 36px
+ * rather than 40px — because it sits beside a heading as a second thought,
+ * not as the reason the card exists.
+ */
+.card-action {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--ff-radius-pill);
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: pointer;
+}
+
+/* Lit while it is holding the screen open, so the state reads at a glance. */
+.card-action[aria-expanded='true'] {
+  color: var(--md-sys-color-on-surface);
 }
 
 .row {
@@ -1263,6 +1311,72 @@ md-outlined-text-field {
   font-weight: 700;
   min-width: 34px;
   text-align: right;
+}
+
+/* ------------------------------------------------------- who owes what */
+
+/*
+ * The debt list, which has two sizes.
+ *
+ * Collapsed it is a peek — five rows or so — because it is the third card on
+ * the screen and the two above it are about you, not about everyone. Expanded
+ * it takes the whole gap between the header and the nav, which is what the
+ * control beside its heading is for.
+ *
+ * Both states are `max-height` on the *card*, not on the scroller, and both
+ * are plain lengths — which is what makes the change animate. The scroller is
+ * then the flex child that gives way (see below), so the heading and the line
+ * under it keep their space and the list absorbs the difference.
+ *
+ * A cap the list does not reach costs nothing: `max-height` is a ceiling, so a
+ * group of four still renders as four rows and a short card.
+ */
+.owes-list {
+  max-height: min(420px, 52vh);
+  max-height: min(420px, 52dvh);
+  /*
+   * Short, in the same easing as the screen-to-screen cross-fade. A little
+   * longer than that 180ms because this moves several hundred pixels rather
+   * than fading in place, and an instant jump of that size loses the thread of
+   * which list grew into which.
+   */
+  transition: max-height 220ms cubic-bezier(0.2, 0, 0, 1);
+  /* Keeps `scrollIntoView` from parking the card's heading behind the sticky
+     header — see the pinning effect in `HistoryPage`. */
+  scroll-margin-top: var(--ff-topbar-h, 68px);
+}
+
+/*
+ * Exactly the room between the header and the nav.
+ *
+ * That figure is load-bearing twice over: it is the height the list grows to,
+ * and — because this card is the last thing on the page — it is also what
+ * makes scrolling it up under the header land perfectly, with the bottom row
+ * finishing flush above the nav and nothing left to scroll.
+ */
+.owes-list.is-expanded {
+  max-height: calc(100vh - var(--ff-chrome-h));
+  max-height: calc(100dvh - var(--ff-chrome-h));
+}
+
+/*
+ * The list gives way, and only the list.
+ *
+ * `min-height: 0` overrides the automatic minimum that would otherwise stop a
+ * flex item shrinking below its contents — and its contents here are the
+ * virtualizer's full scroll height, which for a large group is thousands of
+ * pixels. The heading and the caption keep theirs, so shrinking the card
+ * shrinks the rows rather than crushing the text above them.
+ */
+.owes-list .virtual-scroller {
+  max-height: none;
+  min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .owes-list {
+    transition: none;
+  }
 }
 
 /* ------------------------------------------------------------ attendance */
