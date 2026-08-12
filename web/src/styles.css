@@ -37,6 +37,11 @@
    * are meant to notice. Spending the accent on every button would flatten
    * exactly the hierarchy it exists to create, so `primary` is reserved for
    * the live nav item, links, and the one affirmative action on a screen.
+   *
+   * `primary` and `background` are also written out by hand in `index.html`,
+   * in both schemes, for the boot splash: that screen has to paint before this
+   * file exists, so it cannot read a custom property. Change either one here
+   * and change it there too — nothing enforces it.
    */
   --md-sys-color-primary: #007a43;
   --md-sys-color-on-primary: #ffffff;
@@ -805,6 +810,25 @@ md-outlined-text-field {
   text-align: center;
   color: var(--md-sys-color-on-surface-variant);
   font-size: 0.9rem;
+}
+
+/*
+ * Announced but not drawn.
+ *
+ * `display: none` and `visibility: hidden` would both be simpler and both take
+ * the element out of the accessibility tree, which is the one thing a live
+ * region must not do. Clipping to a pixel is the old trick that keeps it in.
+ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .error-banner {

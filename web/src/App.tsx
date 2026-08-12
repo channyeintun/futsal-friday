@@ -3,8 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 import { currentIdentity } from './api/auth.js';
 import { getToken, onUnauthorized } from './api/client.js';
+import { SPLASH_CAP_MS, splashDown, useSplashDown } from './boot.js';
 import { Icon, type IconName } from './components/Icon.js';
-import { Spinner } from './components/ui.js';
 import { AdminPage } from './pages/AdminPage.js';
 import { PlayersPage } from './pages/PlayersPage.js';
 import { ClaimPage, SignInNeeded } from './pages/ClaimPage.js';
@@ -66,6 +66,8 @@ export function App() {
     // gate rather than leaving the user on a screen that cannot load.
     onUnauthorized(() => setIdentity(null));
 
+    const cap = setTimeout(splashDown, SPLASH_CAP_MS);
+
     currentIdentity()
       // Only ever *establish* an identity, never clear one. This probe is
       // fired before any credential exists, so on a claim link it races the
@@ -74,7 +76,16 @@ export function App() {
       // having just signed in.
       .then((found) => setIdentity((current) => current ?? found))
       .finally(() => setChecking(false));
+
+    return () => clearTimeout(cap);
   }, []);
+
+  // The splash goes as soon as the first screen has something on it. Every
+  // screen but the shell is its own content the moment it commits — the gate,
+  // the two invite flows, the waiting room — so they are settled from here.
+  // The shell is the exception: `HomePage` opens on a spinner of its own until
+  // the fixture arrives, so it reports for itself once it has one.
+  useSplashDown(!checking && (identity === null || !identity.approved));
 
   const signOut = useCallback(() => {
     setIdentity(null);
@@ -139,12 +150,23 @@ export function App() {
   );
 }
 
+/**
+ * Nothing to look at, on purpose: the splash has covered the viewport since the
+ * document parsed, so anything drawn here could only ever be seen as a flicker
+ * on its way out.
+ *
+ * It is not nothing to *hear*, though. The splash is decoration and hidden from
+ * assistive technology, and a reader who landed on an empty document would be
+ * told less than the spinner used to tell them. This is also the first point at
+ * which the catalogue exists, so it can say it in one language — which is the
+ * thing the inline HTML could not do.
+ */
 function Booting() {
   const m = useMessages();
   return (
-    <div className="app">
-      <Spinner label={m.app.loading} />
-    </div>
+    <p className="sr-only" role="status">
+      {m.app.loading}
+    </p>
   );
 }
 

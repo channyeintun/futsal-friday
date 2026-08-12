@@ -261,6 +261,26 @@ function setDocumentLanguage(tag: string): void {
   document.documentElement.lang = tag;
 }
 
+/* ---------------------------------------------------------------- splash */
+
+/**
+ * Take down the boot splash that `index.html` painted.
+ *
+ * A cut rather than a fade, deliberately. The splash field is the app's own
+ * background colour, so removing it changes nothing but the mark — while a
+ * cross-fade would dissolve an 88px green ball into the 48px one the sign-in
+ * screen draws a third of the way up, two of the same logo on screen at once
+ * for the length of the animation. That screen is the most common thing behind
+ * this.
+ *
+ * No `requestAnimationFrame` to bridge the swap either. Callers reach this from
+ * a passive effect, which React runs after it has committed the DOM, so `#root`
+ * already holds the screen and the next frame paints it. There is no gap.
+ */
+function dismissSplash(): void {
+  document.getElementById('splash')?.remove();
+}
+
 /* ----------------------------------------------------------- notifications */
 
 /**
@@ -484,6 +504,7 @@ export const webPlatform: Platform = {
   registerServiceWorker,
   deviceLanguage,
   setDocumentLanguage,
+  dismissSplash,
   openEventStream,
   pickImage,
   compressImage,

@@ -101,6 +101,30 @@ try {
       `${res.status} ${res.headers.get('content-type')}`);
   }
 
+  console.log('\nboot splash');
+  // Scripts off, so whatever paints is exactly what the HTML can paint on its
+  // own — which is the whole claim. `setScriptExecutionDisabled` rather than a
+  // blocked URL pattern: the entry is `/assets/index-*.js` behind `vite
+  // preview` and `/src/main.tsx` behind the dev server, and this suite is
+  // documented as running against either.
+  await send('Emulation.setScriptExecutionDisabled', { value: true });
+  await send('Page.navigate', { url: `${APP_URL}/` });
+  await waitFor('!!document.getElementById("splash")', 'the HTML paints a splash on its own');
+  check('and the bundle is not what painted it',
+    await js('document.getElementById("root").children.length === 0'));
+  const splashBg = await js(`getComputedStyle(document.getElementById('splash')).backgroundColor`);
+  await shoot('30-splash');
+
+  await send('Emulation.setScriptExecutionDisabled', { value: false });
+  await send('Page.navigate', { url: `${APP_URL}/` });
+  await waitFor('!document.getElementById("splash")', 'and it comes down once the app is up');
+  // Read after the app has booted rather than beside the splash: `body` takes
+  // its background from `styles.css`, which the bundle injects in development.
+  // A mismatch is a flash of the wrong colour at the handover.
+  const bodyBg = await js(`getComputedStyle(document.body).backgroundColor`);
+  check('the splash field is the colour the app itself will be', splashBg === bodyBg,
+    `${splashBg} vs ${bodyBg}`);
+
   console.log('\nservice worker');
   await send('Page.navigate', { url: `${APP_URL}/` });
   await waitFor('!!document.querySelector("#root")?.children.length', 'app mounts');
@@ -128,6 +152,10 @@ try {
   check('shell cache was created', cached.includes('futsal-shell'), cached);
   check('the app shell is in the cache',
     await js(`caches.open('futsal-shell-v1').then(c => c.match('/')).then(r => !!r)`));
+  // Read out of the cache, not off the network: a launch with no signal has to
+  // get the splash too, and the origin would keep serving it either way.
+  check('and the splash is in the copy the worker kept',
+    await js(`caches.open('futsal-shell-v1').then(c => c.match('/')).then(r => r.text()).then(t => t.includes('id="splash"'))`));
 
   console.log('\noffline');
   await send('Network.emulateNetworkConditions', {
