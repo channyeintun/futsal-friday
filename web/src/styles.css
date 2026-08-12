@@ -759,26 +759,33 @@ body {
   }
 }
 
+/*
+ * Opacity only. The 6px lift that used to be here moved the whole snapshot —
+ * fine when the bars were excluded from it, a visible jolt of the chrome now
+ * that they are not.
+ */
 @keyframes ff-fade-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
   }
 }
 
 /*
- * The chrome stays put. Fading the bar along with the content makes the whole
- * app blink, and the top bar and bottom nav are the fixed frame the content
- * moves inside — so they are lifted out of the root snapshot and never
- * animate.
+ * The chrome is deliberately *not* given a `view-transition-name`.
+ *
+ * It was, to stop the bars cross-fading with the content. But `.topbar` and
+ * `.bottom-nav` are `position: sticky` against a document that scrolls, and a
+ * named element is lifted out of the page into a snapshot positioned from the
+ * geometry it was captured with. A sticky element's painted position is a
+ * function of scroll, so as soon as the page has been scrolled the captured
+ * position and the live one can disagree — and the snapshot is what you see
+ * for the length of the transition.
+ *
+ * Leaving them in the root snapshot costs nothing here: the bars are
+ * pixel-identical either side of a tab change apart from which tab is lit, and
+ * the UA cross-fade composites with `plus-lighter`, so identical pixels stay
+ * put instead of dipping through a gap.
  */
-.topbar {
-  view-transition-name: ff-topbar;
-}
-
-.bottom-nav {
-  view-transition-name: ff-bottom-nav;
-}
 
 /*
  * `prefers-reduced-motion` is honoured in `platform.viewTransition`, which
@@ -787,11 +794,7 @@ body {
  */
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(root),
-  ::view-transition-new(root),
-  ::view-transition-old(ff-topbar),
-  ::view-transition-new(ff-topbar),
-  ::view-transition-old(ff-bottom-nav),
-  ::view-transition-new(ff-bottom-nav) {
+  ::view-transition-new(root) {
     animation: none !important;
   }
 }

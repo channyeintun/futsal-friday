@@ -43,6 +43,8 @@ export type ViewTransition = (change: () => void) => void;
 export interface Navigation {
   /** Current in-app path, e.g. `/session/ses_123`. */
   path(): string;
+  /** Jump to the top of the page, without a smooth-scroll animation. */
+  scrollToTop(): void;
   /**
    * The URL fragment, without the leading `#`.
    *

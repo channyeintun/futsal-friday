@@ -83,7 +83,17 @@ export function useRoute(): Route {
  * fires synchronously, and which the seam flushes for us.
  */
 export function navigate(route: Route): void {
-  platform.viewTransition(() => platform.navigation.push(routePath(route)));
+  platform.viewTransition(() => {
+    platform.navigation.push(routePath(route));
+    // Arrive at the top of the new screen.
+    //
+    // Without this you keep whatever scroll offset the last screen had, and
+    // the browser merely clamps it to the new page's height — so leaving a
+    // long list part-way down drops you into the middle of the next screen
+    // for no reason. Inside the transition so the jump is part of the
+    // cross-fade rather than a separate lurch after it.
+    platform.navigation.scrollToTop();
+  });
 }
 
 export function replace(route: Route): void {

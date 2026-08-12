@@ -535,7 +535,17 @@ async function run() {
   const first = await announced();
   check('it carries the real kickoff time', first.includes(kickoffOnScreen),
     `${kickoffOnScreen} not in: ${first.slice(0, 120)}`);
-  check('it carries the venue', /Pitch/.test(first), first.slice(0, 200));
+  // Whatever venue the session actually has — or none, when the weekly cron
+  // has just created one and nobody has set it yet. Asserting a literal
+  // "Pitch" was asserting the fixture, not the behaviour.
+  const venueOnScreen = await evalJs(
+    `document.querySelector('.hero')?.innerText.split('\\n').find((l) => /^Pitch|^S\u00e2n/.test(l.trim()))?.trim() ?? ''`,
+  );
+  check(
+    venueOnScreen ? 'it carries the venue' : 'it invents no venue when there is none',
+    venueOnScreen ? first.includes(venueOnScreen) : !/📍/.test(first),
+    `venue on screen: ${JSON.stringify(venueOnScreen)} | ${first.slice(0, 160)}`,
+  );
   check('and a link back to the app', first.includes('http'), first.slice(0, 200));
   await shoot('10-announce');
 

@@ -154,6 +154,9 @@ const viewTransition: Platform['viewTransition'] = (change) => {
 
 const navigation: Platform['navigation'] = {
   path: currentPath,
+  // `instant`, not smooth: this runs inside a view transition, and a
+  // smooth-scroll would still be travelling after the cross-fade had finished.
+  scrollToTop: () => window.scrollTo({ top: 0, behavior: 'instant' }),
   hash: () => window.location.hash.replace(/^#/, ''),
   push(path) {
     window.history.pushState({}, '', path);

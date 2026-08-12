@@ -484,9 +484,24 @@ One consequence worth knowing: the callback is deferred by about a frame, so
 
 The animation is a fade, not a directional slide. Navigation here is a bottom
 bar where "forward" and "back" are not meaningful directions, so a slide would
-have to guess and would be wrong half the time. The top bar and bottom nav are
-given their own `view-transition-name` so the frame stays put while only the
-content changes — fading the whole document makes the app blink.
+have to guess and would be wrong half the time.
+
+The top bar and bottom nav are deliberately **not** given a
+`view-transition-name`, though an earlier version did that to stop the bars
+cross-fading with the content. Both are `position: sticky` against a document
+that scrolls, and naming an element lifts it out of the page into a snapshot
+placed from the geometry it was captured with — but a sticky element's painted
+position is a function of scroll, so once the page has been scrolled the
+captured position and the live one can disagree, and the snapshot is what you
+see for the length of the transition. Leaving the bars in the root snapshot
+costs nothing: they are pixel-identical either side of a tab change apart from
+which tab is lit, and the UA cross-fade composites with `plus-lighter`, so
+identical pixels hold steady rather than dipping through a gap.
+
+Navigating also **scrolls to the top**, inside the transition. Without it you
+keep the previous screen's offset — merely clamped to the new page's height —
+so leaving a long list part-way down dropped you into the middle of the next
+screen.
 
 ### Hyping the group
 
