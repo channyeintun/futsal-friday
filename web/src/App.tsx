@@ -1,6 +1,6 @@
 import type { Identity, InviteKind } from '@futsal/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { currentIdentity } from './api/auth.js';
 import { getToken, onUnauthorized } from './api/client.js';
 import { Icon, type IconName } from './components/Icon.js';
@@ -153,9 +153,46 @@ function Shell() {
   const { identity, toastMessage } = useApp();
   const m = useMessages();
 
+  const shellRef = useRef<HTMLDivElement>(null);
+  const topbarRef = useRef<HTMLElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+
+  /*
+   * Publish how tall the two bars are, as custom properties on the shell.
+   *
+   * A screen that wants to fill "the space between the header and the nav"
+   * cannot express that in CSS on its own: both bars size themselves from
+   * their contents — the title sets taller in Burmese, and so do the nav
+   * labels — and the safe-area inset is known only to the browser. So they are
+   * measured, re-measured whenever either changes, and any page can then say
+   * `calc(100dvh - var(--ff-chrome-h))` and mean it.
+   *
+   * `useLayoutEffect` because the value is read by paint; the stylesheet
+   * carries plausible defaults for the frame before this runs, and for a
+   * browser without `ResizeObserver`.
+   */
+  useLayoutEffect(() => {
+    const shell = shellRef.current;
+    const topbar = topbarRef.current;
+    const nav = navRef.current;
+    if (!shell || !topbar || !nav) return;
+
+    const measure = () => {
+      shell.style.setProperty('--ff-topbar-h', `${topbar.offsetHeight}px`);
+      shell.style.setProperty('--ff-nav-h', `${nav.offsetHeight}px`);
+    };
+
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(topbar);
+    observer.observe(nav);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className="app">
-      <header className="topbar">
+    <div ref={shellRef} className="app">
+      <header ref={topbarRef} className="topbar">
         {route.name !== 'home' ? (
           <button
             type="button"
@@ -181,7 +218,7 @@ function Shell() {
         <Page route={route} />
       </main>
 
-      <nav className="bottom-nav">
+      <nav ref={navRef} className="bottom-nav">
         <NavButton route={{ name: 'home' }} current={route} icon="ball" label={m.nav.session} />
         <NavButton route={{ name: 'history' }} current={route} icon="history" label={m.nav.history} />
         <NavButton route={{ name: 'admin' }} current={route} icon="tune" label={m.nav.setup} />

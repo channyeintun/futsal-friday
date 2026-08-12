@@ -1,5 +1,5 @@
 import { formatKickoff, formatVnd } from '@futsal/shared';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Avatar } from '../components/Avatar.js';
 import { Icon } from '../components/Icon.js';
 import { ProfileCard } from '../components/ProfileCard.js';
@@ -29,11 +29,54 @@ export function HistoryPage() {
   );
   const profile = useProfile(identity.memberId);
 
+  // The debt list has two sizes: a peek where it sits, and the whole gap
+  // between the header and the nav. The heights themselves are in the
+  // stylesheet; this is only which of them is in force.
+  const [owesExpanded, setOwesExpanded] = useState(false);
+  const owesRef = useRef<HTMLDivElement>(null);
+
   const myOutstanding = (history.data ?? []).reduce(
     (sum, entry) =>
       entry.payment && entry.payment.status !== 'confirmed' ? sum + entry.payment.amountDue : sum,
     0,
   );
+
+  // Worth offering only when there is something below the fold to reveal. The
+  // collapsed card holds about five rows, and a control that visibly does
+  // nothing when tapped is worse than no control at all. Kept on while it is
+  // expanded regardless, so a list that shrinks under it — somebody pays, the
+  // query refetches — cannot strand the screen in the tall state.
+  const canExpandOwes = owed.length > 5 || owesExpanded;
+
+  /*
+   * Scroll the list up under the header as it grows, frame by frame.
+   *
+   * The room to scroll into is exactly what the card's own growth creates, so
+   * scrolling once at the start falls short by however much the card has left
+   * to grow. Observing the card's size instead re-runs it on every frame of
+   * the transition, which makes the growing and the scrolling one movement —
+   * and because the card's expanded height is the gap between the two bars,
+   * and this card is the last thing on the page, the two finish together with
+   * the list filling that gap exactly.
+   *
+   * Collapsing needs no counterpart: the page shortens under a scroll position
+   * the browser is already clamping, so the cards above slide back into view
+   * on their own.
+   */
+  useEffect(() => {
+    const card = owesRef.current;
+    if (!owesExpanded || !card) return;
+
+    // `scroll-margin-top` on the card is what keeps this clear of the sticky
+    // header rather than tucked behind it.
+    const pin = () => card.scrollIntoView({ block: 'start' });
+    pin();
+
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(pin);
+    observer.observe(card);
+    return () => observer.disconnect();
+  }, [owesExpanded]);
 
   return (
     <>
@@ -132,10 +175,29 @@ export function HistoryPage() {
 
       {/* Shown to everyone, not just the organizer. Being on this list is the
           reminder; that only works if the group can see it. */}
-      <div className="card">
-        <h2 className="card-title">
-          <Icon name="money" size={18} /> {m.history.whoOwes}
-        </h2>
+      <div
+        ref={owesRef}
+        className={`card owes-list${owesExpanded ? ' is-expanded' : ''}`}
+      >
+        <div className="row between">
+          <h2 className="card-title grow">
+            <Icon name="money" size={18} /> {m.history.whoOwes}
+          </h2>
+          {canExpandOwes ? (
+            /* Deliberately small and unlabelled: this is a way of looking at
+               the list, not a thing to do about it. */
+            <button
+              type="button"
+              className="card-action"
+              aria-expanded={owesExpanded}
+              aria-label={owesExpanded ? m.history.collapseList : m.history.expandList}
+              title={owesExpanded ? m.history.collapseList : m.history.expandList}
+              onClick={() => setOwesExpanded((open) => !open)}
+            >
+              <Icon name={owesExpanded ? 'collapse' : 'expand'} size={18} />
+            </button>
+          ) : null}
+        </div>
         <p className="card-sub">{m.history.whoOwesBody}</p>
         {balances.error ? <ErrorBanner>{balances.error.message}</ErrorBanner> : null}
         {balances.isPending ? <Spinner /> : null}
