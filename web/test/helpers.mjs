@@ -8,8 +8,9 @@
  */
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const API_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'api');
 
@@ -159,4 +160,23 @@ export function clearTestSessions() {
      `DELETE FROM sessions WHERE id LIKE 'ses_test_%';`],
     { cwd: API_DIR, encoding: 'utf8', stdio: 'pipe' },
   );
+}
+
+/**
+ * Load the real `@futsal/shared` into a plain-Node test.
+ *
+ * The browser suites are `.mjs` run straight by Node, which cannot resolve the
+ * workspace's TypeScript sources. Bundling the actual module is the point: a
+ * re-implementation of, say, the VietQR encoder inside a test would agree with
+ * itself when both copies are wrong, which is exactly the bug worth catching.
+ */
+export async function loadShared() {
+  const out = join(tmpdir(), `ff-shared-${process.pid}.mjs`);
+  execFileSync(
+    'npx',
+    ['esbuild', 'src/index.ts', '--bundle', '--platform=node', '--format=esm',
+     `--outfile=${out}`, '--log-level=error'],
+    { cwd: join(API_DIR, '..', 'shared'), encoding: 'utf8', stdio: 'pipe' },
+  );
+  return import(pathToFileURL(out).href);
 }

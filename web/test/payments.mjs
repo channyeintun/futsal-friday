@@ -3,8 +3,10 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import qrcode from 'qrcode-generator';
 import {
   clearTestSessions,
+  loadShared,
   localClaimPath,
   localOrganizerId,
   localUnsettledSession,
@@ -174,6 +176,90 @@ async function run() {
     .map((e) => e.params.entry?.text ?? e.params.exceptionDetails?.exception?.description ?? '')
     .filter((t) => t && !t.includes('favicon') && !/401/.test(t));
   check('no console errors', errors.length === 0, errors.slice(0, 4).join('\n         '));
+
+  console.log('\nhow to pay');
+  // Deterministic by construction: settle the seeded session so this member
+  // definitely owes something, rather than hunting for one where they happen
+  // to. Hoping for the right state is how a section ends up testing nothing.
+  const prepared = await js(`(async () => {
+    const auth = { Authorization: 'Bearer ' + localStorage.getItem('futsal:token'), 'Content-Type': 'application/json' };
+    const details = await fetch('/api/payment-details', {
+      method: 'PUT', headers: auth,
+      body: JSON.stringify({
+        bankBin: '970436', bankName: 'Vietcombank',
+        accountNumber: '0881000458086', accountName: 'NGUYEN VAN A',
+        note: 'Put your name in the transfer note',
+      }),
+    });
+    const settle = await fetch('/api/sessions/${unsettledId}/settle', {
+      method: 'POST', headers: auth, body: JSON.stringify({ totalCharge: 240000 }),
+    });
+    return [details.status, settle.status].join(',');
+  })()`);
+  check('payment details set and the session settled', prepared === '200,200', prepared);
+
+  await send('Page.navigate', { url: `${APP_URL}/payments/${unsettledId}` });
+  await waitFor(`document.body.innerText.includes('You owe')`, 'the pay card appears when money is owed');
+  await sleep(700);
+
+  check('it shows the account number',
+    await js(`document.body.innerText.includes('0881000458086')`),
+    await js(`document.body.innerText.slice(0, 320)`));
+  check('and who the account belongs to',
+    await js(`document.body.innerText.includes('NGUYEN VAN A')`));
+  check('and the organizer note', await js(`document.body.innerText.includes('transfer note')`));
+  check('a QR is rendered', await js(`!!document.querySelector('.payment-qr svg')`));
+  check('the QR is a real code, not an empty box',
+    (await js(`document.querySelectorAll('.payment-qr svg path').length`)) > 0);
+  await shoot('14-how-to-pay');
+
+  /*
+   * The code must encode what the page says it does.
+   *
+   * A QR that renders is not a QR that pays: the failure that matters is one
+   * that scans cleanly to the wrong account or the wrong amount. So the
+   * expected payload is rebuilt here from the values *shown on screen*, run
+   * through the same encoder, and compared module for module against what the
+   * page actually drew.
+   */
+  const onScreen = await js(`(() => {
+    const dd = [...document.querySelectorAll('.pay-details dd')].map((n) => n.textContent.trim());
+    const svg = document.querySelector('.payment-qr svg');
+    const paths = svg.querySelector('path').getAttribute('d');
+    return JSON.stringify({
+      account: dd[1], reference: dd[3],
+      amount: document.body.innerText.match(/You owe ([\\d.]+)d/)?.[1]?.replace(/\\./g, ''),
+      viewBox: svg.getAttribute('viewBox'),
+      darkModules: (paths.match(/M/g) || []).length,
+    });
+  })()`);
+  const seen = JSON.parse(onScreen);
+  check('the amount on screen is a whole number of dong', /^\d+$/.test(seen.amount ?? ''), seen.amount);
+
+  const { buildVietQrPayload } = await loadShared();
+  const expected = buildVietQrPayload({
+    bankBin: '970436',
+    accountNumber: seen.account,
+    amount: Number(seen.amount),
+    reference: seen.reference,
+  });
+  const ref = qrcode(0, 'M');
+  ref.addData(expected);
+  ref.make();
+  let refDark = 0;
+  for (let r = 0; r < ref.getModuleCount(); r++) {
+    for (let c = 0; c < ref.getModuleCount(); c++) if (ref.isDark(r, c)) refDark++;
+  }
+  const refExtent = ref.getModuleCount() + 8;
+
+  check('THE RENDERED QR IS THE PAYLOAD WE EXPECT',
+    seen.viewBox === `0 0 ${refExtent} ${refExtent}` && seen.darkModules === refDark,
+    `page ${seen.viewBox} / ${seen.darkModules} dark vs expected 0 0 ${refExtent} ${refExtent} / ${refDark}`);
+  check('and it encodes this session\'s amount, not a static code',
+    expected.includes(`54${String(seen.amount).length.toString().padStart(2, '0')}${seen.amount}`),
+    expected.slice(0, 120));
+
+  await js(`fetch('/api/payment-details', { method: 'DELETE', headers: { Authorization: 'Bearer ' + localStorage.getItem('futsal:token') } })`);
 
   clearTestSessions();
 

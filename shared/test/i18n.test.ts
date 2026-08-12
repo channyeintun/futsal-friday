@@ -14,6 +14,7 @@ import { sessionAnnouncement } from '../src/announce.ts';
 import { computeStreak, type StreakEntry } from '../src/streak.ts';
 import { initialsOf } from '../src/names.ts';
 import { parseInvite } from '../src/invite.ts';
+import { buildVietQrPayload, crc16, sanitizeReference } from '../src/vietqr.ts';
 
 let failed = 0;
 const check = (label: string, ok: boolean, detail?: unknown) => {
@@ -325,6 +326,92 @@ check('a URL with no fragment is refused',
 check('a fragment with nothing usable in it',
   parseInvite('https://futsal-friday.pages.dev/join#') === null,
   parsed('https://futsal-friday.pages.dev/join#'));
+
+
+console.log('\nVietQR payloads');
+
+/** Walk the TLV back apart, so the assertions read the payload as a bank would. */
+function parseTlv(payload: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  let i = 0;
+  while (i + 4 <= payload.length) {
+    const tag = payload.slice(i, i + 2);
+    const len = Number(payload.slice(i + 2, i + 4));
+    out[tag] = payload.slice(i + 4, i + 4 + len);
+    i += 4 + len;
+  }
+  return out;
+}
+
+// The checksum is the part most implementations get wrong, because it covers
+// its own "6304" header. This is a published payload with a known CRC.
+const published =
+  '00020001021238570010A00000072701270006970436011308810004580860208QRIBFTTA53037045802VN6304CD60';
+check('CRC matches a published VietQR payload', crc16(published.slice(0, -4)) === 'CD60',
+  crc16(published.slice(0, -4)));
+
+const dynamic = buildVietQrPayload({
+  bankBin: '970436',
+  accountNumber: '0881000458086',
+  amount: 70_000,
+  reference: 'Futsal 14 Aug Bao',
+});
+const top = parseTlv(dynamic);
+check('a built payload verifies its own checksum',
+  crc16(dynamic.slice(0, -4)) === dynamic.slice(-4), dynamic.slice(-4));
+check('it is marked dynamic so the amount is honoured', top['01'] === '12', top['01']);
+check('the amount is integer dong, no decimal point', top['54'] === '70000', top['54']);
+check('currency is VND', top['53'] === '704', top['53']);
+check('country is VN', top['58'] === 'VN', top['58']);
+
+const napas = parseTlv(top['38'] ?? '');
+check('the NAPAS application id is present', napas['00'] === 'A000000727', napas['00']);
+check('transfer is to an account, not a card', napas['02'] === 'QRIBFTTA', napas['02']);
+const beneficiary = parseTlv(napas['01'] ?? '');
+check('the bank BIN round-trips', beneficiary['00'] === '970436', beneficiary['00']);
+check('THE ACCOUNT NUMBER ROUND-TRIPS', beneficiary['01'] === '0881000458086', beneficiary['01']);
+check('the reference round-trips', parseTlv(top['62'] ?? '')['08'] === 'Futsal 14 Aug Bao',
+  parseTlv(top['62'] ?? '')['08']);
+
+// No amount means a static code the payer fills in themselves.
+const staticQr = parseTlv(buildVietQrPayload({ bankBin: '970436', accountNumber: '0881000458086' }));
+check('without an amount it is marked static', staticQr['01'] === '11', staticQr['01']);
+check('and carries no amount field', staticQr['54'] === undefined, staticQr['54']);
+check('a zero amount is treated as no amount',
+  parseTlv(buildVietQrPayload({ bankBin: '970436', accountNumber: '123456', amount: 0 }))['01'] === '11');
+
+// Rubbish in must not silently produce a QR that sends money nowhere.
+const rejects = (fn: () => unknown) => {
+  try { fn(); return false; } catch { return true; }
+};
+check('a short bank BIN is refused',
+  rejects(() => buildVietQrPayload({ bankBin: '97043', accountNumber: '123456' })));
+check('a non-numeric BIN is refused',
+  rejects(() => buildVietQrPayload({ bankBin: '97o436', accountNumber: '123456' })));
+check('an empty account number is refused',
+  rejects(() => buildVietQrPayload({ bankBin: '970436', accountNumber: '' })));
+check('an account number with punctuation is refused',
+  rejects(() => buildVietQrPayload({ bankBin: '970436', accountNumber: '0881-0004' })));
+
+// Vietnamese banks are unreliable with diacritics in the transfer note.
+check('Vietnamese folds to ASCII', sanitizeReference('Sân Bóng Tao Đàn') === 'San Bong Tao Dan',
+  sanitizeReference('Sân Bóng Tao Đàn'));
+check('punctuation becomes spaces', sanitizeReference('Futsal — 14/08') === 'Futsal 14 08',
+  sanitizeReference('Futsal — 14/08'));
+check('a long note is truncated, not rejected', sanitizeReference('x'.repeat(80)).length === 25,
+  String(sanitizeReference('x'.repeat(80)).length));
+check('Burmese leaves nothing a bank could use', sanitizeReference('ဖူဆယ်') === '',
+  JSON.stringify(sanitizeReference('ဖူဆယ်')));
+
+// Every field length must stay two digits, whatever the inputs.
+let badLength = '';
+for (const account of ['1234', '0881000458086', '1234567890123456789']) {
+  for (const amount of [0, 1, 1_000, 999_999_999]) {
+    const built = buildVietQrPayload({ bankBin: '970436', accountNumber: account, amount, reference: 'A'.repeat(30) });
+    if (crc16(built.slice(0, -4)) !== built.slice(-4)) badLength = `${account}/${amount}`;
+  }
+}
+check('payloads stay well formed across account and amount sizes', badLength === '', badLength);
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILURE(S)`);
 process.exit(failed === 0 ? 0 : 1);

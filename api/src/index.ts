@@ -11,6 +11,7 @@ import {
 import { authRoutes } from './routes/auth.js';
 import { claimRoutes, groupInviteRoutes, groupJoinRoutes } from './routes/claims.js';
 import { memberRoutes } from './routes/members.js';
+import { paymentDetailsRoutes } from './routes/payment-details.js';
 import { paymentRoutes } from './routes/payments.js';
 import { pushRoutes } from './routes/push.js';
 import { realtimeRoutes } from './routes/realtime.js';
@@ -39,7 +40,8 @@ const protectedRoutes = new Hono<AppContext>()
   .route('/push', pushRoutes)
   // Declares full paths (`/members/:id/claim-link`, `/auth/my-device-link`).
   .route('/', claimRoutes)
-  .route('/', groupInviteRoutes);
+  .route('/', groupInviteRoutes)
+  .route('/', paymentDetailsRoutes);
 
 const app = new Hono<AppContext>()
   .use('*', corsMiddleware())

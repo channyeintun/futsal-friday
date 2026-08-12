@@ -491,6 +491,53 @@ const run = async () => {
     JSON.stringify(reopened.body.members.map((x) => x.name)));
   void erin;
 
+  section('payment details');
+  const noDetails = await call('GET', '/payment-details', { token: alice.token });
+  check('payment details are readable by any member', noDetails.status === 200, noDetails.status);
+  check('and absent until an organizer sets them', 'details' in noDetails.body, noDetails.body);
+
+  const memberWrite = await call('PUT', '/payment-details', {
+    token: alice.token,
+    body: { bankBin: '970436', bankName: 'Vietcombank', accountNumber: '0881000458086', accountName: 'HACKER' },
+  });
+  check('MEMBERS CANNOT REDIRECT THE GROUP\'S TRANSFERS', memberWrite.status === 403, memberWrite.status);
+
+  const saved = await call('PUT', '/payment-details', {
+    token: organizer,
+    body: {
+      bankBin: '970436', bankName: 'Vietcombank',
+      accountNumber: '0881000458086', accountName: 'NGUYEN VAN A',
+      note: 'Put your name in the transfer note',
+    },
+  });
+  check('an organizer sets them', saved.status === 200, JSON.stringify(saved.body).slice(0, 140));
+
+  const readBack = await call('GET', '/payment-details', { token: alice.token });
+  check('every member can then read them', readBack.body?.details?.accountNumber === '0881000458086',
+    JSON.stringify(readBack.body?.details));
+  check('including who the account belongs to',
+    readBack.body?.details?.accountName === 'NGUYEN VAN A', readBack.body?.details?.accountName);
+
+  const anon = await call('GET', '/payment-details');
+  check('but not without signing in', anon.status === 401, anon.status);
+
+  const badBin = await call('PUT', '/payment-details', {
+    token: organizer,
+    body: { bankBin: '97', bankName: 'X', accountNumber: '0881000458086', accountName: 'A' },
+  });
+  check('a malformed bank code is refused', badBin.status === 400, badBin.body);
+  const badAccount = await call('PUT', '/payment-details', {
+    token: organizer,
+    body: { bankBin: '970436', bankName: 'X', accountNumber: '08-81', accountName: 'A' },
+  });
+  check('an account number with punctuation is refused', badAccount.status === 400, badAccount.body);
+
+  const memberClear = await call('DELETE', '/payment-details', { token: alice.token });
+  check('members cannot remove them either', memberClear.status === 403, memberClear.status);
+  check('the organizer can', (await call('DELETE', '/payment-details', { token: organizer })).status === 200);
+  check('and they are gone',
+    (await call('GET', '/payment-details', { token: alice.token })).body?.details === null);
+
   section('guests: friends without an account');
   // A pitch hired for four, so the arithmetic is visible.
   const guestSession = await call('POST', '/sessions', {

@@ -8,6 +8,7 @@ import {
   memberProfile,
   pendingMembers,
 } from '../api/members.js';
+import { getPaymentDetails } from '../api/payment-details.js';
 import { getPayments } from '../api/payments.js';
 import { pushStatus } from '../api/push.js';
 import { getSession, listSessions } from '../api/sessions.js';
@@ -51,6 +52,7 @@ export const queryKeys = {
   avatar: (memberId: string, updatedAt: string | null) =>
     ['avatar', memberId, updatedAt] as const,
   pushStatus: ['push-status'] as const,
+  paymentDetails: ['payment-details'] as const,
 };
 
 /** Kept for the call sites that still spell it out. */
@@ -156,6 +158,18 @@ export function usePushStatus() {
     // Device state, not group state: it changes only through this screen, and
     // every path that changes it invalidates.
     staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * Where the group sends money. Changes about once a year, and every payments
+ * screen wants it, so it is cached hard.
+ */
+export function usePaymentDetails() {
+  return useQuery({
+    queryKey: queryKeys.paymentDetails,
+    queryFn: ({ signal }) => getPaymentDetails(signal),
+    staleTime: 10 * 60_000,
   });
 }
 

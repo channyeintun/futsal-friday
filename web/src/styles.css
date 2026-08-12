@@ -1068,3 +1068,69 @@ md-outlined-text-field {
   margin: 4px 2px;
   background: var(--md-sys-color-outline-variant);
 }
+
+/* --------------------------------------------------------------- payment */
+
+.payment-qr {
+  align-self: center;
+  /* The white field is part of the code — scanners want dark on light — so it
+     gets a little padding of its own rather than sitting flush on the card. */
+  padding: 10px;
+  border-radius: var(--ff-radius-row);
+  background: #ffffff;
+  line-height: 0;
+}
+
+.pay-amount {
+  text-align: center;
+  font-size: 1.9rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--md-sys-color-on-surface);
+}
+
+.pay-details {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.pay-details dt {
+  color: var(--md-sys-color-on-surface-variant);
+  white-space: nowrap;
+}
+
+.pay-details dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* An account number is read a digit at a time; even columns help. */
+.pay-account {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+/* The bank picker is a native select: it gets the platform's own wheel on a
+   phone, which beats any list we could build for a 28-item choice. */
+.pay-bank-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+.pay-bank-picker select {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 14px;
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+  font: inherit;
+  font-weight: 600;
+}

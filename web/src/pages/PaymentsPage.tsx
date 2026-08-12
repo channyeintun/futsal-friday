@@ -18,6 +18,7 @@ import {
 } from '../api/payments.js';
 import { getSession } from '../api/sessions.js';
 import { CopyButton } from '../components/CopyButton.js';
+import { HowToPay } from '../components/HowToPay.js';
 import { Icon } from '../components/Icon.js';
 import { ProofViewer } from '../components/ProofViewer.js';
 import { Button, Dialog, ErrorBanner, Spinner, TextField } from '../components/ui.js';
@@ -155,6 +156,11 @@ export function PaymentsPage({ sessionId }: { sessionId: string }) {
               onChanged={reloadPayments}
               onToast={toast}
             />
+          ) : null}
+          {/* Only while there is something to pay. Once confirmed, an account
+              number and a scan code are just clutter on the screen. */}
+          {mine && mine.status !== 'confirmed' ? (
+            <HowToPay amount={mine.amountDue} sessionStartsAt={session.startsAt} />
           ) : null}
         </>
       )}

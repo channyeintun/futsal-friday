@@ -7,6 +7,7 @@ import { Avatar } from '../components/Avatar.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
 import { Icon } from '../components/Icon.js';
 import { GroupInviteCard, MemberInviteControls, MyDeviceCard } from '../components/InviteLink.js';
+import { PaymentDetailsCard } from '../components/PaymentDetailsCard.js';
 import { PendingApprovals } from '../components/PendingApprovals.js';
 import { ReminderSettings } from '../components/ReminderSettings.js';
 import { Button, Dialog, ErrorBanner, Spinner, Switch, TextField } from '../components/ui.js';
@@ -61,6 +62,9 @@ export function AdminPage() {
       {/* Above the roster: sharing one link is the normal way to onboard, and
           the per-person controls below are for the exceptions. */}
       <GroupInviteCard />
+      {/* Next to the invite link: both are things the organizer sets once and
+          the group then reads without asking. */}
+      <PaymentDetailsCard />
       <MembersCard state={members} />
       <VenuesCard state={venues} />
       <ManualSessionCard />

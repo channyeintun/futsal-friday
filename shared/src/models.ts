@@ -106,6 +106,32 @@ export const pushStatusSchema = z.object({
 });
 export type PushStatus = z.infer<typeof pushStatusSchema>;
 
+/* --------------------------------------------------------- payment details */
+
+/**
+ * Where the group sends money. One per group, set by an organizer.
+ *
+ * Not a secret — an account number and a name are what would otherwise be
+ * pasted into the chat every week, and the point is that anyone can look them
+ * up without asking. Still behind sign-in.
+ */
+export const paymentDetailsSchema = z.object({
+  /** NAPAS acquirer id; the six digits VietQR addresses a bank by. */
+  bankBin: z.string().regex(/^\d{6}$/, 'Pick a bank'),
+  bankName: z.string().min(1).max(60),
+  accountNumber: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9]{4,19}$/, 'Account number should be 4-19 letters or digits'),
+  accountName: z.string().trim().min(1, 'Who the account belongs to').max(60),
+  note: z.string().trim().max(160).nullish(),
+  updatedAt: isoSchema,
+});
+export type PaymentDetails = z.infer<typeof paymentDetailsSchema>;
+
+export const savePaymentDetailsSchema = paymentDetailsSchema.omit({ updatedAt: true });
+export type SavePaymentDetailsInput = z.infer<typeof savePaymentDetailsSchema>;
+
 /* ------------------------------------------------------------------- venue */
 
 export const venueSchema = z.object({

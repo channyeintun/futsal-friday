@@ -39,6 +39,10 @@ See [Who can get in](#who-can-get-in).
   the players who actually played, with per-person overrides. Members mark
   themselves paid and can attach a transfer screenshot; the organizer confirms
   or rejects. `unpaid → pending → confirmed`.
+- **How to pay.** The organizer stores the group's bank account once; anyone
+  who still owes sees it on the payment screen alongside a VietQR with their
+  own amount and a transfer reference already encoded, so paying is scan,
+  check, confirm — no typing an account number off a screenshot.
 - **Dashboards.** Who has paid, who hasn't, running totals per session, and
   outstanding balance per member across all sessions.
 - **Copy summary.** One tap produces a plain-text snapshot of the registration
@@ -62,6 +66,7 @@ futsal-friday/
 │   ├── i18n/         message catalogues; English is the source of truth
 │   ├── time.ts       Asia/Ho_Chi_Minh arithmetic, localised names
 │   ├── money.ts      integer-dong splitting
+│   ├── vietqr.ts     EMVCo/NAPAS transfer payloads
 │   └── summary.ts    the chat-pasteable text
 ├── api/         Hono on Cloudflare Workers
 │   ├── migrations/   versioned D1 SQL
@@ -388,6 +393,43 @@ the naive implementation it reports drift of nearly 14.000d on a single bill.
 The head count is snapshotted onto the payment row rather than looked up
 later, so "why do I owe 210.000?" stays answerable from the charge itself
 whatever the registration says by the time anybody asks.
+
+### Paying, and the QR
+
+The organizer stores one set of bank details for the whole group
+(`payment_details`, a single row). It is group-wide rather than attached to
+whoever currently holds the organizer role, so handing that role over does not
+silently redirect everybody's transfers.
+
+Anyone who still owes something sees a **VietQR** built for them specifically:
+their amount and a transfer reference (`NAME 15 AUG` folded to ASCII, because
+Vietnamese banks are unreliable with diacritics in a note) encoded into the
+code itself. Scanning it in any Vietnamese banking app opens the transfer
+screen with the account, the amount and the note already filled in.
+
+The payload is EMVCo merchant-presented TLV with NAPAS's GUID under tag 38,
+built in `shared/src/vietqr.ts` and unit-tested — including the CRC, checked
+against a published reference payload, because a wrong checksum produces a
+code that fails to scan rather than one that visibly looks wrong. Rendering
+the modules is a dependency (`qrcode-generator`): a subtly wrong hand-rolled
+Reed-Solomon encoder scans to the *wrong digits*, which is worse than not
+scanning at all. The browser test decodes nothing — it rebuilds the expected
+payload from `shared`, re-encodes it, and compares the module count of the
+rendered SVG, so the assertion fails if the amount, the account or the
+reference ever drifts from what the page draws.
+
+**On opening the bank app with the amount prefilled directly.** That was the
+ask, and it is not reliably possible. There is no cross-bank deep link:
+VietQR's own documentation lists `vietqr://pay?...&am=` as not implemented,
+and `dl.vietqr.io/pay` only opens the app at its home screen. Individual banks
+ship private schemes that break between releases and cover one bank each. The
+dynamic QR *is* the sanctioned mechanism for this on the NAPAS rails — it
+reaches the same prefilled transfer screen, works in every bank's app, and
+does not rot. Zalo's version of the feature works the same way underneath.
+
+Account details stay in plain text above the code as well. The QR is the fast
+path; a number you can read and copy is the one that works when somebody is
+paying from a laptop, or from the same phone that is displaying the code.
 
 ### Who owes what is public
 

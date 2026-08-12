@@ -33,6 +33,36 @@ export const en = {
     pasteBlocked: 'Your browser would not let the app read the clipboard. Paste into the box instead.',
   },
 
+  pay: {
+    title: 'How to pay',
+    body: 'Scan with your banking app — the amount is already in the code.',
+    bank: 'Bank',
+    accountNumber: 'Account number',
+    accountName: 'Account name',
+    reference: 'Transfer note',
+    copyAccount: 'Copy account number',
+    copyAmount: 'Copy amount',
+    copied: 'Copied',
+    scanHint:
+      'Paying from this phone? Screenshot the code, then pick it from your photos in your banking app.',
+    youOweThis: (amount: string) => `You owe ${amount}`,
+    nothingSet: 'The organizer has not added payment details yet.',
+    // Organizer editor.
+    editTitle: 'Payment details',
+    editBody:
+      'Shown to everyone with the amount they owe, so nobody has to scroll the chat for your account number.',
+    setUp: 'Add payment details',
+    edit: 'Edit',
+    save: 'Save',
+    remove: 'Remove details',
+    confirmRemove: 'Remove the payment details?',
+    confirmRemoveBody: 'The group loses the account number and the scan code until you add them again.',
+    pickBank: 'Bank',
+    noteLabel: 'Anything else to say',
+    notePlaceholder: 'e.g. put your name in the transfer note',
+    couldNotSave: 'Could not save the payment details',
+  },
+
   waiting: {
     title: 'Almost in',
     body: (name: string) =>

@@ -23,6 +23,7 @@
     "@futsal/shared": "*",
     "@material/web": "^2.4.0",
     "@tanstack/react-query": "^5.101.4",
+    "qrcode-generator": "^2.0.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "zod": "^4.1.5"
