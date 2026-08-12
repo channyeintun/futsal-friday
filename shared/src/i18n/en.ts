@@ -102,6 +102,35 @@ export const en = {
     couldNotLoad: 'Could not load that profile',
   },
 
+  form: {
+    label: (played: number, of: number) => `Played ${played} of the last ${of}`,
+  },
+
+  board: {
+    title: 'Leaderboard',
+    streaks: 'Streaks',
+    goals: 'Goals',
+    streakBody: 'Games in a row. Turning up is the whole trick.',
+    goalsBody: 'Goals scored, since the app started counting.',
+    inARow: (count: number) => (count === 1 ? '1 in a row' : `${count} in a row`),
+    bestEver: (count: number) => `best ${count}`,
+    goalCount: (count: number) => (count === 1 ? '1 goal' : `${count} goals`),
+    nobodyYet: 'Nothing to rank yet. Play a game.',
+    noGoalsYet: 'No goals recorded yet. Say what you scored after the match.',
+    loading: 'Working out the table…',
+    you: 'you',
+  },
+
+  goals: {
+    title: 'Scored?',
+    body: 'How many did you get? Only you and the organizer can change this.',
+    none: 'None',
+    mine: (count: number) => (count === 1 ? '1 goal' : `${count} goals`),
+    add: 'Goals',
+    total: 'Goals',
+    failed: 'Could not save that',
+  },
+
   nav: {
     session: 'Session',
     history: 'History',

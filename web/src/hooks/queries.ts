@@ -3,6 +3,8 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import {
   listBalances,
   listMembers,
+  listForm,
+  listLeaderboard,
   membersCount,
   memberAvatar,
   memberHistory,
@@ -192,6 +194,34 @@ export function useProfile(memberId: string) {
     queryKey: queryKeys.profile(memberId),
     queryFn: ({ signal }) => memberProfile(memberId, signal),
     // A streak only moves when a session completes.
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Recent form for everybody, for the squares beside each name.
+ *
+ * Its own query rather than part of the session detail: the home screen has to
+ * paint before this matters, and bundling it would make the hero wait on a
+ * roster-wide history read.
+ */
+export function useRecentForm(enabled = true) {
+  return useQuery({
+    queryKey: ['members', 'form'] as const,
+    queryFn: ({ signal }) => listForm(signal),
+    enabled,
+    // Only moves when a game finishes and somebody marks attendance.
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useLeaderboard(board: 'streak' | 'goals', pageSize = 25) {
+  return useInfiniteQuery({
+    queryKey: ['leaderboard', board, pageSize] as const,
+    queryFn: ({ pageParam, signal }) =>
+      listLeaderboard({ board, cursor: pageParam, limit: pageSize }, signal),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
     staleTime: 60_000,
   });
 }

@@ -89,6 +89,7 @@ export interface RegistrationRow {
   guests: number;
   attended: number | null;
   guests_arrived: number | null;
+  goals: number;
   status: string;
   position: number;
   created_at: string;
@@ -180,6 +181,7 @@ export const toRegistration = (row: RegistrationRow): Registration => ({
   // "unmarked", which is not the same as "marked absent".
   attended: row.attended == null ? null : row.attended === 1,
   guestsArrived: row.guests_arrived ?? null,
+  goals: row.goals ?? 0,
   status: row.status as Registration['status'],
   position: row.position,
   createdAt: row.created_at,
@@ -243,7 +245,7 @@ export async function listRegistrations(
     .prepare(
       `SELECT r.id, r.session_id, r.member_id, m.name AS member_name,
               m.avatar_updated_at AS member_avatar_updated_at,
-              r.guests, r.attended, r.guests_arrived,
+              r.guests, r.attended, r.guests_arrived, r.goals,
               r.status, r.position, r.created_at
          FROM registrations r
          JOIN members m ON m.id = r.member_id
@@ -536,9 +538,15 @@ export async function loadMemberProfile(
     .bind(memberId)
     .first<{ due: number }>();
 
+  const scored = await db
+    .prepare(`SELECT COALESCE(SUM(goals), 0) AS n FROM registrations WHERE member_id = ?1`)
+    .bind(memberId)
+    .first<{ n: number }>();
+
   return {
     member: toMember(row),
     streak: computeStreak(entries),
+    goals: scored?.n ?? 0,
     outstanding: Math.max(0, owed?.due ?? 0),
   };
 }
@@ -628,4 +636,150 @@ export async function loadMemberHistory(
         })
       : null,
   }));
+}
+
+/* ------------------------------------------------------------ form + ranks */
+
+/** How many past games the little squares beside a name show. */
+export const FORM_WINDOW = 8;
+
+/**
+ * Recent form for everybody at once.
+ *
+ * One bounded query, not one per player: the home screen draws a row of
+ * squares beside every name, and asking per member would be a dozen round
+ * trips on the screen people open most. The window is the last handful of
+ * games, so the whole thing is at most `FORM_WINDOW x roster` rows however
+ * long the group has existed.
+ *
+ * A game from before somebody joined is `none` rather than `missed` — an empty
+ * square, not a black mark for a match that happened without them.
+ */
+export async function loadRecentForm(
+  db: D1Database,
+  window = FORM_WINDOW,
+): Promise<Map<string, Attendance[]>> {
+  const { results: sessions } = await db
+    .prepare(
+      `SELECT id, starts_at FROM sessions
+        WHERE status != 'cancelled' AND starts_at < ?1
+        ORDER BY starts_at DESC LIMIT ?2`,
+    )
+    .bind(new Date().toISOString(), window)
+    .all<{ id: string; starts_at: string }>();
+
+  // Oldest first, so the row reads left to right like a calendar.
+  const ordered = sessions.reverse();
+  const byMember = new Map<string, Attendance[]>();
+  if (ordered.length === 0) return byMember;
+
+  // Joined against the same window rather than an `IN (?, ?, ...)` list of ids:
+  // D1 refuses more than 100 bound parameters, so a list would cap how far
+  // back any of this could ever look. Two parameters, whatever the window.
+  const { results: rows } = await db
+    .prepare(
+      `SELECT r.session_id, r.member_id, r.status, r.attended
+         FROM registrations r
+         JOIN (SELECT id FROM sessions
+                WHERE status != 'cancelled' AND starts_at < ?1
+                ORDER BY starts_at DESC LIMIT ?2) s ON s.id = r.session_id`,
+    )
+    .bind(new Date().toISOString(), window)
+    .all<{ session_id: string; member_id: string; status: string; attended: number | null }>();
+
+  const { results: members } = await db
+    .prepare(`SELECT id, created_at FROM members WHERE active = 1 AND approved_at IS NOT NULL`)
+    .all<{ id: string; created_at: string }>();
+
+  const lookup = new Map<string, { status: string; attended: number | null }>();
+  for (const row of rows) lookup.set(`${row.session_id}|${row.member_id}`, row);
+
+  for (const member of members) {
+    byMember.set(
+      member.id,
+      ordered.map((session) => {
+        // Not yet a member: nothing to say about that game either way.
+        if (session.starts_at < member.created_at) return 'none' as Attendance;
+        const row = lookup.get(`${session.id}|${member.id}`);
+        return toAttendance(row?.status ?? null, row?.attended ?? null);
+      }),
+    );
+  }
+  return byMember;
+}
+
+/**
+ * The whole ranking, computed.
+ *
+ * A streak cannot be a `SUM` — it is "how many in a row, counting back from
+ * the newest", which needs the sequence. So this reads a bounded slice of
+ * history once and runs the same `computeStreak` the profile uses, rather than
+ * inventing a second definition in SQL that would drift from the first.
+ *
+ * Bounded by `HISTORY_LIMIT` games rather than all of them: a streak longer
+ * than two years of Fridays is not the number anybody is arguing about, and
+ * the alternative is a query that grows for ever.
+ */
+const HISTORY_LIMIT = 120;
+
+export async function loadLeaderboard(
+  db: D1Database,
+): Promise<{ member: Member; streak: ReturnType<typeof computeStreak>; goals: number }[]> {
+  const { results: sessions } = await db
+    .prepare(
+      `SELECT id, starts_at FROM sessions
+        WHERE status != 'cancelled' AND starts_at < ?1
+        ORDER BY starts_at DESC LIMIT ?2`,
+    )
+    .bind(new Date().toISOString(), HISTORY_LIMIT)
+    .all<{ id: string; starts_at: string }>();
+
+  const { results: members } = await db
+    .prepare(
+      `SELECT * FROM members WHERE active = 1 AND approved_at IS NOT NULL
+        ORDER BY name COLLATE NOCASE ASC`,
+    )
+    .all<MemberRow>();
+
+  // Same join rather than a parameter list — see `loadRecentForm`. With 120
+  // sessions in the window an `IN` list would be 120 bound parameters, and D1
+  // stops at 100.
+  const { results: regs } = await db
+    .prepare(
+      `SELECT r.session_id, r.member_id, r.status, r.attended
+         FROM registrations r
+         JOIN (SELECT id FROM sessions
+                WHERE status != 'cancelled' AND starts_at < ?1
+                ORDER BY starts_at DESC LIMIT ?2) s ON s.id = r.session_id`,
+    )
+    .bind(new Date().toISOString(), HISTORY_LIMIT)
+    .all<{ session_id: string; member_id: string; status: string; attended: number | null }>();
+
+  const { results: scored } = await db
+    .prepare(
+      `SELECT member_id, COALESCE(SUM(goals), 0) AS n FROM registrations GROUP BY member_id`,
+    )
+    .all<{ member_id: string; n: number }>();
+  const goalsBy = new Map(scored.map((row) => [row.member_id, row.n]));
+
+  const lookup = new Map<string, { status: string; attended: number | null }>();
+  for (const row of regs) lookup.set(`${row.session_id}|${row.member_id}`, row);
+
+  return members.map((row) => {
+    const entries: StreakEntry[] = sessions
+      .filter((session) => session.starts_at >= row.created_at)
+      .map((session) => {
+        const reg = lookup.get(`${session.id}|${row.id}`);
+        return {
+          sessionId: session.id,
+          startsAt: session.starts_at,
+          attendance: toAttendance(reg?.status ?? null, reg?.attended ?? null),
+        };
+      });
+    return {
+      member: toMember(row),
+      streak: computeStreak(entries),
+      goals: goalsBy.get(row.id) ?? 0,
+    };
+  });
 }

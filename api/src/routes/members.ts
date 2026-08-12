@@ -3,7 +3,10 @@ import { Hono } from 'hono';
 import {
   type MemberRow,
   decodeBalanceCursor,
+  FORM_WINDOW,
+  loadLeaderboard,
   loadMemberBalances,
+  loadRecentForm,
   loadMemberHistory,
   loadMemberProfile,
   toMember,
@@ -109,6 +112,56 @@ export const memberRoutes = new Hono<AppContext>()
       `SELECT COUNT(*) AS n FROM members WHERE active = 1 AND approved_at IS NOT NULL`,
     ).first<{ n: number }>();
     return c.json({ total: row?.n ?? 0 });
+  })
+
+  /**
+   * Recent form for the whole roster, for the squares beside each name.
+   *
+   * One call for everybody rather than one per player: the home screen draws a
+   * row of these next to every name on the list, and per-member requests would
+   * be a dozen round trips on the screen people open most.
+   */
+  .get('/form', async (c) => {
+    const form = await loadRecentForm(c.env.DB);
+    return c.json({
+      window: FORM_WINDOW,
+      form: [...form].map(([memberId, recent]) => ({ memberId, recent })),
+    });
+  })
+
+  /**
+   * The ranking, by whichever column was asked for.
+   *
+   * Computed rather than stored — see `loadLeaderboard`. Paged off the sorted
+   * result, with the sort settled before slicing so a page boundary cannot
+   * reorder anybody.
+   */
+  .get('/leaderboard', async (c) => {
+    const board = c.req.query('board') === 'goals' ? 'goals' : 'streak';
+    const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 25) || 25, 1), 100);
+    const cursor = c.req.query('cursor');
+
+    const all = await loadLeaderboard(c.env.DB);
+    // Nobody with nothing to show: a board of forty people on zero is not a
+    // ranking, it is a roster.
+    const ranked = all
+      .filter((row) => (board === 'goals' ? row.goals > 0 : row.streak.best > 0))
+      .sort((a, b) =>
+        board === 'goals'
+          ? b.goals - a.goals || a.member.name.localeCompare(b.member.name)
+          : b.streak.current - a.streak.current ||
+            b.streak.best - a.streak.best ||
+            a.member.name.localeCompare(b.member.name),
+      );
+
+    const from = cursor ? ranked.findIndex((row) => row.member.id === cursor) + 1 : 0;
+    const page = ranked.slice(from, from + limit);
+    const last = page.at(-1);
+    return c.json({
+      board,
+      entries: page.map((row, i) => ({ ...row, rank: from + i + 1 })),
+      nextCursor: from + limit < ranked.length && last ? last.member.id : null,
+    });
   })
 
   /** The waiting room. Organizers only — it is a queue of decisions for them. */

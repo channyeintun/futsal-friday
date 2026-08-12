@@ -179,7 +179,7 @@ async function run() {
   // A plain member — not the organizer — must see the group's unpaid list.
   // The ui suite cannot prove this: it signs in as an organizer, who would see
   // the list either way.
-  await a.evalJs(`[...document.querySelectorAll('.bottom-nav button')][1].click()`);
+  await a.evalJs(`[...document.querySelectorAll('.bottom-nav button')].find(b => /History/i.test(b.textContent ?? ''))?.click()`);
   await a.waitFor('document.body.innerText.includes("Who owes what")',
     'a non-organizer sees the owe list');
   await sleep(400);
@@ -190,7 +190,7 @@ async function run() {
     !(await a.evalJs('document.body.innerText.includes("You owe")')) ||
       (await a.evalJs('document.body.innerText.includes("Who owes what")')));
   await a.shoot('19-owe-list-member');
-  await a.evalJs(`[...document.querySelectorAll('.bottom-nav button')][0].click()`);
+  await a.evalJs(`[...document.querySelectorAll('.bottom-nav button')].find(b => /Session/i.test(b.textContent ?? ''))?.click()`);
   await a.waitFor('!!document.querySelector(".conn")', 'back on the session screen');
 
   console.log('\nthe name is gone for the next person');

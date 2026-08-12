@@ -7,6 +7,7 @@ import { Icon, type IconName } from './components/Icon.js';
 import { Spinner } from './components/ui.js';
 import { AdminPage } from './pages/AdminPage.js';
 import { PlayersPage } from './pages/PlayersPage.js';
+import { LeaderboardPage } from './pages/LeaderboardPage.js';
 import { ClaimPage, SignInNeeded } from './pages/ClaimPage.js';
 import { JoinPage } from './pages/JoinPage.js';
 import { HistoryPage } from './pages/HistoryPage.js';
@@ -184,6 +185,12 @@ function Shell() {
       <nav className="bottom-nav">
         <NavButton route={{ name: 'home' }} current={route} icon="ball" label={m.nav.session} />
         <NavButton route={{ name: 'history' }} current={route} icon="history" label={m.nav.history} />
+        <NavButton
+          route={{ name: 'leaderboard' }}
+          current={route}
+          icon="trophy"
+          label={m.board.title}
+        />
         <NavButton route={{ name: 'admin' }} current={route} icon="tune" label={m.nav.setup} />
       </nav>
 
@@ -217,6 +224,8 @@ function Page({ route }: { route: Route }) {
       return <AdminPage />;
     case 'players':
       return <PlayersPage />;
+    case 'leaderboard':
+      return <LeaderboardPage />;
   }
 }
 
@@ -238,6 +247,8 @@ function titleFor(route: Route, m: ReturnType<typeof useMessages>): string {
       return m.nav.setup;
     case 'players':
       return m.nav.players;
+    case 'leaderboard':
+      return m.board.title;
   }
 }
 

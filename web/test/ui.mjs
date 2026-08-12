@@ -129,11 +129,29 @@ async function run() {
   // defers by a frame — so the URL changes a beat after the tap. Anything that
   // reloads the page has to let the navigation land first, or it reloads the
   // screen it was leaving.
-  const goToTab = async (index, expect) => {
+  /**
+   * Reach a tab by its label rather than its position.
+   *
+   * Index-based navigation broke silently the moment a tab was added: every
+   * later test carried on against whichever screen had inherited that slot,
+   * checking for text it could never find. The label is the thing the test
+   * actually means.
+   */
+  const goToTab = async (label, expect) => {
     // The nav can be momentarily absent — mid-reload, or while the app boots —
     // and clicking `undefined` throws instead of failing a check.
-    await waitFor(`document.querySelectorAll('.bottom-nav button').length === 3`, 'nav is ready');
-    await evalJs(`[...document.querySelectorAll('.bottom-nav button')][${index}].click()`);
+    await waitFor(`document.querySelectorAll('.bottom-nav button').length >= 3`, 'nav is ready');
+    const hit = await evalJs(`(() => {
+      const b = [...document.querySelectorAll('.bottom-nav button')]
+        .find((x) => new RegExp(${JSON.stringify(label)}, 'i').test(x.textContent ?? ''));
+      if (!b) return false;
+      b.click();
+      return true;
+    })()`);
+    if (!hit) {
+      check(`reach ${expect}`, false, `no nav tab matching ${label}`);
+      return false;
+    }
     return waitFor(`document.body.innerText.includes(${JSON.stringify(expect)})`, `reach ${expect}`);
   };
 
@@ -245,14 +263,14 @@ async function run() {
   check('copy button present', typeof summary === 'string' && summary.includes('Copy list'), summary);
 
   console.log('\nnavigation');
-  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][1].click()`);
+  await evalJs(`[...document.querySelectorAll('.bottom-nav button')].find(b => /History/i.test(b.textContent ?? ''))?.click()`);
   // The profile card replaced the old plain header, so this now waits on the
   // streak rather than the sentence it used to print.
   await waitFor('!!document.querySelector(".streak-cell")', 'history screen loads');
   await shoot('06-history');
   check('history shows my name', await evalJs(`document.body.innerText.includes('Organizer')`));
 
-  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][2].click()`);
+  await evalJs(`[...document.querySelectorAll('.bottom-nav button')].find(b => /Setup/i.test(b.textContent ?? ''))?.click()`);
   await waitFor('document.body.innerText.includes("Players")', 'admin screen loads');
   await sleep(500);
   await shoot('07-admin');
@@ -283,7 +301,7 @@ async function run() {
   check('somebody can add themselves from the link', requested === 201, requested);
 
   await reloadApp('app is back after the self-add');
-  await goToTab(2, 'Players');
+  await goToTab('Setup', 'Players');
   await waitFor('document.body.innerText.includes("waiting to join")', 'the queue appears in Setup');
   await sleep(500);
   check('it names who is waiting',
@@ -320,7 +338,7 @@ async function run() {
   // The hazard this guards: the roster puts a sign-out control next to a
   // remove control. If only one of them confirms, there is no way to learn
   // from the interface which taps are safe to explore.
-  await goToTab(2, 'Players');
+  await goToTab('Setup', 'Players');
   await sleep(600);
 
   const noDialogOpen = () => evalJs(`!document.querySelector('md-dialog[open]')`);
@@ -457,7 +475,7 @@ async function run() {
   await shoot('09-group-link');
 
   console.log('\nbringing guests');
-  await goToTab(0, 'Playing');
+  await goToTab('Session', 'Playing');
   await sleep(500);
   // Only offered once you are in — there is no spot to attach guests to
   // otherwise, and the cap check needs one to measure against.
@@ -531,12 +549,14 @@ async function run() {
   // Reload first to pick up the avatar deletion, then navigate: a reload lands
   // on whatever URL the address bar holds, which is not necessarily History.
   await reloadApp('app is back after reload');
-  await goToTab(1, 'Streak');
+  await goToTab('History', 'Streak');
   check('the profile card leads History', await evalJs('!!document.querySelector(".streak-cell")'));
   await sleep(500);
   await shoot('11-profile');
-  check('it shows a current streak', await evalJs(`document.querySelectorAll('.streak-cell').length === 3`),
-    await evalJs(`document.querySelectorAll('.streak-cell').length`));
+  // Streak, best, played, goals.
+  check('it shows the four headline numbers',
+    await evalJs(`document.querySelectorAll('.streak-cell').length === 4`),
+    await evalJs(`[...document.querySelectorAll('.streak-cell')].map(c => c.innerText.replace(/\\n/g, ':')).join(' | ')`));
   check('the streak values are numbers',
     await evalJs(`[...document.querySelectorAll('.streak-value')].every(v => /^\\d+$/.test(v.textContent.trim()))`),
     await evalJs(`[...document.querySelectorAll('.streak-value')].map(v => v.textContent.trim()).join(',')`));
@@ -578,7 +598,7 @@ async function run() {
   check('a picture can be stored', uploaded === 200, uploaded);
 
   await reloadApp('app is back after reload');
-  await goToTab(1, 'Streak');
+  await goToTab('History', 'Streak');
   await waitFor('!!document.querySelector(".avatar img")', 'the stored picture renders');
   check('the initials are gone once there is a photo',
     await evalJs(`document.querySelector('.avatar').textContent.trim() === ''`),
@@ -592,7 +612,7 @@ async function run() {
   // virtualized and ordered by name, so whether this member's row exists in
   // the DOM at all depends on where they sort among everybody else — a test
   // that scrolls hunting for one name would be asserting on luck.
-  await goToTab(0, 'Session');
+  await goToTab('Session', 'Playing');
   await waitFor(`!!document.querySelector('.player-row .avatar')`, 'the roster renders');
   await sleep(600);
   check('a list of people shows the picture too',
@@ -609,11 +629,11 @@ async function run() {
     (await evalJs(`document.querySelectorAll('.member-row .avatar').length`)) > 0,
     await evalJs(`document.querySelectorAll('.member-row .avatar').length`));
 
-  await goToTab(1, 'Streak');
+  await goToTab('History', 'Streak');
   await sleep(300);
 
   // A team-mate's profile is reachable from the session list.
-  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][0].click()`);
+  await evalJs(`[...document.querySelectorAll('.bottom-nav button')].find(b => /Session/i.test(b.textContent ?? ''))?.click()`);
   await waitFor('!!document.querySelector(".conn")', 'back on the session screen');
   await sleep(500);
   const openedProfile = await evalJs(`(() => {
@@ -636,12 +656,12 @@ async function run() {
         !(await evalJs('document.body.innerText.includes("Who owes what")')),
       await evalJs('document.body.innerText.slice(0, 200)'));
   }
-  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][0].click()`);
+  await evalJs(`[...document.querySelectorAll('.bottom-nav button')].find(b => /Session/i.test(b.textContent ?? ''))?.click()`);
   await waitFor('!!document.querySelector(".conn")', 'back to the session again');
   await sleep(400);
 
   console.log('\nthe random announcement');
-  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][0].click()`);
+  await evalJs(`[...document.querySelectorAll('.bottom-nav button')].find(b => /Session/i.test(b.textContent ?? ''))?.click()`);
   await waitFor('!!document.querySelector(".conn")', 'back on the session screen');
   await sleep(600);
   const openAnnounce = `(() => {
@@ -697,21 +717,29 @@ async function run() {
   // The complaint this replaced fetch-on-mount to fix. Warm every tab first,
   // then poll hard while moving between them: the old behaviour put a spinner
   // up on every single mount, so anything above zero here is a regression.
-  const tab = (index) => evalJs(`[...document.querySelectorAll('.bottom-nav button')][${index}].click()`);
+  // By label: the nav gained a tab, and every index below it moved.
+  const tab = (label) =>
+    evalJs(`[...document.querySelectorAll('.bottom-nav button')]
+      .find((b) => new RegExp(${JSON.stringify(label)}, 'i').test(b.textContent ?? ''))?.click()`);
   const settled = (text) => waitFor(`document.body.innerText.includes(${JSON.stringify(text)})`, `warm: ${text}`);
 
-  await tab(0);
+  await tab('Session');
   await settled('Playing');
-  await tab(1);
+  await tab('History');
   await settled('Streak');
-  await tab(2);
+  await tab('Leaderboard');
+  await waitFor(
+    `!!document.querySelector('.rank-cell') || !!document.querySelector('.empty')`,
+    'warm: the ranking itself',
+  );
+  await tab('Setup');
   await settled('Players');
   await sleep(600);
 
   // Now the cache is warm. Sample continuously across several switches.
   let spinnerSightings = 0;
-  const watch = async (index, ms) => {
-    await tab(index);
+  const watch = async (label, ms) => {
+    await tab(label);
     const until = Date.now() + ms;
     while (Date.now() < until) {
       if (await evalJs(`!!document.querySelector('.spinner, md-circular-progress')`)) {
@@ -719,18 +747,19 @@ async function run() {
       }
     }
   };
-  for (const index of [0, 1, 2, 0, 1, 2]) await watch(index, 260);
+  for (const label of ['Session', 'History', 'Leaderboard', 'Setup', 'Session', 'History'])
+    await watch(label, 260);
 
   check('no spinner appears when revisiting a warmed tab', spinnerSightings === 0,
     `${spinnerSightings} sightings`);
 
   // And the content is actually there, not merely spinner-free.
-  await tab(1);
+  await tab('History');
   await sleep(120);
   check('the history tab paints its content immediately',
     await evalJs(`document.body.innerText.includes('Streak')`),
     await evalJs(`document.body.innerText.slice(0, 120)`));
-  await tab(0);
+  await tab('Session');
   await sleep(120);
   check('and so does the session tab',
     await evalJs(`document.body.innerText.includes('Playing')`),
@@ -738,7 +767,7 @@ async function run() {
 
   console.log('\ndark mode');
   await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }] });
-  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][0].click()`);
+  await evalJs(`[...document.querySelectorAll('.bottom-nav button')].find(b => /Session/i.test(b.textContent ?? ''))?.click()`);
   await sleep(1200);
   await shoot('08-dark');
   const bg = await evalJs(`getComputedStyle(document.body).backgroundColor`);
@@ -820,7 +849,7 @@ async function run() {
   // The header arrow used to `navigate({name:'home'})`, so it ignored where you
   // came from *and* pushed a new entry — leaving the browser's own back button
   // walking forward through screens you had already dismissed.
-  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][1].click()`);
+  await evalJs(`[...document.querySelectorAll('.bottom-nav button')].find(b => /History/i.test(b.textContent ?? ''))?.click()`);
   await waitFor(`location.pathname === '/history'`, 'history opens');
   await sleep(900);
   const openedDetail = await evalJs(`(() => {
@@ -861,9 +890,9 @@ async function run() {
       childList: true, subtree: true, characterData: true,
     });
   })()`);
-  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][1].click()`);
+  await evalJs(`[...document.querySelectorAll('.bottom-nav button')].find(b => /History/i.test(b.textContent ?? ''))?.click()`);
   await sleep(1400);
-  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][0].click()`);
+  await evalJs(`[...document.querySelectorAll('.bottom-nav button')].find(b => /Session/i.test(b.textContent ?? ''))?.click()`);
   await sleep(2400);
   const connSeen = await evalJs('JSON.stringify(window.__connSeen)');
   check('NO CONNECTING FLASH WHEN NAVIGATING BACK HOME',

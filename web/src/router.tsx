@@ -18,7 +18,8 @@ export type Route =
   | { name: 'history' }
   | { name: 'profile'; id: string }
   | { name: 'admin' }
-  | { name: 'players' };
+  | { name: 'players' }
+  | { name: 'leaderboard' };
 
 export function parseRoute(path: string): Route {
   const [pathname] = path.split('?');
@@ -43,6 +44,8 @@ export function parseRoute(path: string): Route {
       return { name: 'admin' };
     case 'players':
       return { name: 'players' };
+    case 'leaderboard':
+      return { name: 'leaderboard' };
     default:
       return { name: 'home' };
   }
@@ -68,6 +71,8 @@ export function routePath(route: Route): string {
       return '/admin';
     case 'players':
       return '/players';
+    case 'leaderboard':
+      return '/leaderboard';
   }
 }
 

@@ -687,6 +687,31 @@ md-outlined-text-field {
   font-weight: 600;
 }
 
+/*
+ * A floor on the name, once there is anything else competing for the row.
+ *
+ * `min-width: 0` above is what normally lets a flex child shrink so its
+ * ellipsis can do its job — but with a badge and a row of form squares
+ * alongside, "can shrink" became "shrank to nothing", and the name vanished
+ * entirely at 414px. The squares and the badge are fixed-width, so the name is
+ * the only thing that gives; it needs a floor rather than none.
+ */
+.player-row .player-name {
+  min-width: 5.5rem;
+}
+
+/*
+ * The roster row wraps once it has post-match controls in it.
+ *
+ * `.wrap` is only defined as `.row.wrap`, so putting the bare class on a
+ * `.player-row` silently did nothing — measured: `flex-wrap: nowrap` and a
+ * 425px row inside a 334px card. With wrapping the overflow becomes a second
+ * line, which is what the extra line was for.
+ */
+.player-row.wrap {
+  flex-wrap: wrap;
+}
+
 /* Highlights a row that just changed, so a live update is noticed. */
 @keyframes ff-flash {
   from {
@@ -1160,6 +1185,84 @@ md-outlined-text-field {
   top: 0;
   left: 0;
   width: 100%;
+}
+
+/* ----------------------------------------------------------- form squares */
+
+/*
+ * The little row of games beside a name.
+ *
+ * Sizes are in px rather than em on purpose: these are a graphic, not text,
+ * and they should stay the same size whether the row's font is English or
+ * Burmese — which sets larger at the same font-size and would otherwise
+ * inflate the squares on one locale only.
+ */
+.form-squares {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+  flex: 0 0 auto;
+  /* Keeps the row from being squeezed by a long name beside it. */
+  margin-left: 4px;
+}
+
+.form-square {
+  /* 7px, not 9. Eight of them plus a Burmese "you" badge and a name floor
+     came to 328px inside a 314px row — the difference is exactly this. */
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  /* The empty state: a game that happened before they joined. Faint enough to
+     read as "nothing here" rather than as a miss. */
+  background: var(--md-sys-color-outline-variant);
+}
+
+/* Played. The one state worth spending the accent on. */
+.form-square.is-in {
+  background: var(--ff-paid);
+}
+
+/* Said yes and did not come, or never answered. */
+.form-square.is-missed {
+  background: var(--md-sys-color-outline);
+}
+
+/* Wanted in, no room. Not their fault, so not a miss — but not a game either. */
+.form-square.is-waitlist {
+  background: var(--ff-pending);
+  opacity: 0.65;
+}
+
+.form-square.is-none {
+  background: var(--md-sys-color-outline-variant);
+  opacity: 0.45;
+}
+
+/* --------------------------------------------------------- leaderboard */
+
+.rank-cell {
+  min-width: 26px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* The top three, because a leaderboard nobody can read at a glance is a table. */
+.rank-cell.is-podium {
+  color: var(--ff-paid);
+}
+
+.board-switch {
+  display: flex;
+  gap: 8px;
+}
+
+.board-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  min-width: 34px;
+  text-align: right;
 }
 
 /* ------------------------------------------------------------ attendance */

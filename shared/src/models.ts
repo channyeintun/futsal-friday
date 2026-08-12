@@ -57,6 +57,8 @@ export type StreakStats = z.infer<typeof streakSchema>;
 export const memberProfileSchema = z.object({
   member: memberSchema,
   streak: streakSchema,
+  /** Goals across every game they have played. */
+  goals: z.number().int().min(0).default(0),
   /** Still owed across every session, so a profile shows the whole picture. */
   outstanding: z.number().int().min(0),
 });
@@ -232,6 +234,8 @@ export const registrationSchema = z.object({
   attended: z.boolean().nullable().default(null),
   /** How many guests came. `null` means "as registered", not none. */
   guestsArrived: z.number().int().min(0).max(5).nullable().default(null),
+  /** Goals they scored in this game. Self-reported after the whistle. */
+  goals: z.number().int().min(0).max(30).default(0),
   /** Monotonic per session; defines display order and waitlist promotion order. */
   position: z.number().int(),
   createdAt: isoSchema,
@@ -245,12 +249,40 @@ export type Registration = z.infer<typeof registrationSchema>;
  * themselves and nobody else. Every field is optional so the two halves —
  * "I was there" and "only one of my two friends came" — can be sent apart.
  */
+/** "I scored two." Same permission rule as attendance: self, or an organizer. */
+export const recordGoalsSchema = z.object({
+  memberId: idSchema.optional(),
+  goals: z.number().int().min(0).max(30),
+});
+export type RecordGoalsInput = z.infer<typeof recordGoalsSchema>;
+
 export const markAttendanceSchema = z.object({
   memberId: idSchema.optional(),
   attended: z.boolean().nullable().optional(),
   guestsArrived: z.number().int().min(0).max(5).nullable().optional(),
 });
 export type MarkAttendanceInput = z.infer<typeof markAttendanceSchema>;
+
+/* ------------------------------------------------------------- leaderboard */
+
+/** One player's recent form: the last few games, newest last. */
+export const formSchema = z.object({
+  memberId: idSchema,
+  /** `in` played, `missed` did not, `waitlist` had no room, `none` not a member yet. */
+  recent: z.array(z.enum(['in', 'missed', 'waitlist', 'none'])),
+});
+export type MemberForm = z.infer<typeof formSchema>;
+
+export const leaderboardEntrySchema = z.object({
+  member: memberSchema,
+  streak: streakSchema,
+  goals: z.number().int().min(0),
+});
+export type LeaderboardEntry = z.infer<typeof leaderboardEntrySchema>;
+
+/** Which column the board is ranked by. */
+export const leaderboardBoardSchema = z.enum(['streak', 'goals']);
+export type LeaderboardBoard = z.infer<typeof leaderboardBoardSchema>;
 
 /* ----------------------------------------------------------------- payment */
 

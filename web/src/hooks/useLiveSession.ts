@@ -88,6 +88,8 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
                 // the same thing the server would send back.
                 attended: null,
                 guestsArrived: null,
+                // Nobody has played yet, let alone scored.
+                goals: 0,
                 status,
                 position,
                 createdAt: event.data.at,

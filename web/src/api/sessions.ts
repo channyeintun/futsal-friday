@@ -78,6 +78,10 @@ export interface AttendanceResult {
  * Omitting a field leaves it alone, so "I was there" and "only one of my two
  * friends came" are separate taps rather than one combined write.
  */
+/** "I scored two." Omit `memberId` for yourself; organizers may name anyone. */
+export const recordGoals = (id: string, body: { memberId?: string; goals: number }) =>
+  post<{ registrations: Registration[] }>(`/sessions/${id}/goals`, body);
+
 export const markAttendance = (
   id: string,
   body: { memberId?: string; attended?: boolean | null; guestsArrived?: number | null },

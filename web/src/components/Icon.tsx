@@ -13,6 +13,7 @@ export type IconName =
   | 'history'
   | 'tune'
   | 'copy'
+  | 'trophy'
   | 'check'
   | 'close'
   | 'add'
@@ -65,6 +66,14 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <rect x="9" y="9" width="11" height="11" rx="2" />
       <path d="M15 5.5A1.5 1.5 0 0 0 13.5 4H6a2 2 0 0 0-2 2v7.5A1.5 1.5 0 0 0 5.5 15" />
+    </>
+  ),
+  // A cup: two handles, a bowl, a stem and a base.
+  trophy: (
+    <>
+      <path d="M7 4h10v5a5 5 0 0 1-10 0z" />
+      <path d="M7 5H4v2a3 3 0 0 0 3 3M17 5h3v2a3 3 0 0 1-3 3" />
+      <path d="M12 14v4M9 20h6" />
     </>
   ),
   check: <path d="m4.5 12.5 5 5 10-11" />,
