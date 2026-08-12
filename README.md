@@ -468,6 +468,35 @@ Avatars are cached as `Blob`s rather than object URLs — a URL has to be revoke
 and the cache has no eviction hook to do it, so each component mints its own
 from the shared blob and revokes on unmount.
 
+### Viewport units
+
+Three of the four heights in the stylesheet were wrong, in the way `vh` is
+usually wrong on a phone: `vh` resolves to `lvh`, the viewport as it is with
+the address bar *retracted*, which is not the viewport you have while the bar
+is showing.
+
+- **The app shell** uses `min-height: 100dvh`. `lvh` would make a short page
+  taller than the visible area, so it scrolls by exactly the height of the
+  address bar with nothing to scroll to and the bottom bar starts below the
+  fold; `svh` has the opposite fault, stopping short of the real bottom once
+  the bar hides and floating the nav above a strip of background. The usual
+  objection to `dvh` — relayout while the bar animates — does not apply to a
+  `min-height`: on a long page the content already exceeds it, and on a page
+  short enough for it to bind there is nothing to scroll, so the bar never
+  moves.
+- **The chat preview and the payment screenshot** use `svh`. Both sit in a
+  dialog above a row of buttons, and sized against `lvh` a tall one pushes
+  those buttons off the bottom of the screen. `svh` is the conservative bound
+  that is always visible.
+
+Each is written twice — the `vh` value first, then the modern one — so an
+engine without the new units keeps something sane rather than dropping the
+declaration entirely.
+
+The toast uses `calc(100% - 24px)` rather than `100vw`. It is
+`position: fixed`, so a percentage resolves against the initial containing
+block, which *excludes* a desktop scrollbar where `100vw` includes it.
+
 ### Moving between screens
 
 Navigation runs inside a [view
