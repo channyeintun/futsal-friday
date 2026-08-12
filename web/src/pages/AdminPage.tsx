@@ -18,7 +18,8 @@ import { PaymentDetailsCard } from '../components/PaymentDetailsCard.js';
 import { PendingApprovals } from '../components/PendingApprovals.js';
 import { ReminderSettings } from '../components/ReminderSettings.js';
 import { Button, Dialog, ErrorBanner, Spinner, Switch, TextField } from '../components/ui.js';
-import { useMembers, useVenues } from '../hooks/queries.js';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys, useMembersCount, useVenues } from '../hooks/queries.js';
 import { navigate } from '../router.js';
 import { useApp } from '../state/app.js';
 import { useLocale, useMessages } from '../state/locale.js';
@@ -29,9 +30,9 @@ export function AdminPage() {
   const { identity, signOut } = useApp();
   const m = useMessages();
 
-  const members = useMembers();
   // Retired venues are only of interest on this screen.
   const venues = useVenues(true, identity.isOrganizer);
+  const queryClient = useQueryClient();
 
   if (!identity.isOrganizer) {
     return (
@@ -63,7 +64,7 @@ export function AdminPage() {
     <>
       {/* First on the screen when it has anything to show: somebody is stuck
           on a waiting screen until this gets a tap. */}
-      <PendingApprovals onChanged={() => void members.refetch()} />
+      <PendingApprovals onChanged={() => void queryClient.invalidateQueries({ queryKey: queryKeys.members })} />
       <LanguageCard />
       <ClockCard />
       <MyDeviceCard />
@@ -74,7 +75,7 @@ export function AdminPage() {
       {/* Next to the invite link: both are things the organizer sets once and
           the group then reads without asking. */}
       <PaymentDetailsCard />
-      <MembersCard state={members} />
+      <MembersCard />
       <VenuesCard state={venues} />
       <ManualSessionCard />
 
@@ -94,9 +95,19 @@ export function AdminPage() {
 
 /* ---------------------------------------------------------------- members */
 
-function MembersCard({ state }: { state: ReturnType<typeof useMembers> }) {
-  const { toast, refresh } = useApp();
+/**
+ * A count and a way in — deliberately not the roster.
+ *
+ * Every player used to be rendered here, which pushed "add a midweek session"
+ * and "sign out" below however many people are in the group: on a screen you
+ * open to change a setting, you first scrolled past everybody. It also meant
+ * the whole roster on the wire to print one number. The list has a page of its
+ * own now.
+ */
+function MembersCard() {
+  const { toast } = useApp();
   const m = useMessages();
+  const count = useMembersCount();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +122,7 @@ function MembersCard({ state }: { state: ReturnType<typeof useMembers> }) {
       toast(m.toast.memberAdded(name.trim()));
       setName('');
       setAdding(false);
-      void state.refetch();
+      void count.refetch();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : m.admin.couldNotAdd);
     } finally {
@@ -119,31 +130,10 @@ function MembersCard({ state }: { state: ReturnType<typeof useMembers> }) {
     }
   };
 
-  const toggleOrganizer = async (member: Member) => {
-    try {
-      await updateMember(member.id, { isOrganizer: !member.isOrganizer });
-      void state.refetch();
-      // The caller may have just changed their own role.
-      await refresh();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : m.admin.couldNotChange);
-    }
-  };
-
-  const remove = async (member: Member) => {
-    try {
-      await removeMember(member.id);
-      toast(m.toast.memberRemoved(member.name));
-      void state.refetch();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : m.admin.couldNotRemove);
-    }
-  };
-
   return (
     <div className="card">
       <div className="row between">
-        <h2 className="card-title">{m.admin.players(state.data?.length ?? 0)}</h2>
+        <h2 className="card-title">{m.admin.players(count.data ?? 0)}</h2>
         <Button variant="text" onClick={() => setAdding(true)}>
           <Icon name="add" size={18} slot="icon" />
           {m.app.add}
@@ -151,44 +141,11 @@ function MembersCard({ state }: { state: ReturnType<typeof useMembers> }) {
       </div>
 
       {error ? <ErrorBanner>{error}</ErrorBanner> : null}
-      {state.isPending ? <Spinner /> : null}
 
-      {(state.data ?? []).map((member) => (
-        <div key={member.id} className="member-row">
-          <div className="row" style={{ gap: 8 }}>
-            <Avatar
-              memberId={member.id}
-              name={member.name}
-              avatarUpdatedAt={member.avatarUpdatedAt}
-              size={32}
-            />
-            <span className="player-name truncate grow">{member.name}</span>
-            <span className="muted" style={{ fontSize: '0.75rem' }}>
-              {m.app.organizerSuffix}
-            </span>
-            <Switch selected={member.isOrganizer} onChange={() => toggleOrganizer(member)} />
-          </div>
-          <div className="row wrap" style={{ gap: 4, justifyContent: 'flex-end' }}>
-            <MemberInviteControls member={member} onChanged={() => void state.refetch()} />
-            {/* Separated from the sign-out control beside it: the two are both
-                destructive and were previously indistinguishable. */}
-            <span className="control-divider" aria-hidden="true" />
-            <ConfirmButton
-              ariaLabel={m.app.remove}
-              headline={m.admin.confirmRemoveMember(member.name)}
-              body={m.admin.confirmRemoveMemberBody}
-              confirmLabel={m.app.remove}
-              onConfirm={() => remove(member)}
-            >
-              <Icon name="close" size={16} />
-            </ConfirmButton>
-          </div>
-        </div>
-      ))}
-
-      <p className="muted" style={{ margin: 0 }}>
-        {m.admin.removeNote}
-      </p>
+      <Button variant="outlined" onClick={() => navigate({ name: 'players' })}>
+        <Icon name="person" size={18} slot="icon" />
+        {m.admin.managePlayers}
+      </Button>
 
       <Dialog
         open={adding}
@@ -205,7 +162,10 @@ function MembersCard({ state }: { state: ReturnType<typeof useMembers> }) {
           </>
         }
       >
-        <TextField label={m.admin.name} value={name} onChange={setName} autoFocus />
+        <p className="muted" style={{ margin: 0 }}>
+          {m.admin.addPlayerBody}
+        </p>
+        <TextField label={m.admin.playerName} value={name} onChange={setName} />
       </Dialog>
     </div>
   );

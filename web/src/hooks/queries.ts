@@ -1,8 +1,9 @@
 import type { SessionDetail } from '@futsal/shared';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import {
   listBalances,
   listMembers,
+  membersCount,
   memberAvatar,
   memberHistory,
   memberProfile,
@@ -92,12 +93,38 @@ export function usePayments(sessionId: string) {
 
 /* ---------------------------------------------------------------- members */
 
-export function useMembers() {
-  return useQuery({
-    queryKey: queryKeys.members,
-    queryFn: ({ signal }) => listMembers(signal),
+/**
+ * The roster, a page at a time.
+ *
+ * `useInfiniteQuery` rather than a plain one because the list is unbounded in
+ * principle — the app has no idea whether a group is twelve people or two
+ * hundred — and a screen that quietly stops at whatever the server felt like
+ * returning is worse than one that keeps asking.
+ */
+export function useMembersInfinite(pageSize = 50) {
+  return useInfiniteQuery({
+    queryKey: [...queryKeys.members, 'infinite', pageSize] as const,
+    queryFn: ({ pageParam, signal }) =>
+      listMembers({ cursor: pageParam, limit: pageSize }, signal),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
     // A roster changes when somebody is added or approved, both of which
     // invalidate it explicitly.
+    staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * How many players there are, without downloading them.
+ *
+ * The Setup screen wants a number and an Add button; fetching the whole roster
+ * to render "23 players" is the entire list on the wire to print two
+ * characters, on a screen most people open to do something else entirely.
+ */
+export function useMembersCount() {
+  return useQuery({
+    queryKey: [...queryKeys.members, 'count'] as const,
+    queryFn: ({ signal }) => membersCount(signal),
     staleTime: 5 * 60_000,
   });
 }

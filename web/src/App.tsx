@@ -6,6 +6,7 @@ import { getToken, onUnauthorized } from './api/client.js';
 import { Icon, type IconName } from './components/Icon.js';
 import { Spinner } from './components/ui.js';
 import { AdminPage } from './pages/AdminPage.js';
+import { PlayersPage } from './pages/PlayersPage.js';
 import { ClaimPage, SignInNeeded } from './pages/ClaimPage.js';
 import { JoinPage } from './pages/JoinPage.js';
 import { HistoryPage } from './pages/HistoryPage.js';
@@ -214,6 +215,8 @@ function Page({ route }: { route: Route }) {
       return <ProfilePage memberId={route.id} />;
     case 'admin':
       return <AdminPage />;
+    case 'players':
+      return <PlayersPage />;
   }
 }
 
@@ -233,6 +236,8 @@ function titleFor(route: Route, m: ReturnType<typeof useMessages>): string {
       return m.profile.title;
     case 'admin':
       return m.nav.setup;
+    case 'players':
+      return m.nav.players;
   }
 }
 

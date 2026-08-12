@@ -20,18 +20,94 @@ import { readImageUpload } from './uploads.js';
 const MAX_AVATAR_BYTES = 200_000;
 
 /** The member list is the app's roster; only organizers may change it. */
+/**
+ * Opaque cursor over `(name, id)`.
+ *
+ * Base64 rather than the raw pair so it reads as a token the client should
+ * hand back untouched, and so a name containing the separator cannot forge a
+ * position. Anything unparseable is treated as "start from the beginning",
+ * which is the safe failure: a stale cursor shows the first page again rather
+ * than erroring at somebody halfway down a list.
+ */
+function encodeCursor(name: string, id: string): string {
+  return btoa(unescape(encodeURIComponent(JSON.stringify({ n: name, i: id }))));
+}
+
+function decodeCursor(raw: string | undefined): { name: string; id: string } | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(decodeURIComponent(escape(atob(raw))));
+    if (typeof parsed?.n === 'string' && typeof parsed?.i === 'string') {
+      return { name: parsed.n, id: parsed.i };
+    }
+  } catch {
+    // Fall through: an unreadable cursor is a first page, not a 400.
+  }
+  return null;
+}
+
 export const memberRoutes = new Hono<AppContext>()
 
+  /**
+   * The roster, a page at a time.
+   *
+   * Keyset, not `OFFSET`: the order is by name, and adding somebody called
+   * "Aung" while you are three pages down would shift every later row by one
+   * and make the next page repeat a name it had already shown. Comparing
+   * against the last row you actually saw cannot skip or duplicate, however
+   * much the table moves underneath.
+   *
+   * The tuple has to include `id` because names are not unique — two players
+   * called "Minh" would otherwise make the cursor ambiguous and the second one
+   * unreachable. SQLite compares row values left to right, which is exactly
+   * the "name greater, or name equal and id greater" rule we want.
+   */
   .get('/', async (c) => {
+    const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 50) || 50, 1), 100);
+    const cursor = decodeCursor(c.req.query('cursor'));
+
     // Approved only. Somebody in the waiting room is not a member of the group
     // yet, and leaking them here would put them in the roster, the session
     // lists and every count in the app.
-    const { results } = await c.env.DB.prepare(
-      `SELECT * FROM members
-        WHERE active = 1 AND approved_at IS NOT NULL
-        ORDER BY name COLLATE NOCASE ASC`,
-    ).all<MemberRow>();
-    return c.json({ members: results.map(toMember) });
+    const where = `active = 1 AND approved_at IS NOT NULL`;
+    const statement = cursor
+      ? c.env.DB.prepare(
+          `SELECT * FROM members
+            WHERE ${where}
+              AND (name COLLATE NOCASE, id) > (?1 COLLATE NOCASE, ?2)
+            ORDER BY name COLLATE NOCASE ASC, id ASC
+            LIMIT ?3`,
+        ).bind(cursor.name, cursor.id, limit + 1)
+      : c.env.DB.prepare(
+          `SELECT * FROM members
+            WHERE ${where}
+            ORDER BY name COLLATE NOCASE ASC, id ASC
+            LIMIT ?1`,
+        ).bind(limit + 1);
+
+    // One more than asked for, so "is there another page" is answered without
+    // a second COUNT query on every scroll.
+    const { results } = await statement.all<MemberRow>();
+    const page = results.slice(0, limit);
+    const last = page.at(-1);
+    return c.json({
+      members: page.map(toMember),
+      nextCursor: results.length > limit && last ? encodeCursor(last.name, last.id) : null,
+    });
+  })
+
+  /**
+   * Just how many there are.
+   *
+   * The Setup screen wants a number and an Add button, not a roster — reading
+   * every member to render "23 players" would be the whole list downloaded to
+   * print two characters.
+   */
+  .get('/count', async (c) => {
+    const row = await c.env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM members WHERE active = 1 AND approved_at IS NOT NULL`,
+    ).first<{ n: number }>();
+    return c.json({ total: row?.n ?? 0 });
   })
 
   /** The waiting room. Organizers only — it is a queue of decisions for them. */

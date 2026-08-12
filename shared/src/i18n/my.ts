@@ -117,6 +117,7 @@ export const my: Messages = {
     history: 'မှတ်တမ်း',
     setup: 'ပြင်ဆင်မှု',
     payments: 'ငွေပေးချေမှု',
+    players: 'ကစားသမားများ',
     sessionTitle: 'ပွဲ',
   },
 
@@ -359,6 +360,12 @@ export const my: Messages = {
     signOutAs: (name) => `ထွက်မည် (${name})`,
     players: (count) => `ကစားသမားများ (${count})`,
     addPlayer: 'ကစားသမား ထည့်မည်',
+    managePlayers: 'ကစားသမား စာရင်း ဖွင့်မည်',
+    addPlayerBody: 'စာရင်းထဲ နာမည် ဝင်သွားပါမည်။ ဝင်ရောက်နိုင်ရန် ဖိတ်ကြားလင့်ခ် နောက်မှ ပို့ပေးပါ။',
+    playerName: 'သူ့နာမည်',
+    loadingPlayers: 'ကစားသမားများ ဖွင့်နေသည်…',
+    thatIsEveryone: 'အားလုံးပါပြီ။',
+    refreshPlayers: 'ပြန်ဖတ်မည်',
     name: 'အမည်',
     confirmRemoveMember: (name) => `${name} ကို အဖွဲ့မှ ဖယ်မလား?`,
     confirmRemoveMemberBody:

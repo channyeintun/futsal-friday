@@ -343,8 +343,16 @@ async function run() {
     await closeDialog();
   };
 
+  // The per-member controls moved off Setup with the roster; drive them where
+  // they now live.
+  await send('Page.navigate', { url: `${APP_URL}/players` });
+  await waitFor(`!!document.querySelector('.virtual-scroller .member-row')`,
+    'the player list opens for the destructive checks');
+  await sleep(800);
+
   await guarded('removing a member', `(() => {
     const row = document.querySelector('.member-row');
+    if (!row) return false;
     const b = [...row.querySelectorAll('md-text-button')]
       .find((x) => x.getAttribute('aria-label') === 'Remove');
     if (!b) return false;
@@ -355,6 +363,7 @@ async function run() {
 
   await guarded('signing their devices out', `(() => {
     const row = document.querySelector('.member-row');
+    if (!row) return false;
     const b = [...row.querySelectorAll('md-text-button')]
       .find((x) => (x.getAttribute('aria-label') ?? '').includes('Sign out'));
     if (!b) return false;
@@ -362,6 +371,11 @@ async function run() {
     b.click();
     return true;
   })()`);
+
+  // Back to Setup: everything below is a control that lives there.
+  await send('Page.navigate', { url: `${APP_URL}/admin` });
+  await waitFor(`document.body.innerText.includes('Players')`, 'setup reopens');
+  await sleep(800);
 
   await guarded('replacing the group link', `(() => {
     const b = [...document.querySelectorAll('md-text-button')]
@@ -390,10 +404,16 @@ async function run() {
     return true;
   })()`);
 
-  // And cancelling out of one must leave the world alone.
+  // And cancelling out of one must leave the world alone. Back on the player
+  // list, since that is where a member row is.
+  await send('Page.navigate', { url: `${APP_URL}/players` });
+  await waitFor(`!!document.querySelector('.virtual-scroller .member-row')`,
+    'the player list opens to cancel out of');
+  await sleep(700);
   const playersBefore = await evalJs(`document.body.innerText.match(/Players \\((\\d+)\\)/)?.[1]`);
   await evalJs(`(() => {
     const row = document.querySelector('.member-row');
+    if (!row) return;
     [...row.querySelectorAll('md-text-button')]
       .find((x) => x.getAttribute('aria-label') === 'Remove')?.click();
   })()`);
@@ -406,6 +426,10 @@ async function run() {
   check('backing out of a confirmation changes nothing',
     (await evalJs(`document.body.innerText.match(/Players \\((\\d+)\\)/)?.[1]`)) === playersBefore,
     `${playersBefore} -> ${await evalJs(`document.body.innerText.match(/Players \\((\\d+)\\)/)?.[1]`)}`);
+
+  await send('Page.navigate', { url: `${APP_URL}/admin` });
+  await waitFor(`document.body.innerText.includes('Group invite link')`, 'setup reopens');
+  await sleep(700);
 
   console.log('\nthe group invite card');
   check('the group link card is on the setup screen',
@@ -563,10 +587,26 @@ async function run() {
   await shoot('13-avatar');
 
   // And it reaches the places that list people, not just the profile.
-  await goToTab(2, 'Players');
+  //
+  // Checked on the session roster rather than the player list: that list is
+  // virtualized and ordered by name, so whether this member's row exists in
+  // the DOM at all depends on where they sort among everybody else — a test
+  // that scrolls hunting for one name would be asserting on luck.
+  await goToTab(0, 'Session');
+  await waitFor(`!!document.querySelector('.player-row .avatar')`, 'the roster renders');
   await sleep(600);
-  check('the roster shows the picture too',
-    await evalJs(`!!document.querySelector('.member-row .avatar img')`),
+  check('a list of people shows the picture too',
+    await evalJs(`!!document.querySelector('.player-row .avatar img')`),
+    await evalJs(`document.querySelectorAll('.player-row .avatar').length + ' avatars, ' +
+      document.querySelectorAll('.player-row .avatar img').length + ' with a photo'`));
+
+  // The player list renders avatars for its rows as well, whoever happens to
+  // be in the window.
+  await send('Page.navigate', { url: `${APP_URL}/players` });
+  await waitFor(`!!document.querySelector('.virtual-scroller .member-row')`, 'the player list opens');
+  await sleep(900);
+  check('and the player list draws them for its rows',
+    (await evalJs(`document.querySelectorAll('.member-row .avatar').length`)) > 0,
     await evalJs(`document.querySelectorAll('.member-row .avatar').length`));
 
   await goToTab(1, 'Streak');
@@ -705,6 +745,43 @@ async function run() {
   // Pure black, not a tinted charcoal — that is the whole basis of the dark
   // theme, so it is worth pinning rather than asserting "something dark".
   check('dark theme applies', bg === 'rgb(0, 0, 0)', bg);
+
+  console.log('\nthe roster is paginated and virtualized');
+  // Setup used to render every player, which put "add a session" and "sign
+  // out" below the whole group and pulled the entire roster over the wire to
+  // print one number.
+  const netBefore = events.filter((e) => e.method === 'Network.requestWillBeSent').length;
+  await send('Page.navigate', { url: `${APP_URL}/admin` });
+  await waitFor(`document.body.innerText.includes('Players')`, 'setup loads');
+  await sleep(1800);
+  const memberCalls = events
+    .filter((e) => e.method === 'Network.requestWillBeSent')
+    .slice(netBefore)
+    .map((e) => e.params.request.url)
+    .filter((u) => /\/members/.test(u));
+  check('SETUP FETCHES A COUNT, NOT THE ROSTER',
+    memberCalls.some((u) => /\/members\/count/.test(u)) &&
+      !memberCalls.some((u) => /\/members(\?|$)/.test(u)),
+    JSON.stringify(memberCalls.map((u) => u.replace(/^.*\/api/, ''))));
+  check('and renders no player rows on it',
+    (await evalJs(`document.querySelectorAll('.member-row').length`)) === 0);
+
+  await evalJs(`[...document.querySelectorAll('md-outlined-button')]
+    .find(b => /Open the player list/i.test(b.textContent))?.click()`);
+  await waitFor(`!!document.querySelector('.virtual-scroller')`, 'the player list opens');
+  await sleep(1800);
+  const domRows = await evalJs(`document.querySelectorAll('.virtual-row').length`);
+  const loaded = await evalJs(`document.querySelectorAll('.virtual-scroller .member-row').length`);
+  // The window in the DOM must stay small however many are loaded; that is the
+  // entire claim virtualization makes.
+  check('THE DOM HOLDS A WINDOW, NOT EVERY PLAYER', domRows > 0 && domRows < 40,
+    `${domRows} rows in the DOM, ${loaded} member rows`);
+  const frame = await evalJs(`(() => {
+    const el = document.querySelector('.virtual-scroller');
+    return { clientH: el.clientHeight, scrollH: el.scrollHeight, viewport: innerHeight };
+  })()`);
+  check('the list scrolls inside a capped frame, not the page',
+    frame.clientH < frame.viewport, JSON.stringify(frame));
 
   console.log('\ngetting back out of a screen');
   // The header arrow used to `navigate({name:'home'})`, so it ignored where you

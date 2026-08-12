@@ -496,6 +496,33 @@ Account details stay in plain text above the code as well. The QR is the fast
 path; a number you can read and copy is the one that works when somebody is
 paying from a laptop, or from the same phone that is displaying the code.
 
+### The roster is paged, not listed
+
+Setup asks the server how many players there are and nothing else. It used to
+render every one of them, which put "add a midweek session" and "sign out"
+below however many people are in the group — on a screen you open to change a
+setting, you first scrolled past everybody — and pulled the whole roster over
+the wire to print one number.
+
+The list itself is a screen of its own, `/players`, with `useInfiniteQuery`
+over a cursor and `@tanstack/react-virtual` over the rows. Both, not either:
+virtualizing a list you have already downloaded still costs the download, and
+paging a list you render in full still costs the DOM. Each row carries an
+avatar, a switch and two dialogs' worth of controls, so a few hundred of them
+is thousands of nodes that nobody scrolls to.
+
+Paging is **keyset**, not `OFFSET`. The order is by name, so adding an "Aung"
+while somebody is three pages down would shift every later row and make the
+next page repeat a name it had already shown. The cursor compares against the
+last row actually seen — `(name, id) > (?, ?)`, with `id` in the tuple because
+names are not unique and two players called Minh would otherwise make the
+second unreachable. An unreadable cursor is treated as the first page rather
+than an error, so a stale one shows the top of the list instead of failing at
+somebody halfway down.
+
+The scroll container is the list's own box, capped in `dvh`, which is also
+what keeps the controls under it reachable.
+
 ### Who owes what is public
 
 The group-wide unpaid list on **History** is visible to every member, not just

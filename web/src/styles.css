@@ -1122,6 +1122,46 @@ md-outlined-text-field {
   color: var(--md-sys-color-on-primary);
 }
 
+/* ------------------------------------------------------- virtualized list */
+
+/*
+ * The scroll container a virtualizer measures against.
+ *
+ * It has to be this element rather than the page: `useVirtualizer` needs a box
+ * with a known height to work out which rows are visible, and "the document"
+ * is not one. Capping it here is also what stops a long roster burying the
+ * controls beneath it — the list scrolls inside its own frame and everything
+ * after it stays reachable.
+ *
+ * `dvh`, not `vh`. On a phone `vh` resolves to the *large* viewport — the one
+ * you only have once the address bar has scrolled away — so a list sized
+ * against it runs under the floating nav until you happen to scroll.
+ */
+.virtual-scroller {
+  max-height: 60vh;
+  max-height: 60dvh;
+  overflow-y: auto;
+  /* Contain the scroll chaining: reaching the end of the roster should stop,
+     not start scrolling the page behind it. */
+  overscroll-behavior: contain;
+  /* Room for the row's focus ring, which would otherwise be clipped. */
+  padding-right: 2px;
+}
+
+/*
+ * Rows are absolutely positioned by the virtualizer, so they need a width.
+ *
+ * `transform` rather than `top` because it is what the compositor can move
+ * without a layout pass — the whole point of the exercise is that scrolling a
+ * long list stays cheap.
+ */
+.virtual-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+}
+
 /* ------------------------------------------------------------ attendance */
 
 /*

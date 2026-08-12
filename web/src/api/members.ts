@@ -9,8 +9,27 @@ import type {
 import { platform } from '../platform/index.js';
 import { del, get, getBlob, patch, post, request } from './client.js';
 
-export const listMembers = (signal?: AbortSignal) =>
-  get<{ members: Member[] }>('/members', signal).then((r) => r.members);
+export interface MemberPage {
+  members: Member[];
+  /** Hand back verbatim to fetch the next page; null at the end of the list. */
+  nextCursor: string | null;
+}
+
+/** One page of the roster, ordered by name. */
+export const listMembers = (
+  opts: { cursor?: string | null; limit?: number } = {},
+  signal?: AbortSignal,
+) => {
+  const query = new URLSearchParams();
+  if (opts.cursor) query.set('cursor', opts.cursor);
+  if (opts.limit) query.set('limit', String(opts.limit));
+  const suffix = query.size > 0 ? `?${query}` : '';
+  return get<MemberPage>(`/members${suffix}`, signal);
+};
+
+/** Just the number, for screens that only need to say how many there are. */
+export const membersCount = (signal?: AbortSignal) =>
+  get<{ total: number }>('/members/count', signal).then((r) => r.total);
 
 export const listBalances = (signal?: AbortSignal) =>
   get<{ balances: MemberBalance[] }>('/members/balances', signal).then((r) => r.balances);

@@ -107,6 +107,7 @@ export const en = {
     history: 'History',
     setup: 'Setup',
     payments: 'Payments',
+    players: 'Players',
     sessionTitle: 'Session',
   },
 
@@ -357,6 +358,12 @@ export const en = {
     signOutAs: (name: string) => `Sign out (${name})`,
     players: (count: number) => `Players (${count})`,
     addPlayer: 'Add a player',
+    managePlayers: 'Open the player list',
+    addPlayerBody: 'They get a name on the list. Send them an invite link afterwards so they can sign in.',
+    playerName: 'Their name',
+    loadingPlayers: 'Loading players…',
+    thatIsEveryone: "That's everyone.",
+    refreshPlayers: 'Refresh',
     name: 'Name',
     confirmRemoveMember: (name: string) => `Remove ${name} from the group?`,
     confirmRemoveMemberBody:

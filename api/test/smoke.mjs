@@ -138,6 +138,28 @@ function seedPastSessions(memberId, plan, venueId) {
   });
 }
 
+/**
+ * The whole roster, following the cursor.
+ *
+ * `/members` is paginated, so "is this person in the roster" cannot be
+ * answered by the first page once a group is bigger than one — which a dev
+ * database reaches long before a real group does.
+ */
+async function allMembers(token) {
+  const members = [];
+  let cursor = null;
+  // Bounded: a runaway cursor should fail the test, not spin forever.
+  for (let page = 0; page < 50; page++) {
+    const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+    const res = await call('GET', `/members${query}`, { token });
+    if (res.status !== 200) break;
+    members.push(...(res.body?.members ?? []));
+    cursor = res.body?.nextCursor ?? null;
+    if (!cursor) break;
+  }
+  return members;
+}
+
 /** Creates a member (as organizer), invites them, and redeems the link. */
 async function addAndLogIn(organizerToken, name) {
   const created = await call('POST', '/members', { token: organizerToken, body: { name } });
@@ -397,8 +419,42 @@ const run = async () => {
   const fresh = await call('POST', '/auth/claim', { body: { nonce: nonceOf(second.body.url) } });
   check('the newest link still works', fresh.status === 200, fresh.body);
 
+  section('the roster is paginated');
+  const firstPage = await call('GET', '/members?limit=3', { token: organizer });
+  check('a page is no bigger than asked for', firstPage.body?.members?.length <= 3,
+    firstPage.body?.members?.length);
+  check('and offers a cursor when there is more',
+    typeof firstPage.body?.nextCursor === 'string' || firstPage.body?.nextCursor === null,
+    firstPage.body?.nextCursor);
+
+  const everyone = await allMembers(organizer);
+  const counted = await call('GET', '/members/count', { token: organizer });
+  check('walking the cursor reaches everybody', everyone.length === counted.body?.total,
+    `${everyone.length} walked vs ${counted.body?.total} counted`);
+  const ids = everyone.map((x) => x.id);
+  check('NO MEMBER IS SKIPPED OR REPEATED ACROSS PAGES',
+    new Set(ids).size === ids.length, `${ids.length} rows, ${new Set(ids).size} distinct`);
+  const names = everyone.map((x) => x.name.toLowerCase());
+  check('and the order is stable across page boundaries',
+    names.every((n, i) => i === 0 || names[i - 1] <= n),
+    names.find((n, i) => i > 0 && names[i - 1] > n));
+
+  // Paging with a tiny limit must land on exactly the same people as one big
+  // read — the case a naive OFFSET gets wrong when the table moves.
+  const bigRead = await call('GET', '/members?limit=100', { token: organizer });
+  check('a bigger page agrees with the small ones',
+    bigRead.body.members.every((x, i) => everyone[i]?.id === x.id), 'first 100 differ');
+
+  check('an unreadable cursor starts from the beginning',
+    (await call('GET', '/members?cursor=not-base64', { token: organizer })).body?.members?.[0]?.id
+      === everyone[0]?.id);
+  check('the count needs no roster read', typeof counted.body?.total === 'number',
+    counted.body);
+  check('and a member can read the count too',
+    (await call('GET', '/members/count', { token: alice.token })).status === 200);
+
   section('roster shows who has joined');
-  const roster = await call('GET', '/members', { token: organizer });
+  const roster = { body: { members: await allMembers(organizer) } };
   const aliceRow = roster.body.members.find((x) => x.id === alice.id);
   check('claimed members are marked', !!aliceRow?.claimedAt, aliceRow);
   check('the nonce is never exposed to clients',
@@ -823,8 +879,8 @@ const run = async () => {
   check('THEIR EXISTING TOKEN NOW WORKS', nowIn.status === 200, nowIn.status);
   check('and /auth/me says approved',
     (await call('GET', '/auth/me', { token: walkin })).body?.identity?.approved === true);
-  const rosterAfter = await call('GET', '/members', { token: organizer });
-  check('they are in the roster now', rosterAfter.body.members.some((x) => x.id === walkinId));
+  const rosterAfter = await allMembers(organizer);
+  check('they are in the roster now', rosterAfter.some((x) => x.id === walkinId));
   check('and out of the queue',
     !(await call('GET', '/members/pending', { token: organizer })).body.members
       .some((x) => x.id === walkinId));
@@ -905,10 +961,9 @@ const run = async () => {
   check('an oversized picture is refused', tooBig.status === 413, tooBig.status);
 
   // Registrations carry the token so a session list can draw faces in one call.
-  const rosterAfterAvatar = await call('GET', '/members', { token: organizer });
-  const aliceAvatarRow = rosterAfterAvatar.body.members.find((x) => x.id === alice.id);
-  check('the roster carries the cache token', typeof aliceAvatarRow.avatarUpdatedAt === 'string',
-    aliceAvatarRow.avatarUpdatedAt);
+  const aliceAvatarRow = (await allMembers(organizer)).find((x) => x.id === alice.id);
+  check('the roster carries the cache token',
+    typeof aliceAvatarRow?.avatarUpdatedAt === 'string', aliceAvatarRow);
 
   const dropped = await call('DELETE', '/members/me/avatar', { token: alice.token });
   check('removing a picture works', dropped.status === 200 &&

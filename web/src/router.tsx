@@ -17,7 +17,8 @@ export type Route =
   | { name: 'payments'; id: string }
   | { name: 'history' }
   | { name: 'profile'; id: string }
-  | { name: 'admin' };
+  | { name: 'admin' }
+  | { name: 'players' };
 
 export function parseRoute(path: string): Route {
   const [pathname] = path.split('?');
@@ -40,6 +41,8 @@ export function parseRoute(path: string): Route {
       return segments[1] ? { name: 'profile', id: segments[1] } : { name: 'home' };
     case 'admin':
       return { name: 'admin' };
+    case 'players':
+      return { name: 'players' };
     default:
       return { name: 'home' };
   }
@@ -63,6 +66,8 @@ export function routePath(route: Route): string {
       return `/profile/${route.id}`;
     case 'admin':
       return '/admin';
+    case 'players':
+      return '/players';
   }
 }
 
