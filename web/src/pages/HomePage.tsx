@@ -1,6 +1,7 @@
 import { formatKickoff, formatVnd } from '@futsal/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
+import { useSplashDown } from '../boot.js';
 import { Icon } from '../components/Icon.js';
 import { VirtualList } from '../components/VirtualList.js';
 import { SessionView } from '../components/SessionView.js';
@@ -30,6 +31,14 @@ export function HomePage() {
 
   const upcomingId = overview.data?.upcoming?.id ?? null;
   const live = useLiveSession(upcomingId, identity.memberId);
+
+  // On a cold launch the boot splash is still up, and this is the screen it is
+  // waiting for: a signed-in open costs three requests in a row — the identity,
+  // the overview, then the fixture — and ending the splash at any of the first
+  // two only trades it for one of the spinners below. Both of those flags are
+  // false once their query has settled either way, so an error ends the wait
+  // just as an answer does.
+  useSplashDown(!overview.isPending && !live.loading);
 
   // Only when there is genuinely nothing to draw. Coming back to this tab
   // renders the cached fixture at once and refreshes underneath it.

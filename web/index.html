@@ -26,8 +26,194 @@
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23386a20' stroke-width='1.8'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7.5 15.5 10l-1.3 4h-4.4L8.5 10z'/%3E%3C/svg%3E"
     />
     <title>Futsal Friday</title>
+
+    <!--
+      The boot splash, styled inline for the same reason the favicon above is a
+      data URI: it has to be right on the very first paint, and a request would
+      arrive too late to matter.
+
+      `styles.css` cannot do this job. `main.tsx` imports it, so in development
+      the bundle injects it — and the bundle arriving is the end of the gap this
+      screen exists to cover. A rule living there would be correct in production
+      and an unstyled blob in development, which is the one arrangement nobody
+      notices is broken.
+
+      Hence colour literals rather than `--md-sys-color-*`: nothing has defined
+      those yet. They are `background` and `primary`, light and dark.
+      `styles.css` carries a note beside them; nothing enforces it.
+    -->
+    <style>
+      /* Mirrors `styles.css`, so a dark-mode launch does not open on a white
+         frame in the moment before either of them applies. */
+      :root {
+        color-scheme: light;
+      }
+
+      /* On `html`, not `body`: the canvas is painted from this, and the canvas
+         is what shows through an overscroll bounce and in whatever frames pass
+         before the parser reaches `#splash`. */
+      html {
+        background: #f2f2f6;
+      }
+
+      #splash {
+        position: fixed;
+        inset: 0;
+        /* Above the snackbar's 100, which is the highest the app itself paints. */
+        z-index: 200;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        /*
+         * Optically centred, not geometrically: a mark on the halfway line
+         * reads low, because the eye weights the top of a field. With `inset`
+         * fixing the height, the padding insets the content box rather than
+         * growing it, so this lands the mark at 45% — and it does so without
+         * depending on the `box-sizing` rule that lives in `styles.css`.
+         */
+        padding-bottom: 10vh;
+        background: #f2f2f6;
+        color: #007a43;
+      }
+
+      /*
+       * The mark is redrawn here rather than `Icon`'s ball being scaled up.
+       * That glyph is on a 24-unit grid and does not survive the blow-up: its
+       * pentagon sits above the circle's centre and four of its five seams stop
+       * short of the rim — invisible at 24px, a visible gap at 88. On this grid
+       * the pentagon is concentric and every seam runs radially out to exactly
+       * r=36, so the round caps finish flush with the circle.
+       */
+      #splash .splash-mark {
+        /* 22% of the width across every phone size, floored so a 320px screen
+           still gets a mark rather than an icon, and capped so a desktop tab
+           does not turn it into a poster. */
+        width: clamp(76px, 22vw, 104px);
+        height: auto;
+        /*
+         * An entrance, and then — only if the boot is still going at 900ms — a
+         * slow pulse. Deliberately not a spin, an orbit or a ring: a mark that
+         * turns is the spinner this replaced wearing the logo. Most launches
+         * are over before the pulse starts.
+         */
+        animation:
+          ff-splash-in 260ms cubic-bezier(0.2, 0, 0, 1) both,
+          ff-splash-pulse 2400ms ease-in-out 900ms infinite;
+      }
+
+      @keyframes ff-splash-in {
+        from {
+          opacity: 0;
+          transform: scale(0.94);
+        }
+      }
+
+      @keyframes ff-splash-pulse {
+        50% {
+          transform: scale(1.03);
+        }
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          color-scheme: dark;
+        }
+        html {
+          background: #000000;
+        }
+        #splash {
+          background: #000000;
+          color: #4ade80;
+        }
+      }
+
+      /* The mark simply appears, the way `.flash` simply appears. */
+      @media (prefers-reduced-motion: reduce) {
+        #splash .splash-mark {
+          animation: none;
+        }
+      }
+    </style>
   </head>
   <body>
+    <!--
+      Painted before a byte of the bundle has run — a module script is deferred
+      by definition, so the parser reaches this, paints, and only then executes
+      `main.tsx`. That gap used to be a blank page, and on a phone it is most of
+      what opening the app feels like. Offline gets it too: `sw.js` caches `/`
+      as the shell, so this markup is inside it.
+
+      A sibling of `#root`, not a child. `createRoot` empties its container on
+      the first commit, which would tear this out at exactly the frame it has to
+      survive, and instantly, with no say in when. As a sibling it outlives the
+      mount, the real screen paints beneath it, and the moment it goes is ours.
+      It also keeps `#root.children.length` meaning "React mounted" rather than
+      "the HTML has a div in it", which three of the browser suites rely on.
+
+      No app name on it, in any language. A wordmark's one hard requirement is
+      being in the reader's language, and the code that knows which —
+      `state/locale.tsx`, reading `platform.deviceLanguage()` — is precisely
+      what this is covering for. `<html lang>` is still `en` here, so even the
+      Burmese font stack would not be picked. The header says the name a moment
+      later anyway.
+
+      Taken down by `platform.dismissSplash()`.
+    -->
+    <div id="splash" aria-hidden="true">
+      <svg
+        class="splash-mark"
+        viewBox="0 0 96 96"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="4.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="48" cy="48" r="36" />
+        <path d="M48 33 62.27 43.36 56.82 60.14 39.18 60.14 33.73 43.36Z" />
+        <path d="M48 33V12M62.27 43.36 82.24 36.88M56.82 60.14 69.16 77.12M39.18 60.14 26.84 77.12M33.73 43.36 13.76 36.88" />
+      </svg>
+    </div>
+
+    <script>
+      /*
+       * The splash is opaque and covers the viewport, so the one thing it must
+       * never do is outlive a boot that failed.
+       *
+       * `platform.dismissSplash()` runs from inside the app, which is no help
+       * at all when the app is what did not arrive: a bundle lost to a dropped
+       * connection just after a deploy, a parse error in a webview older than
+       * the build target, a throw during the first render — and there is no
+       * error boundary above `App` to catch that last one.
+       *
+       * None of those leave anything worth showing. The point is only that a
+       * blank page is recoverable, because it looks broken and you reload it,
+       * while a ball sitting patiently on a coloured field looks like an app
+       * that is still working and will not be reloaded for a minute.
+       */
+      (function () {
+        function down() {
+          var splash = document.getElementById('splash');
+          if (splash) splash.remove();
+        }
+        window.addEventListener(
+          'error',
+          function (event) {
+            // Two different events share this name. A resource that failed to
+            // load fires at the element and does not bubble, which is what the
+            // capture phase below is for; an uncaught throw fires at the window
+            // and has no element at all. Only the first kind needs filtering —
+            // a member's avatar 404ing is not a reason to tear the screen down,
+            // and by the time avatars load it would be long gone anyway.
+            var tag = event.target && event.target.tagName;
+            if (!tag || tag === 'SCRIPT' || tag === 'LINK') down();
+          },
+          true,
+        );
+        window.setTimeout(down, 10000);
+      })();
+    </script>
+
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -151,6 +151,15 @@ export interface Platform {
   deviceLanguage(): string | null;
   /** Reflects the active language onto the document, for font and hyphenation. */
   setDocumentLanguage(tag: string): void;
+  /**
+   * Take down the boot splash that `index.html` painted.
+   *
+   * A capability rather than a `getElementById` in a component, on the usual
+   * rule — and the only DOM the app owns that React does not, since the whole
+   * point of that element is to be on screen before React has run. Calling it
+   * twice is harmless.
+   */
+  dismissSplash(): void;
   /** Base URL of the API. */
   apiBaseUrl: string;
   /** Public URL of this app, embedded in shareable summaries. */

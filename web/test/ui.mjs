@@ -170,6 +170,11 @@ async function run() {
       `typeof window.__ffBeforeReload === 'undefined' && !!document.querySelector('.bottom-nav')`,
       label,
     );
+    // The shell paints *underneath* the boot splash, so a nav on the page is
+    // not the same as an app anybody can see or tap. Every reload here is a
+    // token-bearing cold boot, which is the one path that holds the splash past
+    // the mount — and the only one this suite exercises.
+    await waitFor('!document.getElementById("splash")', `${label}: splash clears`);
   };
 
 
