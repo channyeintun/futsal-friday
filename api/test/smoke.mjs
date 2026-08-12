@@ -511,6 +511,12 @@ const run = async () => {
   void erin;
 
   section('payment details');
+  // There is one row for the whole group, and this section overwrites it and
+  // then deletes it — against the same local database somebody has been
+  // clicking around in all afternoon. Put back whatever was there.
+  const detailsBefore = (await call('GET', '/payment-details', { token: organizer })).body?.details
+    ?? null;
+
   const noDetails = await call('GET', '/payment-details', { token: alice.token });
   check('payment details are readable by any member', noDetails.status === 200, noDetails.status);
   check('and absent until an organizer sets them', 'details' in noDetails.body, noDetails.body);
@@ -556,6 +562,24 @@ const run = async () => {
   check('the organizer can', (await call('DELETE', '/payment-details', { token: organizer })).status === 200);
   check('and they are gone',
     (await call('GET', '/payment-details', { token: alice.token })).body?.details === null);
+
+  // Hand the group's real account back, so a test run is not a way to lose it.
+  if (detailsBefore) {
+    await call('PUT', '/payment-details', {
+      token: organizer,
+      body: {
+        bankBin: detailsBefore.bankBin,
+        bankName: detailsBefore.bankName,
+        accountNumber: detailsBefore.accountNumber,
+        accountName: detailsBefore.accountName,
+        note: detailsBefore.note ?? null,
+      },
+    });
+    const restored = await call('GET', '/payment-details', { token: organizer });
+    check('AND THE REAL ONES ARE PUT BACK AFTERWARDS',
+      restored.body?.details?.accountNumber === detailsBefore.accountNumber,
+      JSON.stringify(restored.body?.details));
+  }
 
   section('guests: friends without an account');
   // A pitch hired for four, so the arithmetic is visible.
