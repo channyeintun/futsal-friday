@@ -63,6 +63,7 @@ export const authRoutes = new Hono<AppContext>()
       name: member.name,
       isOrganizer: member.isOrganizer,
       language: member.language,
+      hour12: member.hour12,
       approved: member.approvedAt !== null,
     };
 

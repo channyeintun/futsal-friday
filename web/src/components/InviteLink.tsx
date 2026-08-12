@@ -30,7 +30,7 @@ export function InviteLinkDialog({
   onClose(): void;
 }) {
   const { toast } = useApp();
-  const { m, locale } = useLocale();
+  const { m, locale, hour12 } = useLocale();
   const [failedCopy, setFailedCopy] = useState(false);
 
   if (!link) return null;
@@ -65,7 +65,7 @@ export function InviteLinkDialog({
       {/* Shown so it can be copied by hand where the clipboard API is blocked. */}
       <pre className="summary-preview">{link.url}</pre>
       <p className="muted" style={{ margin: 0 }}>
-        {m.invite.expires(formatKickoff(link.expiresAt, locale))}
+        {m.invite.expires(formatKickoff(link.expiresAt, locale, hour12))}
       </p>
       {failedCopy ? <ErrorBanner>{m.copy.fallbackBody}</ErrorBanner> : null}
     </Dialog>
@@ -217,7 +217,7 @@ export function MyDeviceCard() {
  */
 export function GroupInviteCard() {
   const { toast } = useApp();
-  const { m, locale } = useLocale();
+  const { m, locale, hour12 } = useLocale();
   const [invite, setInvite] = useState<GroupInvite | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -268,7 +268,7 @@ export function GroupInviteCard() {
               ? m.invite.waitingToJoin(invite.unclaimed)
               : m.invite.everyoneJoined}
             {' · '}
-            {m.invite.expires(formatKickoff(invite.expiresAt, locale))}
+            {m.invite.expires(formatKickoff(invite.expiresAt, locale, hour12))}
           </p>
           <Button onClick={copy}>{m.invite.copyGroupLink}</Button>
           <ConfirmButton

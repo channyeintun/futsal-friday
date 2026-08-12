@@ -187,6 +187,7 @@ export const groupJoinRoutes = new Hono<AppContext>()
       name: member.name,
       isOrganizer: member.isOrganizer,
       language: member.language,
+      hour12: member.hour12,
       approved: member.approvedAt !== null,
     };
 
@@ -242,6 +243,7 @@ export const groupJoinRoutes = new Hono<AppContext>()
       name: member.name,
       isOrganizer: false,
       language: member.language,
+      hour12: member.hour12,
       approved: false,
     };
 

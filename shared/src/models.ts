@@ -29,6 +29,8 @@ export const memberSchema = z.object({
   notifyPayment: z.boolean().default(true),
   /** Drives the UI and, crucially, server-written push notifications. */
   language: z.enum(['en', 'my']).default('en'),
+  /** Their clock, for the same two reasons. */
+  hour12: z.boolean().default(false),
   /**
    * When the profile picture last changed, or null if there is none. The R2
    * key stays server-side; this is what the client caches the image against.
@@ -78,6 +80,8 @@ export const notificationPrefsSchema = z.object({
   notifySession: z.boolean().optional(),
   notifyPayment: z.boolean().optional(),
   language: z.enum(['en', 'my']).optional(),
+  /** True for "7:30 PM", false for "19:30". Follows them onto a new phone. */
+  hour12: z.boolean().optional(),
 });
 export type NotificationPrefsInput = z.infer<typeof notificationPrefsSchema>;
 
@@ -103,6 +107,7 @@ export const pushStatusSchema = z.object({
   notifySession: z.boolean(),
   notifyPayment: z.boolean(),
   language: z.enum(['en', 'my']),
+  hour12: z.boolean().default(false),
 });
 export type PushStatus = z.infer<typeof pushStatusSchema>;
 
@@ -365,6 +370,8 @@ export const identitySchema = z.object({
   approved: z.boolean().default(true),
   /** Follows the member across devices, so a new phone opens in their language. */
   language: z.enum(['en', 'my']),
+  /** And on their preferred clock. */
+  hour12: z.boolean().default(false),
 });
 export type Identity = z.infer<typeof identitySchema>;
 

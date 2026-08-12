@@ -69,6 +69,7 @@ export function requireMember(): MiddlewareHandler<AppContext> {
       name: member.name,
       isOrganizer: member.isOrganizer,
       language: member.language,
+      hour12: member.hour12,
       approved: member.approvedAt !== null,
     });
     await next();

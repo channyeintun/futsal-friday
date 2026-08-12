@@ -43,6 +43,7 @@ export interface MemberRow {
   avatar_key: string | null;
   avatar_updated_at: string | null;
   approved_at: string | null;
+  hour12: number;
 }
 
 export interface VenueRow {
@@ -122,6 +123,7 @@ export const toMember = (row: MemberRow): Member => ({
   notifySession: (row.notify_session ?? 1) === 1,
   notifyPayment: (row.notify_payment ?? 1) === 1,
   language: normalizeLocale(row.language),
+  hour12: (row.hour12 ?? 0) === 1,
   claimedAt: row.claimed_at ?? null,
   // The nonce itself never leaves the server; the roster only needs to know
   // whether an invitation is outstanding.

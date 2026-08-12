@@ -391,6 +391,8 @@ export const en = {
     kickoffLabel: 'Kickoff (Ho Chi Minh time)',
     newSessionHint: 'Venue, fee and cap can be set once it exists.',
     couldNotCreateSession: 'Could not create that session',
+    clock: 'Clock',
+    clockBody: 'How times are shown across the app, and in your reminders.',
     language: 'Language',
     languageBody: 'Changes the app, reminders and the text you copy into the chat.',
   },

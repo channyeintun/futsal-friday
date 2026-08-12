@@ -140,6 +140,7 @@ export async function verifySseTicket(env: Env, ticket: string | null): Promise<
     // route re-checks nothing else; carrying the flag would only let a stale
     // ticket assert it.
     approved: true,
+    hour12: false,
   };
 }
 

@@ -28,6 +28,9 @@ interface Recipient {
   memberName: string;
   /** Notification text is written here, so each member gets their own language. */
   locale: Locale;
+  /** And their own clock: a reminder saying 19:30 to somebody whose app says
+   *  7:30 PM reads as a bug rather than a preference. */
+  hour12: boolean;
 }
 
 /**
@@ -41,12 +44,14 @@ interface RecipientRow {
   member_id: string;
   member_name: string;
   language: string;
+  hour12: number;
 }
 
 const toRecipient = (row: RecipientRow): Recipient => ({
   memberId: row.member_id,
   memberName: row.member_name,
   locale: normalizeLocale(row.language),
+  hour12: (row.hour12 ?? 0) === 1,
 });
 
 export interface NotificationSummary {
@@ -123,7 +128,7 @@ async function sendSessionReminders(
 
   for (const session of sessions) {
     const { results: players } = await env.DB.prepare(
-      `SELECT m.id AS member_id, m.name AS member_name, m.language
+      `SELECT m.id AS member_id, m.name AS member_name, m.language, m.hour12
          FROM registrations r
          JOIN members m ON m.id = r.member_id
         WHERE r.session_id = ?1 AND r.status = 'in'
@@ -133,10 +138,10 @@ async function sendSessionReminders(
       .all<RecipientRow>();
 
     const hours = Math.round(lead);
-    const message = (locale: Locale): PushMessage => {
+    const message = (locale: Locale, hour12: boolean): PushMessage => {
       const m = messagesFor(locale);
       return {
-        title: m.push.matchTitle(formatTime(session.starts_at)),
+        title: m.push.matchTitle(formatTime(session.starts_at, hour12)),
         body: session.venue_name
           ? m.push.matchBodyAtVenue(hours, session.venue_name)
           : m.push.matchBody(hours),
@@ -175,7 +180,7 @@ async function sendPaymentNudges(env: Env, now: Date, removed: Set<string>): Pro
 
   const { results: debts } = await env.DB.prepare(
     `SELECT p.session_id, p.amount_due, m.id AS member_id, m.name AS member_name,
-            m.language, s.starts_at
+            m.language, m.hour12, s.starts_at
        FROM payments p
        JOIN members m ON m.id = p.member_id
        JOIN sessions s ON s.id = p.session_id
@@ -193,6 +198,7 @@ async function sendPaymentNudges(env: Env, now: Date, removed: Set<string>): Pro
       member_id: string;
       member_name: string;
       language: string;
+      hour12: number;
       starts_at: string;
     }>();
 
@@ -236,8 +242,8 @@ async function sendPaymentNudges(env: Env, now: Date, removed: Set<string>): Pro
 async function deliver(
   env: Env,
   recipients: readonly Recipient[],
-  /** Built per recipient, because the text is in their language. */
-  message: (locale: Locale) => PushMessage,
+  /** Built per recipient, because the text is in their language and clock. */
+  message: (locale: Locale, hour12: boolean) => PushMessage,
   dedupeKey: string,
   kind: 'session_reminder' | 'payment_due',
   removed: Set<string>,
@@ -251,7 +257,7 @@ async function deliver(
     const claimed = await claim(env, recipient.memberId, kind, dedupeKey);
     if (!claimed) continue;
 
-    if (await pushToMember(env, sender, recipient.memberId, message(recipient.locale), removed)) {
+    if (await pushToMember(env, sender, recipient.memberId, message(recipient.locale, recipient.hour12), removed)) {
       sent++;
     }
   }

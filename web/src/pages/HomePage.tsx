@@ -15,7 +15,7 @@ import { useLocale } from '../state/locale.js';
  */
 export function HomePage() {
   const { identity } = useApp();
-  const { m, locale } = useLocale();
+  const { m, locale, hour12 } = useLocale();
   const queryClient = useQueryClient();
   const overview = useSessions();
 
@@ -75,7 +75,7 @@ export function HomePage() {
                 <Icon name={session.status === 'cancelled' ? 'close' : 'ball'} size={18} />
                 <span className="grow">
                   <span className="truncate" style={{ display: 'block', fontWeight: 500 }}>
-                    {formatKickoff(session.startsAt, locale)}
+                    {formatKickoff(session.startsAt, locale, hour12)}
                   </span>
                   <span className="muted">
                     {session.venue?.name ?? m.home.noVenue}

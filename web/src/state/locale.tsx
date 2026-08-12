@@ -38,11 +38,15 @@ interface LocaleValue {
   locale: Locale;
   m: Messages;
   setLocale(next: Locale): void;
+  /** True for "7:30 PM", false for "19:30". */
+  hour12: boolean;
+  setHour12(next: boolean): void;
 }
 
 const LocaleContext = createContext<LocaleValue | null>(null);
 
 const STORAGE_KEY = 'locale';
+const HOUR12_KEY = 'hour12';
 
 function initialLocale(): Locale {
   const stored = platform.storage.get(STORAGE_KEY);
@@ -59,11 +63,17 @@ export function LocaleProvider({
   children,
   /** The member's stored preference, once known. Overrides the device guess. */
   serverLocale,
+  /** Likewise their clock. Undefined until the first fetch answers. */
+  serverHour12,
 }: {
   children: ReactNode;
   serverLocale?: Locale | null;
+  serverHour12?: boolean | null;
 }) {
   const [locale, setLocaleState] = useState<Locale>(initialLocale);
+  const [hour12, setHour12State] = useState<boolean>(
+    () => platform.storage.get(HOUR12_KEY) === '1',
+  );
 
   useEffect(() => {
     if (!serverLocale) return;
@@ -77,6 +87,14 @@ export function LocaleProvider({
   }, [serverLocale]);
 
   useEffect(() => {
+    if (serverHour12 == null) return;
+    // Same rule as the language: a choice made on this device wins, or the
+    // next fetch would undo it.
+    if (platform.storage.get(HOUR12_KEY)) return;
+    setHour12State(serverHour12);
+  }, [serverHour12]);
+
+  useEffect(() => {
     platform.setDocumentLanguage(locale === 'my' ? 'my' : 'en');
   }, [locale]);
 
@@ -88,9 +106,17 @@ export function LocaleProvider({
     void updateNotificationPrefs({ language: next }).catch(() => {});
   }, []);
 
+  const setHour12 = useCallback((next: boolean) => {
+    setHour12State(next);
+    platform.storage.set(HOUR12_KEY, next ? '1' : '0');
+    // Best-effort, exactly as for the language: the screen has already
+    // changed, and a failure only means push reminders keep the old clock.
+    void updateNotificationPrefs({ hour12: next }).catch(() => {});
+  }, []);
+
   const value = useMemo<LocaleValue>(
-    () => ({ locale, m: messagesFor(locale), setLocale }),
-    [locale, setLocale],
+    () => ({ locale, m: messagesFor(locale), setLocale, hour12, setHour12 }),
+    [locale, setLocale, hour12, setHour12],
   );
 
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
@@ -102,7 +128,13 @@ export function useLocale(): LocaleValue {
   // throwing — an untranslated sign-in beats a blank page.
   if (!value) {
     const locale = initialLocale();
-    return { locale, m: messagesFor(locale), setLocale: () => {} };
+    return {
+      locale,
+      m: messagesFor(locale),
+      setLocale: () => {},
+      hour12: platform.storage.get(HOUR12_KEY) === '1',
+      setHour12: () => {},
+    };
   }
   return value;
 }

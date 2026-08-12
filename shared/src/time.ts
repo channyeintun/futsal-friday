@@ -142,22 +142,41 @@ const MONTH_NAMES: Record<Locale, readonly string[]> = {
   ],
 };
 
-/** e.g. "Fri 08 Aug, 19:30" / "သောကြာ 08 ဩဂုတ်၊ 19:30". */
+/**
+ * The clock, in whichever style the reader has asked for.
+ *
+ * AM/PM stays in Latin in both locales, for the same reason the numerals do:
+ * Myanmar apps overwhelmingly write clock times that way, and picking one of
+ * the several Burmese words for a part of the day (နံနက် / နေ့လယ် / ညနေ / ည)
+ * means picking wrong for half the kickoffs — 19:30 is arguably ည, not ညနေ.
+ *
+ * No leading zero on a 12-hour clock: "07:30 PM" is a digital-watch reading,
+ * not something anybody says.
+ */
+export function clockTime(hour: number, minute: number, hour12 = false): string {
+  if (!hour12) return `${pad(hour)}:${pad(minute)}`;
+  const suffix = hour < 12 ? 'AM' : 'PM';
+  const h = hour % 12 === 0 ? 12 : hour % 12;
+  return `${h}:${pad(minute)} ${suffix}`;
+}
+
+/** e.g. "Fri 08 Aug, 19:30" / "သောကြာ 08 ဩဂုတ်၊ 7:30 PM". */
 export function formatKickoff(
   instant: Date | string | number,
   locale: Locale = 'en',
+  hour12 = false,
 ): string {
   const p = toZonedParts(instant);
   const day = `${WEEKDAY_NAMES[locale][p.weekday]} ${pad(p.day)} ${MONTH_NAMES[locale][p.month - 1]}`;
-  const time = `${pad(p.hour)}:${pad(p.minute)}`;
+  const time = clockTime(p.hour, p.minute, hour12);
   // Burmese uses its own comma (U+104A); an ASCII one reads as a typo.
   return locale === 'my' ? `${day}၊ ${time}` : `${day}, ${time}`;
 }
 
-/** e.g. "19:30" in ICT. */
-export function formatTime(instant: Date | string | number): string {
+/** e.g. "19:30" or "7:30 PM" in ICT. */
+export function formatTime(instant: Date | string | number, hour12 = false): string {
   const p = toZonedParts(instant);
-  return `${pad(p.hour)}:${pad(p.minute)}`;
+  return clockTime(p.hour, p.minute, hour12);
 }
 
 /** e.g. "08 Aug 2026" in ICT. */

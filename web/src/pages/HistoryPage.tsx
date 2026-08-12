@@ -13,7 +13,7 @@ import { useLocale } from '../state/locale.js';
  */
 export function HistoryPage() {
   const { identity } = useApp();
-  const { m, locale } = useLocale();
+  const { m, locale, hour12 } = useLocale();
 
   const history = useHistory(identity.memberId);
   // Everyone's, not just the organizer's: the point of the list is that being
@@ -92,7 +92,7 @@ export function HistoryPage() {
             >
               <span className="grow">
                 <span style={{ display: 'block', fontWeight: 500 }}>
-                  {formatKickoff(entry.session.startsAt, locale)}
+                  {formatKickoff(entry.session.startsAt, locale, hour12)}
                 </span>
                 <span className="muted">
                   {entry.session.venue?.name ?? m.home.noVenue}

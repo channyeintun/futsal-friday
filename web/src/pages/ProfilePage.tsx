@@ -17,7 +17,7 @@ import { useLocale } from '../state/locale.js';
  */
 export function ProfilePage({ memberId }: { memberId: string }) {
   const { identity } = useApp();
-  const { m, locale } = useLocale();
+  const { m, locale, hour12 } = useLocale();
   const profile = useProfile(memberId);
 
   // Somebody else's match list is the organizer's business, or your own.
@@ -41,7 +41,7 @@ export function ProfilePage({ memberId }: { memberId: string }) {
             <div key={entry.session.id} className="player-row">
               <Icon name="ball" size={18} />
               <span className="grow truncate">
-                {formatKickoff(entry.session.startsAt, locale)}
+                {formatKickoff(entry.session.startsAt, locale, hour12)}
               </span>
               {entry.session.venue ? (
                 <span className="muted truncate">{entry.session.venue.name}</span>

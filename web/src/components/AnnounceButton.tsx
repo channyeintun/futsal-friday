@@ -1,5 +1,5 @@
-import type { SessionDetail } from '@futsal/shared';
-import { sessionAnnouncement } from '@futsal/shared';
+import type { Locale, SessionDetail } from '@futsal/shared';
+import { LOCALE_LABELS, LOCALES, sessionAnnouncement } from '@futsal/shared';
 import { useCallback, useState } from 'react';
 import { platform } from '../platform/index.js';
 import { useApp } from '../state/app.js';
@@ -13,16 +13,28 @@ import { Icon } from './Icon.js';
  * The text is always shown in full, not just copied, for two reasons: chat
  * webviews often block the clipboard API, and nobody should post a joke to
  * fifteen friends without reading it first.
+ *
+ * The language of the *message* is chosen here rather than inherited from the
+ * app, because the two are genuinely different questions. The group chat is in
+ * Burmese; the organizer may well be reading the app in English. Making them
+ * switch the whole interface to Burmese and back just to paste one line — and
+ * silently changing the language of their push notifications on the way, since
+ * that preference is shared — is a bad trade for a joke.
  */
 export function AnnounceButton({ detail }: { detail: SessionDetail }) {
   const { toast } = useApp();
   const { m, locale } = useLocale();
+  // Starts at whatever the app is in, which is the right guess most of the
+  // time; it is only a starting point, and it never touches the app's own
+  // language.
+  const [writeIn, setWriteIn] = useState<Locale>(locale);
   const [text, setText] = useState<string | null>(null);
   const [failedCopy, setFailedCopy] = useState(false);
 
   const write = useCallback(
-    (previous: string | null) => {
-      const next = () => sessionAnnouncement(detail, { locale, appUrl: platform.appUrl });
+    (previous: string | null, inLocale: Locale = writeIn) => {
+      const next = () =>
+        sessionAnnouncement(detail, { locale: inLocale, appUrl: platform.appUrl });
       // Shuffling and getting the same message back reads as a broken button,
       // and with eight openers that happens often enough to notice. A few
       // retries is plenty; give up rather than spin if the bank is tiny.
@@ -30,7 +42,7 @@ export function AnnounceButton({ detail }: { detail: SessionDetail }) {
       for (let i = 0; i < 8 && candidate === previous; i++) candidate = next();
       return candidate;
     },
-    [detail, locale],
+    [detail, writeIn],
   );
 
   const copy = async () => {
@@ -67,7 +79,29 @@ export function AnnounceButton({ detail }: { detail: SessionDetail }) {
         <p className="muted" style={{ margin: 0 }}>
           {m.announce.body}
         </p>
-        <pre className="summary-preview">{text}</pre>
+
+        {/* Which language the *message* is in — not the app. */}
+        <div className="row wrap" style={{ gap: 8 }}>
+          {LOCALES.map((code) => (
+            <Button
+              key={code}
+              lang={code}
+              variant={code === writeIn ? 'filled' : 'outlined'}
+              onClick={() => {
+                setWriteIn(code);
+                setText(write(null, code));
+              }}
+            >
+              {LOCALE_LABELS[code]}
+            </Button>
+          ))}
+        </div>
+
+        {/* Tagged with the message's own language, so Burmese gets Burmese
+            line-height even while the app is running in English. */}
+        <pre className="summary-preview" lang={writeIn}>
+          {text}
+        </pre>
         {failedCopy ? <ErrorBanner>{m.copy.fallbackBody}</ErrorBanner> : null}
       </Dialog>
     </>

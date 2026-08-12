@@ -9,7 +9,7 @@
 import { LOCALES, messagesFor, normalizeLocale } from '../src/i18n/index.ts';
 import { en } from '../src/i18n/en.ts';
 import { my } from '../src/i18n/my.ts';
-import { formatKickoff, relativeToNow } from '../src/time.ts';
+import { clockTime, formatKickoff, formatTime, relativeToNow } from '../src/time.ts';
 import { sessionAnnouncement } from '../src/announce.ts';
 import { computeStreak, type StreakEntry } from '../src/streak.ts';
 import { initialsOf } from '../src/names.ts';
@@ -431,6 +431,29 @@ for (const account of ['1234', '0881000458086', '1234567890123456789']) {
   }
 }
 check('payloads stay well formed across account and amount sizes', badLength === '', badLength);
+
+console.log('\nThe clock');
+
+check('24-hour is unchanged and zero-padded', clockTime(19, 30) === '19:30', clockTime(19, 30));
+check('12-hour drops the leading zero', clockTime(7, 5, true) === '7:05 AM', clockTime(7, 5, true));
+check('evening kickoff reads as PM', clockTime(19, 30, true) === '7:30 PM', clockTime(19, 30, true));
+// The two ends of the clock are where a naive `% 12` goes wrong.
+check('MIDNIGHT IS 12 AM, NOT 0 AM', clockTime(0, 5, true) === '12:05 AM', clockTime(0, 5, true));
+check('NOON IS 12 PM, NOT 0 PM', clockTime(12, 0, true) === '12:00 PM', clockTime(12, 0, true));
+check('one minute before noon is still AM', clockTime(11, 59, true) === '11:59 AM',
+  clockTime(11, 59, true));
+// A Friday 19:30 ICT kickoff, which is what the whole app is about.
+const friday = '2026-08-14T12:30:00.000Z';
+check('a kickoff formats on both clocks',
+  formatKickoff(friday, 'en') === 'Fri 14 Aug, 19:30' &&
+    formatKickoff(friday, 'en', true) === 'Fri 14 Aug, 7:30 PM',
+  `${formatKickoff(friday, 'en')} / ${formatKickoff(friday, 'en', true)}`);
+check('and Burmese keeps its own comma with AM/PM in Latin',
+  formatKickoff(friday, 'my', true).includes('၊') &&
+    formatKickoff(friday, 'my', true).endsWith('7:30 PM'),
+  formatKickoff(friday, 'my', true));
+check('formatTime follows the same rule', formatTime(friday, true) === '7:30 PM',
+  formatTime(friday, true));
 
 console.log('\nWho actually played');
 

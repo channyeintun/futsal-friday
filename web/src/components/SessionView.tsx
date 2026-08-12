@@ -38,7 +38,7 @@ export function SessionView({
   onChanged(): void;
 }) {
   const { identity, toast } = useApp();
-  const { m, locale } = useLocale();
+  const { m, locale, hour12 } = useLocale();
   const { session, registrations, counts, registrationOpen, me } = detail;
 
   const [busy, setBusy] = useState(false);
@@ -114,7 +114,7 @@ export function SessionView({
               ? m.session.finished
               : relativeToNow(session.startsAt, new Date(), locale)}
         </span>
-        <span className="when">{formatKickoff(session.startsAt, locale)}</span>
+        <span className="when">{formatKickoff(session.startsAt, locale, hour12)}</span>
 
         {session.venue ? (
           <span className="where row" style={{ gap: 6 }}>

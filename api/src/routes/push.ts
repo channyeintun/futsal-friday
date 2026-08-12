@@ -42,6 +42,7 @@ export const pushRoutes = new Hono<AppContext>()
       notifySession: member?.notifySession ?? true,
       notifyPayment: member?.notifyPayment ?? true,
       language: member?.language ?? 'en',
+      hour12: (row?.hour12 ?? 0) === 1,
     };
     return c.json(status);
   })
@@ -120,18 +121,22 @@ export const pushRoutes = new Hono<AppContext>()
       session: input.notifySession === undefined ? row.notify_session : input.notifySession ? 1 : 0,
       payment: input.notifyPayment === undefined ? row.notify_payment : input.notifyPayment ? 1 : 0,
       language: input.language ?? normalizeLocale(row.language),
+      hour12: input.hour12 === undefined ? (row.hour12 ?? 0) : input.hour12 ? 1 : 0,
     };
 
     await c.env.DB.prepare(
-      `UPDATE members SET notify_session = ?2, notify_payment = ?3, language = ?4 WHERE id = ?1`,
+      `UPDATE members
+          SET notify_session = ?2, notify_payment = ?3, language = ?4, hour12 = ?5
+        WHERE id = ?1`,
     )
-      .bind(identity.memberId, next.session, next.payment, next.language)
+      .bind(identity.memberId, next.session, next.payment, next.language, next.hour12)
       .run();
 
     return c.json({
       notifySession: next.session === 1,
       notifyPayment: next.payment === 1,
       language: next.language,
+      hour12: next.hour12 === 1,
     });
   })
 

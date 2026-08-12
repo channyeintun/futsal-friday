@@ -1,4 +1,11 @@
-import { type Member, type Venue, nextFridayKickoff, toDatetimeLocal, fromDatetimeLocal } from '@futsal/shared';
+import {
+  type Member,
+  type Venue,
+  formatTime,
+  nextFridayKickoff,
+  toDatetimeLocal,
+  fromDatetimeLocal,
+} from '@futsal/shared';
 import { useState } from 'react';
 import { createMember, removeMember, updateMember } from '../api/members.js';
 import { createSession } from '../api/sessions.js';
@@ -31,6 +38,7 @@ export function AdminPage() {
       <>
         {/* Reminders are everyone's setting, not an organizer tool. */}
         <LanguageCard />
+        <ClockCard />
         <MyDeviceCard />
         <ReminderSettings />
         <div className="card">
@@ -57,6 +65,7 @@ export function AdminPage() {
           on a waiting screen until this gets a tap. */}
       <PendingApprovals onChanged={() => void members.refetch()} />
       <LanguageCard />
+      <ClockCard />
       <MyDeviceCard />
       <ReminderSettings />
       {/* Above the roster: sharing one link is the normal way to onboard, and
@@ -350,6 +359,34 @@ function LanguageCard() {
             onClick={() => setLocale(code)}
           >
             {LOCALE_LABELS[code]}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ clock format */
+
+/** Also personal, and also follows them onto a new phone. */
+function ClockCard() {
+  const { m, hour12, setHour12 } = useLocale();
+  // A real kickoff rather than a made-up one, so the sample reads like the
+  // thing it is about to change.
+  const sample = nextFridayKickoff();
+
+  return (
+    <div className="card">
+      <h2 className="card-title">{m.admin.clock}</h2>
+      <p className="card-sub">{m.admin.clockBody}</p>
+      <div className="row wrap" style={{ gap: 8 }}>
+        {([false, true] as const).map((choice) => (
+          <Button
+            key={String(choice)}
+            variant={choice === hour12 ? 'filled' : 'outlined'}
+            onClick={() => setHour12(choice)}
+          >
+            {formatTime(sample, choice)}
           </Button>
         ))}
       </div>

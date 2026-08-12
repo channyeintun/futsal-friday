@@ -55,7 +55,10 @@ See [Who can get in](#who-can-get-in).
 - **Installable, with reminders.** A PWA that opens offline, plus push
   notifications ~3h before kickoff and a weekly nudge while you still owe.
 - **English and Burmese.** Including the push notifications and the text you
-  copy into the group chat.
+  copy into the group chat — and the announcement picks its own language, so
+  the organizer can post Burmese to the chat without switching the whole app.
+- **12- or 24-hour clock.** A personal setting that follows you onto a new
+  phone, and that your reminders honour too.
 
 ---
 
