@@ -1,8 +1,11 @@
 import { formatKickoff, formatVnd } from '@futsal/shared';
+import { useMemo } from 'react';
+import { Avatar } from '../components/Avatar.js';
 import { Icon } from '../components/Icon.js';
 import { ProfileCard } from '../components/ProfileCard.js';
+import { VirtualList } from '../components/VirtualList.js';
 import { ErrorBanner, Spinner } from '../components/ui.js';
-import { useBalances, useHistory, useProfile } from '../hooks/queries.js';
+import { useBalancesInfinite, useHistory, useProfile } from '../hooks/queries.js';
 import { navigate } from '../router.js';
 import { useApp } from '../state/app.js';
 import { useLocale } from '../state/locale.js';
@@ -18,7 +21,12 @@ export function HistoryPage() {
   const history = useHistory(identity.memberId);
   // Everyone's, not just the organizer's: the point of the list is that being
   // on it is public.
-  const balances = useBalances(true);
+  const balances = useBalancesInfinite(true);
+  // Flattened once per fetch: the virtualizer reads this on every scroll frame.
+  const owed = useMemo(
+    () => balances.data?.pages.flatMap((page) => page.balances) ?? [],
+    [balances.data],
+  );
   const profile = useProfile(identity.memberId);
 
   const myOutstanding = (history.data ?? []).reduce(
@@ -130,33 +138,44 @@ export function HistoryPage() {
         </h2>
         <p className="card-sub">{m.history.whoOwesBody}</p>
         {balances.error ? <ErrorBanner>{balances.error.message}</ErrorBanner> : null}
-        {(balances.data ?? []).length === 0 ? (
-          <p className="empty">{m.history.noPayments}</p>
-        ) : (
-          (balances.data ?? [])
-            // Debtors first. It is the list nobody wants to be at the top of,
-            // which only works if the top is where the eye lands.
-            .slice()
-            .sort((a, b) => b.outstanding - a.outstanding)
-            .map((balance) => (
-              <div
-                key={balance.member.id}
-                className={`player-row${balance.member.id === identity.memberId ? ' is-me' : ''}`}
+        {balances.isPending ? <Spinner /> : null}
+        <VirtualList
+          query={balances}
+          items={owed}
+          estimateSize={60}
+          itemKey={(balance) => balance.member.id}
+          empty={<p className="empty">{m.history.noPayments}</p>}
+          renderItem={(balance) => (
+            /* Debtors first, ordered by the server — see `loadMemberBalances`. */
+            <div
+              className={`player-row${balance.member.id === identity.memberId ? ' is-me' : ''}`}
+            >
+              <Avatar
+                memberId={balance.member.id}
+                name={balance.member.name}
+                avatarUpdatedAt={balance.member.avatarUpdatedAt}
+                size={28}
+              />
+              <button
+                type="button"
+                className="player-name truncate grow link"
+                onClick={() => navigate({ name: 'profile', id: balance.member.id })}
               >
-                <span className="player-name truncate">{balance.member.name}</span>
-                <span className="muted">{balance.sessionsPlayed}×</span>
-                <span
-                  className="amount"
-                  style={{
-                    color:
-                      balance.outstanding > 0 ? 'var(--md-sys-color-error)' : 'var(--ff-paid)',
-                  }}
-                >
-                  {balance.outstanding > 0 ? formatVnd(balance.outstanding) : m.history.settledUp}
+                {balance.member.name}
+              </button>
+              <span className="muted" style={{ fontSize: '0.75rem' }}>
+                {m.history.sessionsPlayed(balance.sessionsPlayed)}
+              </span>
+              {balance.outstanding > 0 ? (
+                <span className="amount" style={{ color: 'var(--md-sys-color-error)' }}>
+                  {formatVnd(balance.outstanding)}
                 </span>
-              </div>
-            ))
-        )}
+              ) : (
+                <span className="badge paid">{m.history.settledUp}</span>
+              )}
+            </div>
+          )}
+        />
       </div>
     </>
   );

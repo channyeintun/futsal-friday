@@ -12,7 +12,7 @@ import {
 import { getPaymentDetails } from '../api/payment-details.js';
 import { getPayments } from '../api/payments.js';
 import { pushStatus } from '../api/push.js';
-import { getSession, listSessions } from '../api/sessions.js';
+import { getSession, listPastSessions, listSessions } from '../api/sessions.js';
 import { listVenues } from '../api/venues.js';
 
 /**
@@ -158,11 +158,31 @@ export function useHistory(memberId: string, enabled = true) {
   });
 }
 
-export function useBalances(enabled: boolean) {
-  return useQuery({
-    queryKey: queryKeys.balances,
-    queryFn: ({ signal }) => listBalances(signal),
+/**
+ * The debt list, paged. Ordered by the server — sorting "debtors first" in the
+ * browser would only sort the pages fetched so far, which with paging is not
+ * an order at all.
+ */
+export function useBalancesInfinite(enabled: boolean, pageSize = 50) {
+  return useInfiniteQuery({
+    queryKey: [...queryKeys.balances, 'infinite', pageSize] as const,
+    queryFn: ({ pageParam, signal }) =>
+      listBalances({ cursor: pageParam, limit: pageSize }, signal),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
     enabled,
+    staleTime: 60_000,
+  });
+}
+
+/** Everything already played, newest first. */
+export function usePastSessions(pageSize = 20) {
+  return useInfiniteQuery({
+    queryKey: ['sessions', 'past', pageSize] as const,
+    queryFn: ({ pageParam, signal }) =>
+      listPastSessions({ cursor: pageParam, limit: pageSize }, signal),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
     staleTime: 60_000,
   });
 }

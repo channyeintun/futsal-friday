@@ -34,6 +34,24 @@ import {
 import { requireOrganizer } from '../middleware.js';
 import { isUniqueViolation } from './members.js';
 
+/** Opaque `(starts_at, id)` position in the fixture history. */
+function encodePastCursor(startsAt: string, id: string): string {
+  return btoa(unescape(encodeURIComponent(JSON.stringify({ s: startsAt, i: id }))));
+}
+
+function decodePastCursor(raw: string | undefined): { startsAt: string; id: string } | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(decodeURIComponent(escape(atob(raw))));
+    if (typeof parsed?.s === 'string' && typeof parsed?.i === 'string') {
+      return { startsAt: parsed.s, id: parsed.i };
+    }
+  } catch {
+    // An unreadable cursor is the first page, not an error.
+  }
+  return null;
+}
+
 export const sessionRoutes = new Hono<AppContext>()
 
   /** Home screen: the next session plus a short history. */
@@ -59,6 +77,45 @@ export const sessionRoutes = new Hono<AppContext>()
     return c.json({
       upcoming: upcomingRow ? toSession(upcomingRow) : null,
       recent: recent.map(toSession),
+    });
+  })
+
+  /**
+   * Fixtures that have already happened, newest first, a page at a time.
+   *
+   * The home screen used to get twelve of these bundled into `/sessions` and
+   * no way to ask for a thirteenth — the group's history simply stopped there.
+   * Keyset on `(starts_at DESC, id ASC)`: two sessions can share a kickoff
+   * time (a midweek game added twice, a fixture moved onto another), and
+   * without the id in the tuple one of them would be unreachable.
+   */
+  .get('/past', async (c) => {
+    const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 20) || 20, 1), 100);
+    const cursor = decodePastCursor(c.req.query('cursor'));
+    const now = nowIso();
+
+    const statement = cursor
+      ? c.env.DB.prepare(
+          `SELECT ${SESSION_COLUMNS} ${SESSION_FROM}
+            WHERE (s.starts_at < ?1 OR s.status <> 'scheduled')
+              AND (s.starts_at < ?2 OR (s.starts_at = ?2 AND s.id > ?3))
+            ORDER BY s.starts_at DESC, s.id ASC
+            LIMIT ?4`,
+        ).bind(now, cursor.startsAt, cursor.id, limit + 1)
+      : c.env.DB.prepare(
+          `SELECT ${SESSION_COLUMNS} ${SESSION_FROM}
+            WHERE s.starts_at < ?1 OR s.status <> 'scheduled'
+            ORDER BY s.starts_at DESC, s.id ASC
+            LIMIT ?2`,
+        ).bind(now, limit + 1);
+
+    const { results } = await statement.all<SessionWithVenueRow>();
+    const page = results.slice(0, limit);
+    const last = page.at(-1);
+    return c.json({
+      sessions: page.map(toSession),
+      nextCursor:
+        results.length > limit && last ? encodePastCursor(last.starts_at, last.id) : null,
     });
   })
 

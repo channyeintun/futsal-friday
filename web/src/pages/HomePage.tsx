@@ -1,9 +1,11 @@
 import { formatKickoff, formatVnd } from '@futsal/shared';
 import { useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { Icon } from '../components/Icon.js';
+import { VirtualList } from '../components/VirtualList.js';
 import { SessionView } from '../components/SessionView.js';
 import { ErrorBanner, Spinner } from '../components/ui.js';
-import { queryKeys, useSessions } from '../hooks/queries.js';
+import { queryKeys, usePastSessions, useSessions } from '../hooks/queries.js';
 import { useLiveSession } from '../hooks/useLiveSession.js';
 import { navigate } from '../router.js';
 import { useApp } from '../state/app.js';
@@ -18,6 +20,13 @@ export function HomePage() {
   const { m, locale, hour12 } = useLocale();
   const queryClient = useQueryClient();
   const overview = useSessions();
+  // The history used to be twelve rows bundled into the overview with no way
+  // to ask for a thirteenth. It is its own paged query now.
+  const past = usePastSessions();
+  const playedSessions = useMemo(
+    () => past.data?.pages.flatMap((page) => page.sessions) ?? [],
+    [past.data],
+  );
 
   const upcomingId = overview.data?.upcoming?.id ?? null;
   const live = useLiveSession(upcomingId, identity.memberId);
@@ -51,47 +60,51 @@ export function HomePage() {
         </div>
       )}
 
-      {overview.data && overview.data.recent.length > 0 ? (
-        <div className="card">
-          <h2 className="card-title">{m.home.previously}</h2>
-          <div>
-            {overview.data.recent.map((session) => (
-              <button
-                key={session.id}
-                type="button"
-                className="player-row"
-                style={{
-                  width: '100%',
-                  background: 'none',
-                  border: 0,
-                  borderBottom: '1px solid var(--md-sys-color-outline-variant)',
-                  font: 'inherit',
-                  color: 'inherit',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                }}
-                onClick={() => navigate({ name: 'session', id: session.id })}
-              >
-                <Icon name={session.status === 'cancelled' ? 'close' : 'ball'} size={18} />
-                <span className="grow">
-                  <span className="truncate" style={{ display: 'block', fontWeight: 500 }}>
-                    {formatKickoff(session.startsAt, locale, hour12)}
-                  </span>
-                  <span className="muted">
-                    {session.venue?.name ?? m.home.noVenue}
-                    {session.totalCharge != null ? ` · ${formatVnd(session.totalCharge)}` : ''}
-                  </span>
+      <div className="card">
+        <h2 className="card-title">{m.home.previously}</h2>
+        {past.error ? <ErrorBanner>{past.error.message}</ErrorBanner> : null}
+        {past.isPending ? <Spinner /> : null}
+        <VirtualList
+          query={past}
+          items={playedSessions}
+          estimateSize={62}
+          itemKey={(session) => session.id}
+          empty={<p className="empty">{m.home.noneYet}</p>}
+          renderItem={(session) => (
+            <button
+              type="button"
+              className="player-row"
+              style={{
+                width: '100%',
+                background: 'none',
+                border: 0,
+                borderBottom: '1px solid var(--md-sys-color-outline-variant)',
+                font: 'inherit',
+                color: 'inherit',
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+              onClick={() => navigate({ name: 'session', id: session.id })}
+            >
+              <Icon name={session.status === 'cancelled' ? 'close' : 'ball'} size={18} />
+              <span className="grow">
+                <span className="truncate" style={{ display: 'block', fontWeight: 500 }}>
+                  {formatKickoff(session.startsAt, locale, hour12)}
                 </span>
-                {session.status === 'cancelled' ? (
-                  <span className="badge unpaid">{m.home.badgeCancelled}</span>
-                ) : session.totalCharge == null ? (
-                  <span className="badge pending">{m.home.badgeNotSplit}</span>
-                ) : null}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
+                <span className="muted">
+                  {session.venue?.name ?? m.home.noVenue}
+                  {session.totalCharge != null ? ` · ${formatVnd(session.totalCharge)}` : ''}
+                </span>
+              </span>
+              {session.status === 'cancelled' ? (
+                <span className="badge unpaid">{m.home.badgeCancelled}</span>
+              ) : session.totalCharge == null ? (
+                <span className="badge pending">{m.home.badgeNotSplit}</span>
+              ) : null}
+            </button>
+          )}
+        />
+      </div>
     </>
   );
 }

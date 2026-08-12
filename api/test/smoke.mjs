@@ -160,6 +160,21 @@ async function allMembers(token) {
   return members;
 }
 
+/** Follow any cursor endpoint to the end, collecting one field. */
+async function walk(token, path, field) {
+  const out = [];
+  let cursor = null;
+  for (let page = 0; page < 60; page++) {
+    const sep = path.includes('?') ? '&' : '?';
+    const res = await call('GET', `${path}${cursor ? `${sep}cursor=${encodeURIComponent(cursor)}` : ''}`, { token });
+    if (res.status !== 200) break;
+    out.push(...(res.body?.[field] ?? []));
+    cursor = res.body?.nextCursor ?? null;
+    if (!cursor) break;
+  }
+  return out;
+}
+
 /** Creates a member (as organizer), invites them, and redeems the link. */
 async function addAndLogIn(organizerToken, name) {
   const created = await call('POST', '/members', { token: organizerToken, body: { name } });
@@ -375,7 +390,9 @@ const run = async () => {
   check('collected matches the confirmed payment', summary.body.collected === 200_000, summary.body);
   check('outstanding is the rest', summary.body.outstanding === 300_000, summary.body);
 
-  const balances = await call('GET', '/members/balances', { token: organizer });
+  // Walked, not read: the debt list is paged and ordered by what is owed, so
+  // somebody square with the group sits far past the first page.
+  const balances = { body: { balances: await walk(organizer, '/members/balances?limit=100', 'balances') } };
   const bobBalance = balances.body.balances.find((b) => b.member.id === bob.id);
   check('balance shows nothing outstanding for Bob', bobBalance?.outstanding === 0, bobBalance);
   const aliceBalance = balances.body.balances.find((b) => b.member.id === alice.id);
@@ -418,6 +435,41 @@ const run = async () => {
   check('re-issuing invalidates the previous link', stale.status === 401, stale.body);
   const fresh = await call('POST', '/auth/claim', { body: { nonce: nonceOf(second.body.url) } });
   check('the newest link still works', fresh.status === 200, fresh.body);
+
+  section('the long lists are paginated');
+  // Past fixtures, newest first.
+  const pastPage = await call('GET', '/sessions/past?limit=5', { token: organizer });
+  check('past sessions come a page at a time', pastPage.body?.sessions?.length <= 5,
+    pastPage.body?.sessions?.length);
+  const allPast = await walk(organizer, '/sessions/past?limit=5', 'sessions');
+  const pastIds = allPast.map((x) => x.id);
+  check('NO FIXTURE IS SKIPPED OR REPEATED', new Set(pastIds).size === pastIds.length,
+    `${pastIds.length} rows, ${new Set(pastIds).size} distinct`);
+  check('and they stay newest-first across pages',
+    allPast.every((x, i) => i === 0 || allPast[i - 1].startsAt >= x.startsAt),
+    allPast.find((x, i) => i > 0 && allPast[i - 1].startsAt < x.startsAt)?.startsAt);
+  check('every one of them has already happened or is finished',
+    allPast.every((x) => x.startsAt < new Date().toISOString() || x.status !== 'scheduled'));
+  check('an unreadable fixture cursor starts from the top',
+    (await call('GET', '/sessions/past?cursor=zzz', { token: organizer })).body?.sessions?.[0]?.id
+      === allPast[0]?.id);
+
+  // Who owes what, biggest debt first — the order has to be the server's, or
+  // paging would sort each page separately and the list would mean nothing.
+  const owedPage = await call('GET', '/members/balances?limit=4', { token: alice.token });
+  check('balances come a page at a time', owedPage.body?.balances?.length <= 4,
+    owedPage.body?.balances?.length);
+  const allOwed = await walk(alice.token, '/members/balances?limit=4', 'balances');
+  const owedIds = allOwed.map((x) => x.member.id);
+  check('no debtor is skipped or repeated', new Set(owedIds).size === owedIds.length,
+    `${owedIds.length} rows, ${new Set(owedIds).size} distinct`);
+  check('DEBTORS STAY IN ORDER ACROSS PAGE BOUNDARIES',
+    allOwed.every((x, i) => i === 0 || allOwed[i - 1].outstanding >= x.outstanding),
+    allOwed.find((x, i) => i > 0 && allOwed[i - 1].outstanding < x.outstanding)?.outstanding);
+  const oneBigRead = await call('GET', '/members/balances?limit=100', { token: alice.token });
+  check('and small pages agree with one big read',
+    oneBigRead.body.balances.every((x, i) => allOwed[i]?.member.id === x.member.id),
+    'the first 100 differ');
 
   section('the roster is paginated');
   const firstPage = await call('GET', '/members?limit=3', { token: organizer });

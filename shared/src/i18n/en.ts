@@ -255,6 +255,7 @@ export const en = {
       'The next Friday game is created automatically every week. If one is missing, add it from the admin screen.',
     noSessionMember:
       'The next Friday game is created automatically every week. If one is missing, nudge the organizer.',
+    noneYet: 'No games played yet.',
     previously: 'Previously',
     badgeCancelled: 'cancelled',
     badgeNotSplit: 'not split',

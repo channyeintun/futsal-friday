@@ -28,6 +28,22 @@ export interface WithdrawResult {
 export const listSessions = (signal?: AbortSignal) =>
   get<SessionsOverview>('/sessions', signal);
 
+export interface PastSessionPage {
+  sessions: Session[];
+  nextCursor: string | null;
+}
+
+/** Fixtures already played, newest first. */
+export const listPastSessions = (
+  opts: { cursor?: string | null; limit?: number } = {},
+  signal?: AbortSignal,
+) => {
+  const query = new URLSearchParams();
+  if (opts.cursor) query.set('cursor', opts.cursor);
+  if (opts.limit) query.set('limit', String(opts.limit));
+  return get<PastSessionPage>(`/sessions/past${query.size ? `?${query}` : ''}`, signal);
+};
+
 export const getSession = (id: string, signal?: AbortSignal) =>
   get<SessionDetail>(`/sessions/${id}`, signal);
 

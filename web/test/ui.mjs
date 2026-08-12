@@ -746,6 +746,39 @@ async function run() {
   // theme, so it is worth pinning rather than asserting "something dark".
   check('dark theme applies', bg === 'rgb(0, 0, 0)', bg);
 
+  console.log('\nevery long list is paged and windowed');
+  // The same three properties on each: a bounded first request, a DOM holding
+  // a window rather than the list, and a scroll box that does not swallow the
+  // page. Written as one loop because three copies would drift.
+  for (const [label, path, endpoint] of [
+    ['home history', '/', '/sessions/past'],
+    ['who owes what', '/history', '/members/balances'],
+    ['the roster', '/players', '/members\\?'],
+  ]) {
+    const before = events.filter((e) => e.method === 'Network.requestWillBeSent').length;
+    await send('Page.navigate', { url: `${APP_URL}${path}` });
+    const ready = await waitFor(`!!document.querySelector('.virtual-scroller')`,
+      `${label}: the list renders`);
+    if (!ready) continue;
+    await sleep(2000);
+    const asked = events
+      .filter((e) => e.method === 'Network.requestWillBeSent')
+      .slice(before)
+      .map((e) => e.params.request.url)
+      .filter((u) => new RegExp(endpoint).test(u));
+    check(`${label}: asks for a bounded page`, asked.some((u) => /limit=\d+/.test(u)),
+      JSON.stringify(asked.map((u) => u.replace(/^.*\/api/, '')).slice(0, 3)));
+    const shape = await evalJs(`(() => {
+      const el = document.querySelector('.virtual-scroller');
+      return { rows: document.querySelectorAll('.virtual-row').length,
+               clientH: el?.clientHeight ?? 0, viewport: innerHeight };
+    })()`);
+    check(`${label}: the DOM holds a window, not the whole list`,
+      shape.rows > 0 && shape.rows < 40, JSON.stringify(shape));
+    check(`${label}: it scrolls inside a capped box`,
+      shape.clientH > 0 && shape.clientH < shape.viewport, JSON.stringify(shape));
+  }
+
   console.log('\nthe roster is paginated and virtualized');
   // Setup used to render every player, which put "add a session" and "sign
   // out" below the whole group and pulled the entire roster over the wire to

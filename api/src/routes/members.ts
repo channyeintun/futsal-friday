@@ -2,6 +2,7 @@ import { createMemberSchema, updateMemberSchema } from '@futsal/shared';
 import { Hono } from 'hono';
 import {
   type MemberRow,
+  decodeBalanceCursor,
   loadMemberBalances,
   loadMemberHistory,
   loadMemberProfile,
@@ -170,7 +171,13 @@ export const memberRoutes = new Hono<AppContext>()
    * the only one who could see it, which put all the nagging on them.
    */
   .get('/balances', async (c) => {
-    return c.json({ balances: await loadMemberBalances(c.env.DB) });
+    const limit = Number(c.req.query('limit') ?? 50) || 50;
+    return c.json(
+      await loadMemberBalances(c.env.DB, {
+        limit,
+        cursor: decodeBalanceCursor(c.req.query('cursor')),
+      }),
+    );
   })
 
   /**

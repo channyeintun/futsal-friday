@@ -377,31 +377,103 @@ export async function loadPaymentSummary(
  * Outstanding balance per member across every settled session — the "who still
  * owes me money" view, answered in one query rather than N.
  */
-export async function loadMemberBalances(db: D1Database): Promise<MemberBalance[]> {
-  const { results } = await db
-    .prepare(
-      `SELECT m.id, m.name, m.is_organizer, m.active, m.external_id, m.created_at,
+/**
+ * Who owes what, biggest debt first, a page at a time.
+ *
+ * The order moved from the client to here when this list grew past one screen.
+ * Sorting "debtors first" in the browser only sorts what the browser happens
+ * to have fetched, so with paging the top of page two could easily outrank the
+ * bottom of page one — the list would no longer be in any order at all.
+ *
+ * Keyset on `(outstanding DESC, id ASC)`, spelled out rather than as a row
+ * value because the two directions differ and `(a, b) < (?, ?)` cannot express
+ * that. `HAVING`, not `WHERE`, because `outstanding` is an aggregate and does
+ * not exist yet when `WHERE` runs.
+ */
+export async function loadMemberBalances(
+  db: D1Database,
+  opts: { limit?: number; cursor?: { outstanding: number; id: string } | null } = {},
+): Promise<{ balances: MemberBalance[]; nextCursor: string | null }> {
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 100);
+  const cursor = opts.cursor ?? null;
+
+  const columns = `m.id, m.name, m.is_organizer, m.active, m.external_id, m.created_at,
+              m.notify_session, m.notify_payment, m.language, m.claimed_at, m.claim_nonce,
+              m.claim_expires_at, m.token_version, m.avatar_key, m.avatar_updated_at,
+              m.approved_at, m.hour12,
               COUNT(p.id) AS sessions_played,
               COALESCE(SUM(p.amount_due), 0) AS total_owed,
               COALESCE(SUM(CASE WHEN p.status = 'confirmed' THEN p.amount_due ELSE 0 END), 0)
-                AS total_confirmed
-         FROM members m
-         LEFT JOIN payments p ON p.member_id = m.id
-        WHERE m.active = 1
-        GROUP BY m.id
-        ORDER BY m.name COLLATE NOCASE ASC`,
-    )
-    .all<
-      MemberRow & { sessions_played: number; total_owed: number; total_confirmed: number }
-    >();
+                AS total_confirmed,
+              MAX(0, COALESCE(SUM(p.amount_due), 0)
+                     - COALESCE(SUM(CASE WHEN p.status = 'confirmed' THEN p.amount_due ELSE 0 END), 0))
+                AS outstanding`;
 
-  return results.map((row) => ({
-    member: toMember(row),
-    sessionsPlayed: row.sessions_played,
-    totalOwed: row.total_owed,
-    totalConfirmed: row.total_confirmed,
-    outstanding: Math.max(0, row.total_owed - row.total_confirmed),
-  }));
+  const statement = cursor
+    ? db.prepare(
+        `SELECT ${columns}
+           FROM members m
+           LEFT JOIN payments p ON p.member_id = m.id
+          WHERE m.active = 1
+          GROUP BY m.id
+         HAVING outstanding < ?1 OR (outstanding = ?1 AND m.id > ?2)
+          ORDER BY outstanding DESC, m.id ASC
+          LIMIT ?3`,
+      ).bind(cursor.outstanding, cursor.id, limit + 1)
+    : db.prepare(
+        `SELECT ${columns}
+           FROM members m
+           LEFT JOIN payments p ON p.member_id = m.id
+          WHERE m.active = 1
+          GROUP BY m.id
+          ORDER BY outstanding DESC, m.id ASC
+          LIMIT ?1`,
+      ).bind(limit + 1);
+
+  const { results } = await statement.all<
+    MemberRow & {
+      sessions_played: number;
+      total_owed: number;
+      total_confirmed: number;
+      outstanding: number;
+    }
+  >();
+
+  const page = results.slice(0, limit);
+  const last = page.at(-1);
+  return {
+    balances: page.map((row) => ({
+      member: toMember(row),
+      sessionsPlayed: row.sessions_played,
+      totalOwed: row.total_owed,
+      totalConfirmed: row.total_confirmed,
+      outstanding: Math.max(0, row.total_owed - row.total_confirmed),
+    })),
+    nextCursor:
+      results.length > limit && last
+        ? encodeBalanceCursor(last.outstanding, last.id)
+        : null,
+  };
+}
+
+/** Opaque `(outstanding, id)` position in the debt list. */
+export function encodeBalanceCursor(outstanding: number, id: string): string {
+  return btoa(unescape(encodeURIComponent(JSON.stringify({ o: outstanding, i: id }))));
+}
+
+export function decodeBalanceCursor(
+  raw: string | undefined,
+): { outstanding: number; id: string } | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(decodeURIComponent(escape(atob(raw))));
+    if (typeof parsed?.o === 'number' && typeof parsed?.i === 'string') {
+      return { outstanding: parsed.o, id: parsed.i };
+    }
+  } catch {
+    // An unreadable cursor is the first page, not an error.
+  }
+  return null;
 }
 
 /**

@@ -31,8 +31,21 @@ export const listMembers = (
 export const membersCount = (signal?: AbortSignal) =>
   get<{ total: number }>('/members/count', signal).then((r) => r.total);
 
-export const listBalances = (signal?: AbortSignal) =>
-  get<{ balances: MemberBalance[] }>('/members/balances', signal).then((r) => r.balances);
+export interface BalancePage {
+  balances: MemberBalance[];
+  nextCursor: string | null;
+}
+
+/** Who owes what, biggest debt first. Ordered by the server so paging holds. */
+export const listBalances = (
+  opts: { cursor?: string | null; limit?: number } = {},
+  signal?: AbortSignal,
+) => {
+  const query = new URLSearchParams();
+  if (opts.cursor) query.set('cursor', opts.cursor);
+  if (opts.limit) query.set('limit', String(opts.limit));
+  return get<BalancePage>(`/members/balances${query.size ? `?${query}` : ''}`, signal);
+};
 
 export const memberHistory = (memberId: string, signal?: AbortSignal) =>
   get<{ history: MemberHistoryEntry[] }>(`/members/${memberId}/history`, signal).then(

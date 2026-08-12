@@ -496,32 +496,51 @@ Account details stay in plain text above the code as well. The QR is the fast
 path; a number you can read and copy is the one that works when somebody is
 paying from a laptop, or from the same phone that is displaying the code.
 
-### The roster is paged, not listed
+### The long lists are paged and windowed
 
-Setup asks the server how many players there are and nothing else. It used to
-render every one of them, which put "add a midweek session" and "sign out"
-below however many people are in the group — on a screen you open to change a
-setting, you first scrolled past everybody — and pulled the whole roster over
-the wire to print one number.
+Three lists grow without limit — the fixture history on the home screen, the
+debt list on **History**, and the roster. All three now use
+`useInfiniteQuery` over a cursor with `@tanstack/react-virtual` over the rows,
+through one `VirtualList` component rather than three copies of the same
+fiddly wiring.
 
-The list itself is a screen of its own, `/players`, with `useInfiniteQuery`
-over a cursor and `@tanstack/react-virtual` over the rows. Both, not either:
-virtualizing a list you have already downloaded still costs the download, and
-paging a list you render in full still costs the DOM. Each row carries an
-avatar, a switch and two dialogs' worth of controls, so a few hundred of them
-is thousands of nodes that nobody scrolls to.
+Both halves are needed and neither is enough: virtualizing a list you have
+already downloaded still pays for the download, and paging one you render in
+full still pays for the DOM. A roster row carries an avatar, a switch and two
+dialogs' worth of controls, so a few hundred is thousands of nodes nobody
+scrolls to. Measured on the dev database: **12–16 rows in the DOM** per list,
+whatever the total.
 
-Paging is **keyset**, not `OFFSET`. The order is by name, so adding an "Aung"
-while somebody is three pages down would shift every later row and make the
-next page repeat a name it had already shown. The cursor compares against the
-last row actually seen — `(name, id) > (?, ?)`, with `id` in the tuple because
-names are not unique and two players called Minh would otherwise make the
-second unreachable. An unreadable cursor is treated as the first page rather
-than an error, so a stale one shows the top of the list instead of failing at
-somebody halfway down.
+Paging is **keyset**, not `OFFSET`. Insert a row while somebody is three pages
+down and offsets shift every later row, so the next page repeats what they
+have already seen. Each cursor compares against the last row actually seen:
 
-The scroll container is the list's own box, capped in `dvh`, which is also
-what keeps the controls under it reachable.
+| List | Cursor | Why the tie-break |
+| --- | --- | --- |
+| Roster | `(name, id) >` | Names are not unique — two players called Minh |
+| Fixtures | `(starts_at, id) <` | Two sessions can share a kickoff time |
+| Who owes what | `outstanding <`, then `id >` | Many people owe exactly nothing |
+
+The debt list also moved its **sort to the server**. It is ordered
+biggest-debt-first, and sorting that in the browser only sorts the pages
+fetched so far — with paging, the top of page two could outrank the bottom of
+page one and the list would be in no order at all. It is a `HAVING` clause
+rather than `WHERE`, because `outstanding` is an aggregate that does not exist
+when `WHERE` runs, and spelled out rather than as a row value because the two
+directions differ and `(a, b) < (?, ?)` cannot express that.
+
+An unreadable cursor is treated as the first page rather than an error, so a
+stale one shows the top of the list instead of failing underneath somebody
+halfway down.
+
+**Setup asks for a count and nothing else.** It used to render every player,
+which put "add a midweek session" and "sign out" below however many people are
+in the group, and pulled the whole roster over the wire to print one number.
+The list is its own screen now, at `/players`.
+
+Each list scrolls inside its own box, capped in `dvh` — which is both what a
+virtualizer needs to measure against and what keeps whatever sits below the
+list reachable.
 
 ### Who owes what is public
 
