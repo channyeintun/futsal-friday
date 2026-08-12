@@ -15,7 +15,7 @@ import { ProfilePage } from './pages/ProfilePage.js';
 import { SessionPage } from './pages/SessionPage.js';
 import { WaitingPage } from './pages/WaitingPage.js';
 import { platform } from './platform/index.js';
-import { type Route, navigate, parseRoute, replace, useRoute } from './router.js';
+import { type Route, navigate, parseRoute, replace, useRoute, goBack } from './router.js';
 import { AppProvider, useApp } from './state/app.js';
 import { LocaleProvider, useMessages } from './state/locale.js';
 
@@ -160,7 +160,7 @@ function Shell() {
             type="button"
             className="icon-button"
             aria-label={m.app.back}
-            onClick={() => navigate({ name: 'home' })}
+            onClick={() => goBack()}
           >
             <Icon name="back" />
           </button>

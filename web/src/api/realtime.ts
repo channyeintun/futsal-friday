@@ -258,3 +258,104 @@ export function connectLive(options: LiveOptions): LiveConnection {
     },
   };
 }
+
+/* ------------------------------------------------------- sharing the stream */
+
+/**
+ * One stream per channel set, shared by every component that asks for it, and
+ * kept open briefly after the last one goes away.
+ *
+ * Two things were wrong without this. A component that unmounts on navigation
+ * closed its stream and the next screen opened a fresh one, so the status
+ * indicator flashed "connecting" on *every* trip back to the home screen even
+ * though nothing about the connection had actually changed. And on the free
+ * tier that reconnect is not free — an SSE stream costs a subscribe and a
+ * ticket round-trip each time, paid on every navigation rather than once.
+ *
+ * The linger is what makes navigation free: leaving a screen keeps the stream
+ * warm for long enough to come back to it, and only a genuine departure ends
+ * up closing anything.
+ */
+const LINGER_MS = 30_000;
+
+interface Subscriber {
+  onEvent(event: RealtimeEvent): void;
+  onRefresh(): void;
+  onStateChange?(state: ConnectionState): void;
+}
+
+interface SharedStream {
+  connection: LiveConnection | null;
+  state: ConnectionState;
+  subscribers: Set<Subscriber>;
+  linger: ReturnType<typeof setTimeout> | null;
+}
+
+const shared = new Map<string, SharedStream>();
+
+/** The state a newcomer should start at, so it never re-announces "connecting". */
+export function liveStateFor(channels: string[]): ConnectionState {
+  return shared.get(channels.join('|'))?.state ?? 'connecting';
+}
+
+export function subscribeLive(options: LiveOptions): LiveConnection {
+  const key = options.channels.join('|');
+  let entry = shared.get(key);
+
+  if (entry?.linger) {
+    clearTimeout(entry.linger);
+    entry.linger = null;
+  }
+
+  if (!entry) {
+    const created: SharedStream = {
+      connection: null,
+      state: 'connecting',
+      subscribers: new Set(),
+      linger: null,
+    };
+    shared.set(key, created);
+    entry = created;
+    created.connection = connectLive({
+      channels: key.split('|'),
+      onEvent: (event) => {
+        for (const s of [...created.subscribers]) s.onEvent(event);
+      },
+      onRefresh: () => {
+        for (const s of [...created.subscribers]) s.onRefresh();
+      },
+      onStateChange: (next) => {
+        created.state = next;
+        for (const s of [...created.subscribers]) s.onStateChange?.(next);
+      },
+    });
+  }
+
+  const live = entry;
+  const subscriber: Subscriber = {
+    onEvent: options.onEvent,
+    onRefresh: options.onRefresh,
+    onStateChange: options.onStateChange,
+  };
+  live.subscribers.add(subscriber);
+  // Tell the newcomer where things already stand, rather than letting it sit
+  // on its own initial guess until the next change.
+  options.onStateChange?.(live.state);
+
+  let closed = false;
+  return {
+    close() {
+      if (closed) return;
+      closed = true;
+      live.subscribers.delete(subscriber);
+      if (live.subscribers.size > 0) return;
+      live.linger = setTimeout(() => {
+        // Re-check: somebody may have subscribed and unsubscribed again while
+        // the timer was pending.
+        if (live.subscribers.size > 0) return;
+        live.connection?.close();
+        shared.delete(key);
+      }, LINGER_MS);
+    },
+  };
+}

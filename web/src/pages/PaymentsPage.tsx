@@ -6,7 +6,6 @@ import {
   parseVnd,
   paymentsSummary,
   sessionChannel,
-  suggestedTotal,
   totalArrivedHeads,
 } from '@futsal/shared';
 import { useCallback, useState } from 'react';
@@ -112,7 +111,7 @@ export function PaymentsPage({ sessionId }: { sessionId: string }) {
           <SettleCard
             sessionId={sessionId}
             arrivedHeads={totalArrivedHeads(registrations)}
-            suggested={suggestedTotal(session.feePerPerson, registrations)}
+            perPerson={session.feePerPerson}
             attendanceChecked={attendanceChecked(registrations)}
             onSettled={() => {
               reloadPayments();
@@ -148,6 +147,7 @@ export function PaymentsPage({ sessionId }: { sessionId: string }) {
               <ReSettleButton
                 sessionId={sessionId}
                 current={summary.totalCharge ?? 0}
+                arrivedHeads={totalArrivedHeads(registrations)}
                 onSettled={() => {
                   reloadPayments();
                   void queryClient.invalidateQueries({ queryKey: queryKeys.session(sessionId) });
@@ -212,35 +212,40 @@ export function PaymentsPage({ sessionId }: { sessionId: string }) {
 function SettleCard({
   sessionId,
   arrivedHeads,
-  suggested,
+  perPerson,
   attendanceChecked: checked,
   onSettled,
 }: {
   sessionId: string;
   /** Heads down as having played — what the total will actually be split by. */
   arrivedHeads: number;
-  /** The standing per-person fee times those heads, or null if there is none. */
-  suggested: number | null;
+  /** What one person pays. Prefills the only box on this card. */
+  perPerson: number | null;
   /** Whether anybody has confirmed the roster, as opposed to it being presumed. */
   attendanceChecked: boolean;
   onSettled(): void;
 }) {
   const { toast } = useApp();
   const m = useMessages();
-  // Prefilled from the standing fee, because the usual week is the usual
-  // price: the organizer's job is then to notice when it is *not*, rather
-  // than to retype the same number every Friday. Still a plain editable
-  // field — the pitch is rented by the hour, so the total is the truth and
-  // the fee is only a good guess at it.
-  const [total, setTotal] = useState(suggested === null ? '' : String(suggested));
+  /*
+   * One number: what a person pays.
+   *
+   * That is the figure this group actually agrees on, it is already stored on
+   * the session, and it does not move week to week — so the box is prefilled
+   * with it and usually needs no typing at all. The total is derived here
+   * (`fee x heads that played`) because the API splits a total, which is what
+   * keeps the shares summing to a real amount.
+   */
+  const [each, setEach] = useState(perPerson === null ? '' : String(perPerson));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const parsed = total.trim() ? parseVnd(total) : null;
+  const perHead = each.trim() ? parseVnd(each) : null;
+  const parsed = perHead === null ? null : perHead * arrivedHeads;
 
   const submit = async () => {
     if (parsed === null) {
-      setError(m.payments.enterAmount);
+      setError(m.payments.enterEach);
       return;
     }
     setBusy(true);
@@ -267,17 +272,16 @@ function SettleCard({
         ) : null}
       </div>
       {error ? <ErrorBanner>{error}</ErrorBanner> : null}
+
       <TextField
-        label={m.payments.totalCharge}
-        value={total}
-        onChange={setTotal}
+        label={m.payments.perPersonCharge}
+        value={each}
+        onChange={setEach}
         inputMode="numeric"
         supportingText={
-          parsed !== null
-            ? arrivedHeads > 0
-              ? m.payments.eachWorksOutAt(formatVnd(parsed), formatVnd(Math.round(parsed / arrivedHeads)))
-              : formatVnd(parsed)
-            : m.payments.enterAmount
+          parsed === null
+            ? m.payments.enterEach
+            : m.payments.comesTo(arrivedHeads, formatVnd(parsed))
         }
       />
       <Button onClick={submit} disabled={busy}>
@@ -290,19 +294,26 @@ function SettleCard({
 function ReSettleButton({
   sessionId,
   current,
+  arrivedHeads,
   onSettled,
 }: {
   sessionId: string;
   current: number;
+  arrivedHeads: number;
   onSettled(): void;
 }) {
   const { toast } = useApp();
   const m = useMessages();
   const [open, setOpen] = useState(false);
-  const [total, setTotal] = useState(String(current));
+  // The same one number as the split card, for the same reason: changing what
+  // a person pays is the edit anybody actually wants to make.
+  const [each, setEach] = useState(
+    arrivedHeads > 0 ? String(Math.round(current / arrivedHeads)) : String(current),
+  );
   const [busy, setBusy] = useState(false);
 
-  const parsed = parseVnd(total);
+  const perHead = parseVnd(each);
+  const parsed = perHead === null ? null : perHead * Math.max(1, arrivedHeads);
 
   const submit = async () => {
     if (parsed === null) return;
@@ -341,11 +352,13 @@ function ReSettleButton({
           {m.payments.changeTotalBody}
         </p>
         <TextField
-          label={m.payments.totalCharge}
-          value={total}
-          onChange={setTotal}
+          label={m.payments.perPersonCharge}
+          value={each}
+          onChange={setEach}
           inputMode="numeric"
-          supportingText={parsed !== null ? formatVnd(parsed) : m.payments.enterAmount}
+          supportingText={
+            parsed !== null ? m.payments.comesTo(arrivedHeads, formatVnd(parsed)) : m.payments.enterEach
+          }
         />
       </Dialog>
     </>

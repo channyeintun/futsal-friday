@@ -119,12 +119,12 @@ async function run() {
     if (b) { b.click(); return true; } return false;
   })()`);
   check('payments button present', wentToPayments);
-  await waitFor('document.body.innerText.includes("Field total")', 'payments screen loads');
+  await waitFor('document.body.innerText.includes("Whole bill")', 'payments screen loads');
   await sleep(900);
   await shoot('11-payments');
 
   const text = await js('document.body.innerText');
-  check('shows the field total', /Field total/.test(text), text.slice(0, 300));
+  check('shows the whole bill', /Whole bill/.test(text), text.slice(0, 300));
   check('shows collected', /Collected/.test(text));
   check('shows outstanding', /Still owed/.test(text));
   check('lists everyone', /Everyone \(\d+\)/.test(text), text.match(/Everyone \(\d+\)/)?.[0]);
@@ -155,7 +155,7 @@ async function run() {
   // Material renders labels and supporting text inside a shadow root, so
   // `innerText` cannot see them — read the element's own properties.
   await waitFor(
-    `document.querySelector('md-outlined-text-field')?.label === 'Total field charge'`,
+    `document.querySelector('md-outlined-text-field')?.label === 'What each person pays'`,
     'split form loads',
   );
   await sleep(700);
@@ -168,15 +168,14 @@ async function run() {
     f.dispatchEvent(new Event('input',{bubbles:true,composed:true})); })()`);
   await sleep(500);
   const hint = await js(`document.querySelector('md-outlined-text-field')?.supportingText ?? ''`);
-  check('parses shorthand like 560k into 560.000d', hint.startsWith('560.000d'), hint);
-  // The hint also does the division, so the organizer can see what they are
-  // about to charge each person before committing to it — and how many people
-  // that is, which is now the arrived count rather than the sign-up sheet.
-  check('and says what that works out at per head', / — about [\d.]+d each$/.test(hint), hint);
+  // The box takes what ONE person pays; the hint multiplies it out, so the
+  // organizer can see the whole bill before committing without ever typing it.
+  check('parses shorthand like 560k into 560.000d', hint.includes('560.000d'), hint);
+  check('AND MULTIPLIES IT BY WHO PLAYED, NOT WHO SIGNED UP',
+    /^\d+ played · [\d.]+d in all$/.test(hint), hint);
   const between = await js(`[...document.querySelectorAll('.muted')]
-    .map((n) => n.textContent).find((t) => /who played/.test(t ?? '')) ?? ''`);
-  check('THE SPLIT FORM COUNTS WHO PLAYED, NOT WHO SIGNED UP',
-    /Between \d+ who played/.test(between), between);
+    .map((n) => n.textContent).find((t) => /played/.test(t ?? '')) ?? ''`);
+  check('and says how many that is', /\d+ (people|person) played/.test(between), between);
   await shoot('13-split-typed');
 
   const errors = events

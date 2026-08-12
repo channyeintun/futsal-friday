@@ -706,6 +706,59 @@ async function run() {
   // theme, so it is worth pinning rather than asserting "something dark".
   check('dark theme applies', bg === 'rgb(0, 0, 0)', bg);
 
+  console.log('\ngetting back out of a screen');
+  // The header arrow used to `navigate({name:'home'})`, so it ignored where you
+  // came from *and* pushed a new entry — leaving the browser's own back button
+  // walking forward through screens you had already dismissed.
+  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][1].click()`);
+  await waitFor(`location.pathname === '/history'`, 'history opens');
+  await sleep(900);
+  const openedDetail = await evalJs(`(() => {
+    const b = [...document.querySelectorAll('.player-name.link, button.player-row')][0];
+    if (b) { b.click(); return true; } return false;
+  })()`);
+  await sleep(1300);
+  check('a detail page opens from history', openedDetail &&
+    (await evalJs('location.pathname')) !== '/history', await evalJs('location.pathname'));
+  await evalJs(`document.querySelector('.topbar .icon-button')?.click()`);
+  await sleep(1300);
+  check('BACK RETURNS WHERE YOU CAME FROM, NOT HOME',
+    (await evalJs('location.pathname')) === '/history', await evalJs('location.pathname'));
+
+  // Straight into a deep link with nothing of ours behind it: back has to fall
+  // through to home rather than leaving the app.
+  await send('Page.navigate', { url: `${APP_URL}/history` });
+  await waitFor('!!document.querySelector(".bottom-nav")', 'cold deep link loads');
+  await sleep(1000);
+  await evalJs(`document.querySelector('.topbar .icon-button')?.click()`);
+  await sleep(1300);
+  check('and falls through to home when there is no history',
+    (await evalJs('location.pathname')) === '/', await evalJs('location.pathname'));
+
+  console.log('\nthe connection indicator holds steady');
+  await sleep(2500);
+  // Watched with a MutationObserver, not a timer. The flash lasts a single
+  // render, and a 60ms sampler stepped straight over it — a check that passed
+  // against the very bug it was written for.
+  await evalJs(`(() => {
+    window.__connSeen = [];
+    const grab = () => {
+      const t = document.querySelector('.conn')?.textContent?.trim();
+      if (t && window.__connSeen.at(-1) !== t) window.__connSeen.push(t);
+    };
+    grab();
+    new MutationObserver(grab).observe(document.body, {
+      childList: true, subtree: true, characterData: true,
+    });
+  })()`);
+  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][1].click()`);
+  await sleep(1400);
+  await evalJs(`[...document.querySelectorAll('.bottom-nav button')][0].click()`);
+  await sleep(2400);
+  const connSeen = await evalJs('JSON.stringify(window.__connSeen)');
+  check('NO CONNECTING FLASH WHEN NAVIGATING BACK HOME',
+    !/Connecting/i.test(connSeen), connSeen);
+
   // Console errors, excluding noise we do not control.
   const errors = events
     .filter((e) => e.method === 'Runtime.exceptionThrown' || (e.method === 'Log.entryAdded' && e.params.entry.level === 'error'))

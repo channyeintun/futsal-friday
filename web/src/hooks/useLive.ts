@@ -1,6 +1,6 @@
 import type { RealtimeEvent } from '@futsal/shared';
 import { useEffect, useRef, useState } from 'react';
-import { type ConnectionState, connectLive } from '../api/realtime.js';
+import { type ConnectionState, liveStateFor, subscribeLive } from '../api/realtime.js';
 
 /**
  * Subscribe a component to realtime events for the given channels.
@@ -8,6 +8,10 @@ import { type ConnectionState, connectLive } from '../api/realtime.js';
  * The handlers are held in refs so a re-render never tears the connection down
  * and builds a new one — reconnecting on every keystroke would be both janky
  * and, given the keepalive cost of a stream, expensive.
+ *
+ * The stream itself is shared and lingers past unmount (see `subscribeLive`),
+ * so moving between screens on the same channel neither drops the connection
+ * nor makes the indicator claim it did.
  */
 export function useLive(
   channels: string[],
@@ -17,7 +21,11 @@ export function useLive(
   },
   enabled = true,
 ): ConnectionState {
-  const [state, setState] = useState<ConnectionState>('connecting');
+  // Seeded from the shared stream rather than from 'connecting'. Navigating
+  // back to a screen re-runs this hook, and starting from scratch is what made
+  // the status flash "connecting" on every trip home even though the stream
+  // underneath had never dropped.
+  const [state, setState] = useState<ConnectionState>(() => liveStateFor(channels));
 
   const onEventRef = useRef(handlers.onEvent);
   const onRefreshRef = useRef(handlers.onRefresh);
@@ -31,7 +39,7 @@ export function useLive(
   useEffect(() => {
     if (!enabled || channels.length === 0) return;
 
-    const connection = connectLive({
+    const connection = subscribeLive({
       channels: key.split('|'),
       onEvent: (event) => onEventRef.current(event),
       onRefresh: () => onRefreshRef.current(),

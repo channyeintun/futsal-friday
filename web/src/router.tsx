@@ -96,6 +96,29 @@ export function navigate(route: Route): void {
   });
 }
 
+/**
+ * Go back to where they actually came from.
+ *
+ * The header's arrow used to `navigate({ name: 'home' })`, which was wrong
+ * twice over: it ignored the route they arrived from, and it *pushed* a new
+ * entry, so the browser's own back button then walked forward through the
+ * screens they had already dismissed. Stepping the history stack keeps the two
+ * back buttons — ours and the browser's — telling the same story.
+ *
+ * Falls through to home only when there is no in-app history to step into,
+ * which is the case that matters most: somebody opening a deep link straight
+ * from the group chat has nowhere behind them but the chat itself.
+ */
+export function goBack(fallback: Route = { name: 'home' }): void {
+  if (platform.navigation.canGoBack()) {
+    // The transition wraps the *result* of popstate, which arrives
+    // asynchronously — so unlike `navigate` there is nothing to flush here.
+    platform.navigation.back();
+    return;
+  }
+  navigate(fallback);
+}
+
 export function replace(route: Route): void {
   platform.viewTransition(() => platform.navigation.replace(routePath(route)));
 }

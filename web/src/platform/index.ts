@@ -55,6 +55,10 @@ export interface Navigation {
   hash(): string;
   push(path: string): void;
   replace(path: string): void;
+  /** True when this app has somewhere of its own to go back to. */
+  canGoBack(): boolean;
+  /** Step back one entry. Returns false when there was nothing to step to. */
+  back(): boolean;
   /** Subscribe to path changes. Returns an unsubscribe function. */
   subscribe(listener: (path: string) => void): () => void;
 }

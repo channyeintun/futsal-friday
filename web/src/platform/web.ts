@@ -152,14 +152,44 @@ const viewTransition: Platform['viewTransition'] = (change) => {
   transition.updateCallbackDone.catch(() => {});
 };
 
+/**
+ * How many entries this app has pushed onto the history stack.
+ *
+ * `history.length` cannot answer "can I go back *within the app*" — it counts
+ * everything the tab has ever visited, including whatever page the user was on
+ * before they opened the invite link. Going back from the first screen would
+ * then leave the app entirely. Counting our own pushes is the only reliable
+ * way to know there is somewhere of ours to return to.
+ *
+ * A `popstate` decrements it, so walking back down the stack eventually
+ * reaches zero and the back button starts falling through to home instead.
+ */
+let ownDepth = 0;
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('popstate', () => {
+    ownDepth = Math.max(0, ownDepth - 1);
+  });
+}
+
 const navigation: Platform['navigation'] = {
   path: currentPath,
   // `instant`, not smooth: this runs inside a view transition, and a
   // smooth-scroll would still be travelling after the cross-fade had finished.
   scrollToTop: () => window.scrollTo({ top: 0, behavior: 'instant' }),
   hash: () => window.location.hash.replace(/^#/, ''),
+  canGoBack: () => ownDepth > 0,
+  back() {
+    if (ownDepth === 0) return false;
+    // `history.back()` is asynchronous and fires `popstate`, which the counter
+    // above and the path subscribers both listen for — so nothing needs to be
+    // notified here.
+    window.history.back();
+    return true;
+  },
   push(path) {
     window.history.pushState({}, '', path);
+    ownDepth += 1;
     notify();
   },
   replace(path) {
