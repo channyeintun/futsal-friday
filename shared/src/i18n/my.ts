@@ -117,7 +117,7 @@ export const my: Messages = {
   },
 
   board: {
-    title: 'အဆင့်စာရင်း',
+    title: 'အဆင့်ဇယား',
     streaks: 'ဆက်တိုက်',
     goals: 'ဂိုးများ',
     streakBody: 'ဆက်တိုက် ကစားခဲ့သော ပွဲများ။ လာဖို့ပဲ လိုတယ်။',
