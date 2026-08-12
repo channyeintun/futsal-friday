@@ -166,13 +166,13 @@ export const en = {
     expires: (when: string) => `Works until ${when}`,
     copied: 'Link copied — send it to them directly',
     couldNotMint: 'Could not create a link',
-    myDevice: 'Add another device',
+    myDevice: 'Sign in somewhere else',
     myDeviceBody:
-      'Open this link on your other phone or laptop to sign in there as well.',
-    removeAccess: 'Sign out their devices',
+      'Open this link in another browser, or on another phone or laptop, to sign in there too. Each browser signs in on its own — being signed in on Chrome does not sign you in on Safari.',
+    removeAccess: 'Sign out everywhere',
     removeAccessBody:
-      'Signs out every device they are using and cancels any unused link. They will need a new one.',
-    confirmRemove: (name: string) => `Sign out all of ${name}'s devices?`,
+      'Signs them out of every browser they are signed in on, and cancels any unused link. They will need a new one.',
+    confirmRemove: (name: string) => `Sign ${name} out of everywhere?`,
     removed: (name: string) => `${name} signed out everywhere`,
     couldNotRemove: 'Could not do that',
   },
@@ -371,7 +371,7 @@ export const en = {
     confirmRetireVenue: (name: string) => `Retire ${name}?`,
     confirmRetireVenueBody:
       'It stops being offered for new sessions. Sessions already played there keep it.',
-    confirmSignOut: 'Sign out on this device?',
+    confirmSignOut: 'Sign out of this browser?',
     confirmSignOutBody:
       'You will need an invite link to get back in — there is no password to type.',
     removeNote:
