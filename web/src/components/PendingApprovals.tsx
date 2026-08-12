@@ -79,7 +79,7 @@ export function PendingApprovals({ onChanged }: { onChanged(): void }) {
             <span className="player-name truncate grow">{member.name}</span>
           </div>
           <div className="row wrap" style={{ gap: 4, justifyContent: 'flex-end' }}>
-            <Button variant="text" onClick={() => setConfirm(member)} disabled={busy !== null}>
+            <Button variant="text" danger onClick={() => setConfirm(member)} disabled={busy !== null}>
               {m.approvals.reject}
             </Button>
             <Button onClick={() => approve(member)} disabled={busy !== null}>

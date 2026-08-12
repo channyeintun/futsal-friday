@@ -118,7 +118,7 @@ export function ProfileCard({ profile }: { profile: MemberProfile }) {
       <StreakRow profile={profile} />
 
       {isMe && profile.member.avatarUpdatedAt ? (
-        <Button variant="text" onClick={() => setConfirmRemove(true)} disabled={busy}>
+        <Button variant="text" danger onClick={() => setConfirmRemove(true)} disabled={busy}>
           {m.profile.removePicture}
         </Button>
       ) : null}

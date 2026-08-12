@@ -29,87 +29,115 @@
   --ff-typeface-mono: ui-monospace, SFMono-Regular, Menlo,
     'Myanmar Sangam MN', 'Noto Sans Myanmar', 'Padauk', 'Myanmar Text', monospace;
 
-  --md-sys-color-primary: #386a20;
+  /*
+   * One accent, used sparingly.
+   *
+   * The reference is almost monochrome: a black canvas, near-black cards,
+   * white type, and a single bright green that appears only on the thing you
+   * are meant to notice. Spending the accent on every button would flatten
+   * exactly the hierarchy it exists to create, so `primary` is reserved for
+   * the live nav item, links, and the one affirmative action on a screen.
+   */
+  --md-sys-color-primary: #007a43;
   --md-sys-color-on-primary: #ffffff;
-  --md-sys-color-primary-container: #b8f397;
-  --md-sys-color-on-primary-container: #042100;
-  --md-sys-color-secondary: #55624c;
+  --md-sys-color-primary-container: #b6f2ce;
+  --md-sys-color-on-primary-container: #00210f;
+  --md-sys-color-secondary: #4a635a;
   --md-sys-color-on-secondary: #ffffff;
-  --md-sys-color-secondary-container: #d9e7cb;
-  --md-sys-color-on-secondary-container: #131f0d;
-  --md-sys-color-tertiary: #19686a;
+  --md-sys-color-secondary-container: #cce8dc;
+  --md-sys-color-on-secondary-container: #072019;
+  --md-sys-color-tertiary: #1c6472;
   --md-sys-color-on-tertiary: #ffffff;
-  --md-sys-color-tertiary-container: #a8eff0;
-  --md-sys-color-on-tertiary-container: #002020;
+  --md-sys-color-tertiary-container: #b4eaf9;
+  --md-sys-color-on-tertiary-container: #001f27;
   --md-sys-color-error: #ba1a1a;
   --md-sys-color-on-error: #ffffff;
   --md-sys-color-error-container: #ffdad6;
   --md-sys-color-on-error-container: #410002;
-  --md-sys-color-background: #fdfcf5;
-  --md-sys-color-on-background: #1a1c18;
-  --md-sys-color-surface: #fdfcf5;
-  --md-sys-color-on-surface: #1a1c18;
-  --md-sys-color-surface-variant: #e0e4d6;
-  --md-sys-color-on-surface-variant: #43483e;
-  --md-sys-color-outline: #73796d;
-  --md-sys-color-outline-variant: #c3c8bb;
+  --md-sys-color-background: #f2f2f6;
+  --md-sys-color-on-background: #111113;
+  --md-sys-color-surface: #ffffff;
+  --md-sys-color-on-surface: #111113;
+  --md-sys-color-surface-variant: #e6e6ea;
+  --md-sys-color-on-surface-variant: #6b6b70;
+  --md-sys-color-outline: #a9a9ae;
+  --md-sys-color-outline-variant: #dcdce0;
   --md-sys-color-surface-container-lowest: #ffffff;
-  --md-sys-color-surface-container-low: #f7f9f0;
-  --md-sys-color-surface-container: #f2f3eb;
-  --md-sys-color-surface-container-high: #eceee5;
-  --md-sys-color-surface-container-highest: #e6e8e0;
-  --md-sys-color-inverse-surface: #2f312c;
-  --md-sys-color-inverse-on-surface: #f1f1ea;
-  --md-sys-color-inverse-primary: #9dd67d;
+  --md-sys-color-surface-container-low: #fafafc;
+  --md-sys-color-surface-container: #ffffff;
+  --md-sys-color-surface-container-high: #f4f4f7;
+  --md-sys-color-surface-container-highest: #ececed;
+  --md-sys-color-inverse-surface: #1c1c1e;
+  --md-sys-color-inverse-on-surface: #f5f5f7;
+  --md-sys-color-inverse-primary: #4ade80;
 
   /* Semantic aliases for payment states, so the meaning lives in one place. */
-  --ff-paid: #2e6b34;
-  --ff-paid-container: #c8ecc8;
-  --ff-pending: #7a5a00;
-  --ff-pending-container: #ffe08a;
+  --ff-paid: #007a43;
+  --ff-paid-container: #d3f5e3;
+  --ff-pending: #8a5a00;
+  --ff-pending-container: #ffe8b0;
+
+  /* The shared shape language: big soft rectangles, fully round pills. */
+  --ff-radius-card: 20px;
+  --ff-radius-row: 16px;
+  --ff-radius-pill: 999px;
+  /* The gap between the floating nav and the screen edge. */
+  --ff-nav-inset: 10px;
+  --ff-nav-active: #dfe3e8;
 
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --md-sys-color-primary: #9dd67d;
-    --md-sys-color-on-primary: #0c3900;
-    --md-sys-color-primary-container: #1f5106;
-    --md-sys-color-on-primary-container: #b8f397;
-    --md-sys-color-secondary: #bdcbb0;
-    --md-sys-color-on-secondary: #283420;
-    --md-sys-color-secondary-container: #3e4a36;
-    --md-sys-color-on-secondary-container: #d9e7cb;
-    --md-sys-color-tertiary: #8cd3d4;
-    --md-sys-color-on-tertiary: #003737;
-    --md-sys-color-tertiary-container: #004f50;
-    --md-sys-color-on-tertiary-container: #a8eff0;
-    --md-sys-color-error: #ffb4ab;
+    /*
+     * Pure black, not a dark grey.
+     *
+     * The canvas being #000 rather than a tinted charcoal is most of what
+     * makes the reference read as "dark" rather than "dimmed": cards at
+     * #1c1c1e then separate from it on their own, with no border and no
+     * shadow needed to lift them.
+     */
+    --md-sys-color-primary: #4ade80;
+    --md-sys-color-on-primary: #00391c;
+    --md-sys-color-primary-container: #005230;
+    --md-sys-color-on-primary-container: #86f7b4;
+    --md-sys-color-secondary: #b2ccbe;
+    --md-sys-color-on-secondary: #1d352b;
+    --md-sys-color-secondary-container: #334b41;
+    --md-sys-color-on-secondary-container: #cce8dc;
+    --md-sys-color-tertiary: #8ccfe0;
+    --md-sys-color-on-tertiary: #003642;
+    --md-sys-color-tertiary-container: #004e5c;
+    --md-sys-color-on-tertiary-container: #b4eaf9;
+    --md-sys-color-error: #ff6b6b;
     --md-sys-color-on-error: #690005;
-    --md-sys-color-error-container: #93000a;
+    --md-sys-color-error-container: #4a1512;
     --md-sys-color-on-error-container: #ffdad6;
-    --md-sys-color-background: #12140f;
-    --md-sys-color-on-background: #e2e3dc;
-    --md-sys-color-surface: #12140f;
-    --md-sys-color-on-surface: #e2e3dc;
-    --md-sys-color-surface-variant: #43483e;
-    --md-sys-color-on-surface-variant: #c3c8bb;
-    --md-sys-color-outline: #8d9387;
-    --md-sys-color-outline-variant: #43483e;
-    --md-sys-color-surface-container-lowest: #0c0f0a;
-    --md-sys-color-surface-container-low: #1a1c18;
-    --md-sys-color-surface-container: #1e201c;
-    --md-sys-color-surface-container-high: #282b26;
-    --md-sys-color-surface-container-highest: #333630;
-    --md-sys-color-inverse-surface: #e2e3dc;
-    --md-sys-color-inverse-on-surface: #2f312c;
-    --md-sys-color-inverse-primary: #386a20;
+    --md-sys-color-background: #000000;
+    --md-sys-color-on-background: #ffffff;
+    --md-sys-color-surface: #000000;
+    --md-sys-color-on-surface: #ffffff;
+    --md-sys-color-surface-variant: #2c2c2e;
+    /* Secondary text. Grey enough to recede, light enough to read on black. */
+    --md-sys-color-on-surface-variant: #98989f;
+    --md-sys-color-outline: #48484a;
+    --md-sys-color-outline-variant: #2c2c2e;
+    --md-sys-color-surface-container-lowest: #000000;
+    --md-sys-color-surface-container-low: #141416;
+    --md-sys-color-surface-container: #1c1c1e;
+    --md-sys-color-surface-container-high: #242427;
+    --md-sys-color-surface-container-highest: #2c2c2e;
+    --md-sys-color-inverse-surface: #f5f5f7;
+    --md-sys-color-inverse-on-surface: #1c1c1e;
+    --md-sys-color-inverse-primary: #007a43;
 
-    --ff-paid: #9fd89f;
-    --ff-paid-container: #1d4620;
-    --ff-pending: #ffd54a;
-    --ff-pending-container: #4a3a00;
+    --ff-nav-active: #38383d;
+
+    --ff-paid: #4ade80;
+    --ff-paid-container: #10331f;
+    --ff-pending: #ffc857;
+    --ff-pending-container: #3a2c07;
 
     color-scheme: dark;
   }
@@ -199,6 +227,105 @@ body {
   line-height: 1.5;
 }
 
+/* ---------------------------------------------------------------- buttons */
+
+/*
+ * Buttons, restyled away from Material's look.
+ *
+ * The components stay — they carry the ripple, focus ring and disabled
+ * handling that would otherwise have to be rebuilt — but the tokens are
+ * repointed at the reference's shapes: tall, fully-rounded, heavy label, and
+ * a primary action that is a solid block of accent rather than a tinted one.
+ */
+md-filled-button,
+md-outlined-button,
+md-filled-tonal-button,
+md-text-button {
+  --md-filled-button-container-shape: var(--ff-radius-pill);
+  --md-outlined-button-container-shape: var(--ff-radius-pill);
+  --md-filled-tonal-button-container-shape: var(--ff-radius-pill);
+  --md-text-button-container-shape: var(--ff-radius-pill);
+
+  --md-filled-button-container-height: 52px;
+  --md-outlined-button-container-height: 52px;
+  --md-filled-tonal-button-container-height: 52px;
+  --md-text-button-container-height: 44px;
+
+  --md-filled-button-label-text-weight: 700;
+  --md-outlined-button-label-text-weight: 700;
+  --md-filled-tonal-button-label-text-weight: 700;
+  --md-text-button-label-text-weight: 700;
+
+  --md-filled-button-label-text-size: 1rem;
+  --md-outlined-button-label-text-size: 1rem;
+  --md-filled-tonal-button-label-text-size: 1rem;
+  --md-text-button-label-text-size: 0.95rem;
+}
+
+/* The affirmative action: solid accent, dark label. One per screen. */
+md-filled-button {
+  --md-filled-button-container-color: var(--md-sys-color-primary);
+  --md-filled-button-label-text-color: var(--md-sys-color-on-primary);
+  --md-filled-button-icon-color: var(--md-sys-color-on-primary);
+}
+
+/*
+ * Secondary actions read as a filled dark pill rather than an outlined one.
+ * A hairline outline on near-black all but disappears, and the reference uses
+ * a slightly lighter fill for the same job.
+ */
+md-outlined-button {
+  --md-outlined-button-outline-color: transparent;
+  --md-outlined-button-outline-width: 0;
+  --md-outlined-button-label-text-color: var(--md-sys-color-on-surface);
+  --md-outlined-button-icon-color: var(--md-sys-color-on-surface);
+  /*
+   * Painted on the host, not through a token: an outlined button has no
+   * container-color to set — its fill is transparent by design — so with the
+   * outline removed it would otherwise be bare floating text.
+   */
+  background: var(--md-sys-color-surface-container-highest);
+  border-radius: var(--ff-radius-pill);
+}
+
+md-filled-tonal-button {
+  --md-filled-tonal-button-container-color: var(--md-sys-color-surface-container-highest);
+  --md-filled-tonal-button-label-text-color: var(--md-sys-color-on-surface);
+  --md-filled-tonal-button-icon-color: var(--md-sys-color-on-surface);
+}
+
+/* Text buttons are the accent's other home: links, in effect. */
+md-text-button {
+  --md-text-button-label-text-color: var(--md-sys-color-primary);
+  --md-text-button-icon-color: var(--md-sys-color-primary);
+}
+
+/* Actions that take something away are toned in `ui.tsx`, as inline custom
+   properties — a class never reaches a custom element through React. */
+
+/*
+ * A dialog has to sit *above* a card, so it takes a lighter fill than one —
+ * at these values a sheet the same grey as the card behind it reads as part
+ * of the page rather than over it.
+ */
+md-dialog {
+  --md-dialog-container-shape: 28px;
+  --md-dialog-container-color: var(--md-sys-color-surface-container-high);
+  --md-dialog-headline-color: var(--md-sys-color-on-surface);
+  --md-dialog-headline-weight: 700;
+  --md-dialog-supporting-text-color: var(--md-sys-color-on-surface-variant);
+}
+
+/* Text fields get the same soft-rectangle shape as everything else. */
+md-outlined-text-field {
+  --md-outlined-text-field-container-shape: 14px;
+  --md-outlined-text-field-outline-color: var(--md-sys-color-outline-variant);
+  --md-outlined-text-field-focus-outline-color: var(--md-sys-color-primary);
+  --md-outlined-text-field-label-text-color: var(--md-sys-color-on-surface-variant);
+  --md-outlined-text-field-input-text-color: var(--md-sys-color-on-surface);
+  width: 100%;
+}
+
 /* ------------------------------------------------------------------ shell */
 
 .app {
@@ -227,51 +354,91 @@ body {
   background: var(--md-sys-color-background);
 }
 
+/*
+ * The header sits *on* the canvas rather than on a bar of its own.
+ *
+ * A tinted strip across the top is the thing that makes an app look like a
+ * form. Dropping it and letting a large, heavy title sit directly on the
+ * background is most of what separates the reference from stock chrome —
+ * the page announces itself by typography instead of by furniture.
+ */
 .topbar {
   position: sticky;
   top: 0;
   z-index: 10;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: max(8px, env(safe-area-inset-top)) 12px 8px;
-  background: var(--md-sys-color-surface-container);
+  gap: 10px;
+  padding: max(10px, env(safe-area-inset-top)) 16px 10px;
+  background: var(--md-sys-color-background);
   color: var(--md-sys-color-on-surface);
 }
 
 .topbar h1 {
   flex: 1;
   margin: 0;
-  font-size: 1.25rem;
-  font-weight: 500;
-  letter-spacing: 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
 }
 
 .topbar .topbar-sub {
   display: block;
-  font-size: 0.75rem;
-  font-weight: 400;
+  margin-top: 1px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0;
   color: var(--md-sys-color-on-surface-variant);
+}
+
+/* Round, self-contained, and the same size wherever it appears. */
+.icon-button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: var(--ff-radius-pill);
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+  cursor: pointer;
+  padding: 0;
 }
 
 .content {
   flex: 1;
-  padding: 12px 12px 24px;
+  padding: 4px 12px 8px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
+/*
+ * A pill that floats over the content instead of a bar welded to the bottom.
+ *
+ * Detaching it is what makes the list underneath feel like it continues past
+ * the edge of the screen rather than stopping at a wall. It stays `sticky`
+ * rather than `fixed` so it still participates in layout and cannot cover the
+ * last row of a short page.
+ */
 .bottom-nav {
   position: sticky;
-  bottom: 0;
+  bottom: calc(var(--ff-nav-inset) + env(safe-area-inset-bottom));
   z-index: 10;
   display: flex;
-  justify-content: space-around;
-  gap: 4px;
-  padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+  align-self: center;
+  gap: 2px;
+  width: calc(100% - 24px);
+  max-width: 420px;
+  margin: 8px 0 calc(var(--ff-nav-inset) + env(safe-area-inset-bottom));
+  padding: 6px;
+  border-radius: var(--ff-radius-pill);
   background: var(--md-sys-color-surface-container);
-  border-top: 1px solid var(--md-sys-color-outline-variant);
+  /* Content scrolls underneath, so the pill needs to read as being above it. */
+  box-shadow: 0 6px 24px rgb(0 0 0 / 45%);
 }
 
 .bottom-nav button {
@@ -279,29 +446,41 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 6px 4px;
+  gap: 3px;
+  padding: 7px 4px;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--ff-radius-pill);
   background: transparent;
   color: var(--md-sys-color-on-surface-variant);
   font: inherit;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
+  font-weight: 600;
   cursor: pointer;
-  min-height: 48px;
+  min-height: 46px;
 }
 
+/*
+ * The live tab is the one place the accent is spent on this screen: a filled
+ * pill behind it, and the icon and label take the accent colour.
+ */
 .bottom-nav button[aria-current='page'] {
-  color: var(--md-sys-color-on-secondary-container);
-  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-primary);
+  /* A dedicated step: at pill size, two greys four points apart do not read
+     as a selection. Set per theme rather than reusing a surface token. */
+  background: var(--ff-nav-active);
 }
 
 /* ------------------------------------------------------------------ cards */
 
+/*
+ * A card is a block of near-black floating on black. No border and no shadow:
+ * at this contrast the fill alone separates it, and an outline would only
+ * reintroduce the boxed-in look the reference avoids.
+ */
 .card {
-  background: var(--md-sys-color-surface-container-low);
-  border-radius: 16px;
-  padding: 16px;
+  background: var(--md-sys-color-surface-container);
+  border-radius: var(--ff-radius-card);
+  padding: 18px 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -313,6 +492,7 @@ body {
 }
 
 .card-title {
+  letter-spacing: -0.01em;
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
@@ -363,39 +543,48 @@ body {
 
 /* --------------------------------------------------------------- session */
 
+/*
+ * The kickoff is the single largest thing in the app, on a plain surface
+ * rather than a coloured slab. The reference gets its impact from type size
+ * and weight, not from filling the block with the accent — which it saves for
+ * one small mark per screen.
+ */
 .hero {
-  background: var(--md-sys-color-primary-container);
-  color: var(--md-sys-color-on-primary-container);
-  border-radius: 20px;
-  padding: 20px 16px;
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+  border-radius: var(--ff-radius-card);
+  padding: 22px 18px;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
 .hero .when {
-  font-size: 1.5rem;
-  font-weight: 600;
-  line-height: 1.2;
+  font-size: 2.1rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
 }
 
 .hero .where {
   font-size: 0.95rem;
-  opacity: 0.85;
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 .hero .countdown {
-  font-size: 0.8rem;
+  font-size: 0.72rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  opacity: 0.75;
+  letter-spacing: 0.1em;
+  color: var(--md-sys-color-primary);
 }
 
 .player-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 4px;
+  padding: 12px 2px;
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
 }
 
@@ -403,10 +592,10 @@ body {
   border-bottom: 0;
 }
 
+/* Your own row: a tint, not a colour block, so the list still reads evenly. */
 .player-row.is-me {
-  background: var(--md-sys-color-secondary-container);
-  color: var(--md-sys-color-on-secondary-container);
-  border-radius: 12px;
+  background: var(--md-sys-color-surface-container-highest);
+  border-radius: var(--ff-radius-row);
   padding-inline: 10px;
   border-bottom-color: transparent;
 }
@@ -423,7 +612,7 @@ body {
 .player-name {
   flex: 1;
   min-width: 0;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 /* Highlights a row that just changed, so a live update is noticed. */
@@ -438,7 +627,7 @@ body {
 
 .flash {
   animation: ff-flash 1.2s ease-out;
-  border-radius: 12px;
+  border-radius: var(--ff-radius-row);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -453,7 +642,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 10px 4px;
+  padding: 12px 2px;
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
 }
 
@@ -467,10 +656,10 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  padding: 4px 11px;
+  border-radius: var(--ff-radius-pill);
+  font-size: 0.72rem;
+  font-weight: 700;
   white-space: nowrap;
 }
 
@@ -743,7 +932,9 @@ body {
   padding: 0;
   background: none;
   font: inherit;
-  color: var(--md-sys-color-primary);
+  /* Not the accent. Every row carries one of these, and colouring them all
+     would spend on a list the emphasis the accent exists to give one thing. */
+  color: var(--md-sys-color-on-surface);
   text-align: left;
   cursor: pointer;
   /* Keep the 44px touch target the row already provides without changing the

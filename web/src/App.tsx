@@ -158,16 +158,9 @@ function Shell() {
         {route.name !== 'home' ? (
           <button
             type="button"
+            className="icon-button"
             aria-label={m.app.back}
             onClick={() => navigate({ name: 'home' })}
-            style={{
-              background: 'none',
-              border: 0,
-              color: 'inherit',
-              cursor: 'pointer',
-              padding: 4,
-              display: 'flex',
-            }}
           >
             <Icon name="back" />
           </button>

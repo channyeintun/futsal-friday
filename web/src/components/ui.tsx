@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import '@material/web/button/filled-button.js';
 import '@material/web/button/filled-tonal-button.js';
 import '@material/web/button/outlined-button.js';
@@ -222,7 +223,27 @@ interface ButtonProps {
   disabled?: boolean;
   variant?: 'filled' | 'tonal' | 'outlined' | 'text';
   type?: 'button' | 'submit';
+  /**
+   * Colours the label with the error tone. Purely visual — an action that
+   * takes something away should not look as inviting as one that adds.
+   */
+  danger?: boolean;
 }
+
+/*
+ * Set as inline custom properties rather than a class.
+ *
+ * React does not forward `className` to a custom element — it lands as no
+ * attribute at all — so a `.danger` rule in the stylesheet would never match.
+ * Custom properties on the host do reach the component's internals, which is
+ * how these buttons are themed everywhere else.
+ */
+const DANGER_TOKENS = {
+  '--md-text-button-label-text-color': 'var(--md-sys-color-error)',
+  '--md-text-button-icon-color': 'var(--md-sys-color-error)',
+  '--md-outlined-button-label-text-color': 'var(--md-sys-color-error)',
+  '--md-outlined-button-icon-color': 'var(--md-sys-color-error)',
+} as CSSProperties;
 
 export function Button({
   children,
@@ -230,11 +251,13 @@ export function Button({
   disabled,
   variant = 'filled',
   type = 'button',
+  danger,
 }: ButtonProps) {
   const props = {
     onClick,
     disabled,
     type,
+    ...(danger ? { style: DANGER_TOKENS } : {}),
   };
 
   switch (variant) {

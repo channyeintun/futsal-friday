@@ -611,7 +611,9 @@ async function run() {
   await sleep(1200);
   await shoot('08-dark');
   const bg = await evalJs(`getComputedStyle(document.body).backgroundColor`);
-  check('dark theme applies', bg === 'rgb(18, 20, 15)', bg);
+  // Pure black, not a tinted charcoal — that is the whole basis of the dark
+  // theme, so it is worth pinning rather than asserting "something dark".
+  check('dark theme applies', bg === 'rgb(0, 0, 0)', bg);
 
   // Console errors, excluding noise we do not control.
   const errors = events

@@ -12,3 +12,4 @@ shared/dist/
 web/dist/
 .push-vectors.mjs
 .i18n-test.mjs
+examples/

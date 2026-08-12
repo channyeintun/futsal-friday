@@ -147,7 +147,7 @@ export function MemberInviteControls({
             <Button variant="text" onClick={() => setConfirmRemove(false)}>
               {m.app.cancel}
             </Button>
-            <Button onClick={remove} disabled={busy}>
+            <Button danger onClick={remove} disabled={busy}>
               {m.invite.removeAccess}
             </Button>
           </>

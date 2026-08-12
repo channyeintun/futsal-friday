@@ -468,6 +468,35 @@ Avatars are cached as `Blob`s rather than object URLs — a URL has to be revoke
 and the cache has no eviction hook to do it, so each component mints its own
 from the shared blob and revokes on unmount.
 
+### The look
+
+Dark by default, modelled on the FotMob screenshots in `examples/`. The shape
+of it, in case it needs rebuilding:
+
+- **The canvas is pure black**, not a tinted charcoal. That single choice is
+  most of what makes it read as *dark* rather than *dimmed*: cards at `#1c1c1e`
+  then separate on their own, with no border and no shadow needed to lift them.
+- **One accent, spent sparingly.** A bright green appears on the live nav tab,
+  on text actions, and on the countdown — and nowhere else. Filling the hero
+  with it, which an earlier version did, flattens the hierarchy the accent
+  exists to create. Actions that take something away take the error tone
+  instead, so nothing destructive reads as inviting.
+- **Type carries the header**, not furniture. There is no tinted bar across the
+  top; a large, heavy title sits directly on the background, and the kickoff
+  time is the biggest thing in the app.
+- **The bottom nav floats** as a detached pill rather than a bar welded to the
+  edge, so the content reads as continuing underneath it.
+- Big soft rectangles throughout (`--ff-radius-card`, `--ff-radius-row`,
+  `--ff-radius-pill`), fully-round chips and icon buttons.
+
+`@material/web` stays — it carries the ripple, focus and disabled behaviour
+that would otherwise have to be rebuilt — but it is themed away from the
+Material look through its own custom properties rather than replaced. Two
+notes for anyone extending it: an outlined button has no `container-color`
+token, so its fill is painted on the host element; and React does not forward
+`className` to a custom element, so per-instance theming (the `danger` prop on
+`Button`) has to go through inline custom properties, not a class.
+
 ### Viewport units
 
 Three of the four heights in the stylesheet were wrong, in the way `vh` is
