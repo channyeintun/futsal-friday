@@ -1,5 +1,12 @@
 import { nextFridayKickoff, formatKickoff, toZonedParts, zonedDateKey, fromDatetimeLocal, toDatetimeLocal } from '../src/time.ts';
 import { splitEqually, splitWithOverrides, formatVnd, parseVnd } from '../src/money.ts';
+import {
+  arrivedSlots, canRedrawTeams, canSplitInto, drawTeams, matchPlayed, maxTeamsFor, roundRobin,
+  slotsMissingFrom, teamBoardLive, teamDrawOpen, teamOutcomes, teamRecords,
+} from '../src/teams.ts';
+import { SESSION_RUNS_FOR_MS } from '../src/time.ts';
+import { totalArrivedHeads } from '../src/attendance.ts';
+import type { TeamMatch, TeamSlot } from '../src/models.ts';
 
 let failures = 0;
 function check(label: string, actual: unknown, expected: unknown) {
@@ -144,6 +151,232 @@ check('parseVnd 120k', parseVnd('120k'), 120_000);
 check('parseVnd dotted', parseVnd('120.000'), 120_000);
 check('parseVnd spaced', parseVnd('120 000'), 120_000);
 check('parseVnd junk', parseVnd('abc'), null);
+
+// --- teams: the random draw ------------------------------------------------
+//
+// The draw's whole job is to be defensible to fifteen people standing on a
+// pitch, so the properties are checked over a sweep rather than on one lucky
+// seed: everybody is dealt exactly once, the sides differ by at most one, and
+// no team is systematically the bigger one.
+
+/** Deterministic PRNG (mulberry32), so a failure here is reproducible. */
+function seeded(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}
+
+const slotOf = (n: number): TeamSlot => ({
+  memberId: `m${n}`,
+  memberName: `Player ${n}`,
+  memberAvatarUpdatedAt: null,
+  guestIndex: 0,
+});
+
+let drawFault = '';
+for (let heads = 0; heads <= 24 && !drawFault; heads++) {
+  const slots = Array.from({ length: heads }, (_, i) => slotOf(i));
+  for (let teamCount = 1; teamCount <= 6; teamCount++) {
+    for (let seed = 1; seed <= 40; seed++) {
+      const teams = drawTeams(slots, teamCount, seeded(seed * 31 + heads));
+      const dealt = teams.flat();
+
+      if (teams.length !== teamCount) drawFault = `heads=${heads} n=${teamCount} teams=${teams.length}`;
+      // Everybody, exactly once. A draw that loses somebody is worse than
+      // no draw: they find out by nobody passing to them.
+      if (dealt.length !== heads) drawFault = `heads=${heads} n=${teamCount} dealt=${dealt.length}`;
+      if (new Set(dealt.map((s) => s.memberId)).size !== heads) {
+        drawFault = `heads=${heads} n=${teamCount} duplicated somebody`;
+      }
+      const sizes = teams.map((t) => t.length);
+      if (Math.max(...sizes) - Math.min(...sizes) > 1) {
+        drawFault = `heads=${heads} n=${teamCount} lopsided ${sizes.join('/')}`;
+      }
+    }
+  }
+}
+check('teams: every draw is complete and balanced', drawFault, '');
+
+// The spare player must not always land on the same side. Round-robin alone
+// puts it on the team dealt first every time, which over a season is team A
+// playing a man up every odd week.
+const spareLandedOn = new Set<number>();
+for (let seed = 1; seed <= 200; seed++) {
+  const teams = drawTeams(Array.from({ length: 11 }, (_, i) => slotOf(i)), 2, seeded(seed));
+  spareLandedOn.add(teams[0]!.length);
+}
+check('teams: the odd player out moves between sides', [...spareLandedOn].sort(), [5, 6]);
+
+// Guests are their own bodies, and a party is not welded together.
+const partySlots = arrivedSlots([
+  { memberId: 'a', memberName: 'Aung', status: 'in', guests: 2 },
+  { memberId: 'b', memberName: 'Bo', status: 'in', guests: 0 },
+  { memberId: 'c', memberName: 'Chit', status: 'in', guests: 0, attended: false },
+  { memberId: 'd', memberName: 'Dara', status: 'waitlist', guests: 0, attended: true },
+  { memberId: 'e', memberName: 'Ei', status: 'in', guests: 1, attended: false, guestsArrived: 1 },
+]);
+check('teams: a party of three is three slots', partySlots.filter((s) => s.memberId === 'a').length, 3);
+check('teams: the no-show gets no slot', partySlots.some((s) => s.memberId === 'c'), false);
+check('teams: the reserve who played gets one', partySlots.filter((s) => s.memberId === 'd').length, 1);
+check(
+  'teams: an absent member whose guest came yields only the guest',
+  partySlots.filter((s) => s.memberId === 'e').map((s) => s.guestIndex),
+  [1],
+);
+check('teams: slots are the same heads the bill is divided by', partySlots.length,
+  totalArrivedHeads([
+    { status: 'in', guests: 2 },
+    { status: 'in', guests: 0 },
+    { status: 'in', guests: 0, attended: false },
+    { status: 'waitlist', guests: 0, attended: true },
+    { status: 'in', guests: 1, attended: false, guestsArrived: 1 },
+  ]));
+
+// A stored draw does not follow the roster; the screen has to notice instead.
+const drawnBoard = { teams: drawTeams(partySlots.slice(0, 3), 2, seeded(7)) };
+check('teams: latecomers are reported as missing from the draw',
+  slotsMissingFrom(drawnBoard, partySlots).length, partySlots.length - 3);
+check('teams: nobody is missing from a fresh draw',
+  slotsMissingFrom({ teams: drawTeams(partySlots, 2, seeded(9)) }, partySlots), []);
+
+check('teams: two is the floor', canSplitInto(10, 1), false);
+check('teams: cannot field more teams than players', canSplitInto(3, 4), false);
+check('teams: three players make three teams', canSplitInto(3, 3), true);
+check('teams: the cap is six', maxTeamsFor(40), 6);
+
+// The board opens before kickoff, because people arrive before kickoff.
+const kickoffAt = '2026-08-07T12:30:00.000Z';
+check('teams: closed an hour before kickoff',
+  teamDrawOpen({ startsAt: kickoffAt, status: 'scheduled' }, new Date('2026-08-07T11:30:00Z')), false);
+check('teams: open ten minutes before kickoff',
+  teamDrawOpen({ startsAt: kickoffAt, status: 'scheduled' }, new Date('2026-08-07T12:20:00Z')), true);
+check('teams: still open after the whistle',
+  teamDrawOpen({ startsAt: kickoffAt, status: 'completed' }, new Date('2026-08-07T14:00:00Z')), true);
+check('teams: never open on a cancelled session',
+  teamDrawOpen({ startsAt: kickoffAt, status: 'cancelled' }, new Date('2026-08-07T14:00:00Z')), false);
+
+// And it stops being a control once everybody has gone home. Measured off the
+// clock, not off `status`: settling the bill completes a session too, and that
+// often happens while the last game is still being scored.
+check('board: live in the half hour before kickoff',
+  teamBoardLive({ startsAt: kickoffAt, status: 'scheduled' }, new Date('2026-08-07T12:20:00Z')), true);
+check('board: live an hour into the game',
+  teamBoardLive({ startsAt: kickoffAt, status: 'scheduled' }, new Date('2026-08-07T13:30:00Z')), true);
+check('BOARD: A RECORD TWO HOURS AFTER KICKOFF',
+  teamBoardLive({ startsAt: kickoffAt, status: 'scheduled' }, new Date('2026-08-07T14:31:00Z')), false);
+check('board: settling the bill mid-game does not close it',
+  teamBoardLive({ startsAt: kickoffAt, status: 'completed' }, new Date('2026-08-07T13:30:00Z')), true);
+check('board: closed for good the week after',
+  teamBoardLive({ startsAt: kickoffAt, status: 'completed' }, new Date('2026-08-14T12:30:00Z')), false);
+check('board: the window matches the one the cron completes on',
+  SESSION_RUNS_FOR_MS, 2 * 60 * 60 * 1000);
+
+
+// --- teams: fixtures and results -------------------------------------------
+
+check('fixtures: two teams play once', roundRobin(2), [[0, 1]]);
+check('fixtures: three teams all play each other', roundRobin(3), [[0, 1], [0, 2], [1, 2]]);
+check('fixtures: four teams make six games', roundRobin(4).length, 6);
+check('fixtures: one team has nothing to play', roundRobin(1), []);
+
+let pairFault = '';
+for (let n = 2; n <= 6; n++) {
+  const pairs = roundRobin(n);
+  const seen = new Set(pairs.map(([a, b]) => `${a}-${b}`));
+  if (seen.size !== pairs.length) pairFault = `n=${n} repeats a fixture`;
+  // Stored low-first so the same pairing cannot exist twice under two
+  // orderings — the unique index depends on it.
+  if (pairs.some(([a, b]) => a >= b)) pairFault = `n=${n} has an unordered pair`;
+  if (pairs.length !== (n * (n - 1)) / 2) pairFault = `n=${n} wrong count ${pairs.length}`;
+}
+check('fixtures: every pair once, low team first', pairFault, '');
+
+const asMatch = (
+  ordinal: number, firstTeam: number, secondTeam: number,
+  firstGoals: number | null, secondGoals: number | null,
+): TeamMatch => ({
+  id: `mat_${ordinal}`, ordinal, firstTeam, secondTeam, firstGoals, secondGoals,
+  recordedBy: null, recordedAt: null,
+});
+
+check('a fixture with no score is not played', matchPlayed(asMatch(0, 0, 1, null, null)), false);
+check('a nil-nil is played', matchPlayed(asMatch(0, 0, 1, 0, 0)), true);
+check('half a score is not a result', matchPlayed(asMatch(0, 0, 1, 3, null)), false);
+
+// A three-team afternoon: A beat B, A drew with C, C beat B.
+const table = teamRecords(3, [
+  asMatch(0, 0, 1, 4, 2),
+  asMatch(1, 0, 2, 1, 1),
+  asMatch(2, 1, 2, 0, 3),
+]);
+check('results: a win and a draw', [table[0]!.won, table[0]!.drawn, table[0]!.lost], [1, 1, 0]);
+check('results: the team that lost both', [table[1]!.won, table[1]!.drawn, table[1]!.lost], [0, 0, 2]);
+check('results: a draw counts for both sides', [table[2]!.won, table[2]!.drawn, table[2]!.lost], [1, 1, 0]);
+check('results: goals for and against tally both ways',
+  [table[0]!.goalsFor, table[0]!.goalsAgainst], [5, 3]);
+check('results: every game counts for two teams',
+  table.reduce((sum, r) => sum + r.played, 0), 6);
+check('results: goals for across the table equal goals against',
+  table.reduce((s, r) => s + r.goalsFor, 0) === table.reduce((s, r) => s + r.goalsAgainst, 0), true);
+
+// An unplayed fixture is a game not played, not a nil-nil.
+const partial = teamRecords(2, [asMatch(0, 0, 1, null, null)]);
+check('results: an unrecorded game is not a draw',
+  [partial[0]!.played, partial[0]!.drawn], [0, 0]);
+
+// A fixture naming a team the draw no longer has must not throw.
+check('results: a stale fixture is ignored rather than fatal',
+  teamRecords(2, [asMatch(0, 0, 4, 3, 1)]).every((r) => r.played === 0), true);
+
+// Who may pull the teams apart.
+check('anybody may redraw an unconfirmed board',
+  canRedrawTeams({ confirmedAt: null }, { isOrganizer: false }), true);
+check('ONCE SETTLED, ONLY AN ORGANIZER MAY REDRAW',
+  canRedrawTeams({ confirmedAt: '2026-08-07T12:40:00.000Z' }, { isOrganizer: false }), false);
+check('and an organizer still may',
+  canRedrawTeams({ confirmedAt: '2026-08-07T12:40:00.000Z' }, { isOrganizer: true }), true);
+check('with no board at all there is nothing to protect',
+  canRedrawTeams(null, { isOrganizer: false }), true);
+
+// --- teams: one side's run of results --------------------------------------
+// The run rather than the tally: what a history row draws as a line of marks.
+check('outcomes: read from the winning side', teamOutcomes(0, [
+  asMatch(0, 0, 1, 4, 2), asMatch(1, 0, 2, 1, 1), asMatch(2, 1, 2, 0, 3),
+]), ['won', 'drawn']);
+check('outcomes: and from the losing one', teamOutcomes(1, [
+  asMatch(0, 0, 1, 4, 2), asMatch(1, 0, 2, 1, 1), asMatch(2, 1, 2, 0, 3),
+]), ['lost', 'lost']);
+check('outcomes: a draw counts for both sides', teamOutcomes(2, [
+  asMatch(0, 0, 1, 4, 2), asMatch(1, 0, 2, 1, 1), asMatch(2, 1, 2, 0, 3),
+]), ['drawn', 'won']);
+check('outcomes: in fixture order, not sorted',
+  teamOutcomes(2, [asMatch(0, 1, 2, 5, 0), asMatch(1, 0, 2, 0, 1)]), ['lost', 'won']);
+check('outcomes: an unplayed game contributes nothing',
+  teamOutcomes(0, [asMatch(0, 0, 1, null, null), asMatch(1, 0, 1, 2, 1)]), ['won']);
+check('outcomes: a team in no fixture has no run', teamOutcomes(4, [asMatch(0, 0, 1, 2, 1)]), []);
+check('outcomes: nil-nil is a draw, not an absence',
+  teamOutcomes(0, [asMatch(0, 0, 1, 0, 0)]), ['drawn']);
+
+// The two readings of the same afternoon have to agree — the history row and
+// the session board are both derived, and from the same fixtures.
+check('OUTCOMES: THE RUN AND THE TALLY CANNOT DISAGREE',
+  [0, 1, 2].map((team) => {
+    const run = teamOutcomes(team, [
+      asMatch(0, 0, 1, 4, 2), asMatch(1, 0, 2, 1, 1), asMatch(2, 1, 2, 0, 3),
+    ]);
+    const record = table[team]!;
+    return [
+      run.filter((o) => o === 'won').length === record.won,
+      run.filter((o) => o === 'drawn').length === record.drawn,
+      run.filter((o) => o === 'lost').length === record.lost,
+    ].every(Boolean);
+  }),
+  [true, true, true]);
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

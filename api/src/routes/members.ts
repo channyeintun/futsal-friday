@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import {
   type MemberRow,
   decodeBalanceCursor,
+  decodeSessionCursor,
   FORM_WINDOW,
   loadLeaderboard,
   loadMemberBalances,
@@ -336,7 +337,13 @@ export const memberRoutes = new Hono<AppContext>()
     // Your own history is yours; everyone else's is the organizer's business.
     if (id !== identity.memberId && !identity.isOrganizer) throw forbidden();
 
-    return c.json({ history: await loadMemberHistory(c.env.DB, id) });
+    const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 20) || 20, 1), 100);
+    return c.json(
+      await loadMemberHistory(c.env.DB, id, {
+        limit,
+        cursor: decodeSessionCursor(c.req.query('cursor')),
+      }),
+    );
   })
 
   .post('/', requireOrganizer(), async (c) => {

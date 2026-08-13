@@ -151,10 +151,30 @@ export function useVenues(includeRetired: boolean, enabled = true) {
   });
 }
 
-export function useHistory(memberId: string, enabled = true) {
+/**
+ * The most recent page of somebody's history.
+ *
+ * For the screens that only want a glimpse — the profile shows ten games and
+ * stops. Anything that scrolls wants {@link useHistoryInfinite} instead.
+ */
+export function useHistory(memberId: string, enabled = true, pageSize = 20) {
   return useQuery({
-    queryKey: queryKeys.history(memberId),
-    queryFn: ({ signal }) => memberHistory(memberId, signal),
+    queryKey: [...queryKeys.history(memberId), pageSize] as const,
+    queryFn: ({ signal }) => memberHistory(memberId, { limit: pageSize }, signal),
+    select: (page) => page.history,
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+/** The same list, all of it, a page at a time. */
+export function useHistoryInfinite(memberId: string, enabled = true, pageSize = 20) {
+  return useInfiniteQuery({
+    queryKey: [...queryKeys.history(memberId), 'infinite', pageSize] as const,
+    queryFn: ({ pageParam, signal }) =>
+      memberHistory(memberId, { cursor: pageParam, limit: pageSize }, signal),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
     enabled,
     staleTime: 60_000,
   });

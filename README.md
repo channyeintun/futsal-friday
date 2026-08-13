@@ -38,6 +38,18 @@ See [Who can get in](#who-can-get-in).
 - **Who turned up.** Signing up is a promise; arriving is what the bill is
   divided by. After kickoff anyone can mark themselves a no-show and the
   organizer can mark anybody, and the split follows the people who played.
+- **Picking sides.** At the pitch, anybody says how many teams and the people
+  who turned up are dealt into balanced sides at random — guests included, as
+  bodies of their own. Anyone can shuffle again, because the remedy for a draw
+  that looks unfair is another draw, not an argument. "These are the teams"
+  settles it: from then on only the organizer can move anybody.
+- **Games and scores.** Settling the teams puts up the fixture list — everyone
+  plays everyone — so a game that has just finished needs a score and nothing
+  else. Nobody is ever asked at full time who they just played. Anyone can
+  enter a result, and wins, draws and losses follow from the scorelines.
+  Two hours after kickoff the board stops being a set of controls and becomes
+  the record of that Friday: the sides, the scores, and a row of marks on your
+  history saying which team you were on and how it went.
 - **Payments.** The organizer enters the total charge; it splits equally among
   the players who actually played, with per-person overrides. Members mark
   themselves paid and can attach a transfer screenshot; the organizer confirms
@@ -56,8 +68,9 @@ See [Who can get in](#who-can-get-in).
   outstanding balance per member across all sessions.
 - **Copy summary.** One tap produces a plain-text snapshot of the registration
   list or the payment status, formatted for pasting into the group chat.
-- **Realtime.** Registrations, withdrawals and payment updates appear on
-  everyone's screen without a refresh, with automatic fallback to polling.
+- **Realtime.** Registrations, withdrawals, the team board and payment updates
+  appear on everyone's screen without a refresh, with automatic fallback to
+  polling.
 - **Installable, with reminders.** A PWA that opens offline, plus push
   notifications ~3h before kickoff and a weekly nudge while you still owe.
 - **English and Burmese.** Including the push notifications and the text you

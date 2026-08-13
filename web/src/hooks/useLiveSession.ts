@@ -152,6 +152,19 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
             return;
           }
 
+          case 'teams.changed': {
+            // The board travels whole — teams, confirmation and scorelines —
+            // so somebody else's shuffle deals out on every phone at the pitch
+            // at the same moment rather than each going away to refetch it.
+            // `drawnAt` changes on every draw, which is what the board keys
+            // its animation off.
+            const { draw } = event.data;
+            patch((current) =>
+              current.session.id === event.data.sessionId ? { ...current, teams: draw } : current,
+            );
+            return;
+          }
+
           case 'session.updated':
             // Time, venue, cap or status changed — too structural to patch.
             reload();

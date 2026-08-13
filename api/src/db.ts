@@ -1,4 +1,4 @@
-import { computeStreak, normalizeLocale } from '@futsal/shared';
+import { computeStreak, normalizeLocale, teamOutcomes } from '@futsal/shared';
 import type {
   Attendance,
   Member,
@@ -11,6 +11,9 @@ import type {
   Registration,
   Session,
   SessionDetail,
+  TeamDraw,
+  TeamMatch,
+  TeamSlot,
   Venue,
 } from '@futsal/shared';
 
@@ -93,6 +96,38 @@ export interface RegistrationRow {
   status: string;
   position: number;
   created_at: string;
+}
+
+/**
+ * A team slot joined to its draw. The draw's own columns repeat on every row,
+ * which is what lets one query answer "are there teams, and who is on them" —
+ * see {@link loadTeamDraw}.
+ */
+export interface TeamSlotRow {
+  team_count: number;
+  drawn_at: string;
+  drawn_by: string | null;
+  drawn_by_name: string | null;
+  confirmed_at: string | null;
+  confirmed_by: string | null;
+  confirmed_by_name: string | null;
+  team: number | null;
+  guest_index: number | null;
+  member_id: string | null;
+  member_name: string | null;
+  member_avatar_updated_at: string | null;
+}
+
+export interface TeamMatchRow {
+  id: string;
+  ordinal: number;
+  first_team: number;
+  second_team: number;
+  first_goals: number | null;
+  second_goals: number | null;
+  recorded_at: string | null;
+  recorded_by: string | null;
+  recorded_by_name: string | null;
 }
 
 export interface PaymentRow {
@@ -257,6 +292,102 @@ export async function listRegistrations(
   return results.map(toRegistration);
 }
 
+/**
+ * The teams as they currently stand, or null if nobody has split them.
+ *
+ * One query rather than two. The draw's metadata repeats on every slot row,
+ * which is a few bytes duplicated a dozen times in exchange for one less round
+ * trip on the screen people open while standing on a pitch. The LEFT JOIN also
+ * makes "a draw exists but everybody in it has since left" representable,
+ * rather than indistinguishable from no draw at all.
+ */
+export async function loadTeamDraw(
+  db: D1Database,
+  sessionId: string,
+): Promise<TeamDraw | null> {
+  // Slots and fixtures are independent, so they go together rather than one
+  // after the other. Both are a dozen rows at most.
+  const [slots, fixtures] = await Promise.all([
+    db
+      .prepare(
+        `SELECT d.team_count, d.drawn_at, d.drawn_by, b.name AS drawn_by_name,
+                d.confirmed_at, d.confirmed_by, c.name AS confirmed_by_name,
+                s.team, s.guest_index, s.member_id, m.name AS member_name,
+                m.avatar_updated_at AS member_avatar_updated_at
+           FROM team_draws d
+           LEFT JOIN members b ON b.id = d.drawn_by
+           LEFT JOIN members c ON c.id = d.confirmed_by
+           LEFT JOIN team_slots s ON s.session_id = d.session_id
+           LEFT JOIN members m ON m.id = s.member_id
+          WHERE d.session_id = ?1
+          ORDER BY s.team ASC, m.name COLLATE NOCASE ASC, s.guest_index ASC`,
+      )
+      .bind(sessionId)
+      .all<TeamSlotRow>(),
+    db
+      .prepare(
+        `SELECT x.id, x.ordinal, x.first_team, x.second_team,
+                x.first_goals, x.second_goals, x.recorded_at, x.recorded_by,
+                r.name AS recorded_by_name
+           FROM team_matches x
+           LEFT JOIN members r ON r.id = x.recorded_by
+          WHERE x.session_id = ?1
+          ORDER BY x.ordinal ASC`,
+      )
+      .bind(sessionId)
+      .all<TeamMatchRow>(),
+  ]);
+
+  const results = slots.results;
+  const first = results[0];
+  if (!first) return null;
+
+  const teams: TeamSlot[][] = Array.from({ length: first.team_count }, () => []);
+  for (const row of results) {
+    // The slot half of the join is null when the draw has no slots left.
+    if (row.team == null || row.member_id == null || row.member_name == null) continue;
+    // A team index outside the stored count would have to come from a shrunk
+    // `team_count`, which nothing writes — but dropping the row is better than
+    // indexing off the end of the board.
+    teams[row.team]?.push({
+      memberId: row.member_id,
+      memberName: row.member_name,
+      memberAvatarUpdatedAt: row.member_avatar_updated_at ?? null,
+      guestIndex: row.guest_index ?? 0,
+    });
+  }
+
+  return {
+    teamCount: first.team_count,
+    teams,
+    drawnBy:
+      first.drawn_by && first.drawn_by_name
+        ? { memberId: first.drawn_by, memberName: first.drawn_by_name }
+        : null,
+    drawnAt: first.drawn_at,
+    confirmedAt: first.confirmed_at ?? null,
+    confirmedBy:
+      first.confirmed_by && first.confirmed_by_name
+        ? { memberId: first.confirmed_by, memberName: first.confirmed_by_name }
+        : null,
+    matches: fixtures.results.map((row) => ({
+      id: row.id,
+      ordinal: row.ordinal,
+      firstTeam: row.first_team,
+      secondTeam: row.second_team,
+      // A half-recorded score cannot be written, but reading it back as
+      // unplayed is safer than reporting a one-sided scoreline.
+      firstGoals: row.first_goals ?? null,
+      secondGoals: row.second_goals ?? null,
+      recordedBy:
+        row.recorded_by && row.recorded_by_name
+          ? { memberId: row.recorded_by, memberName: row.recorded_by_name }
+          : null,
+      recordedAt: row.recorded_at ?? null,
+    })),
+  };
+}
+
 /* -------------------------------------------------------- composite reads */
 
 /**
@@ -276,13 +407,21 @@ export async function loadSessionDetail(
   const session = await getSessionRow(db, sessionId);
   if (!session) return null;
 
-  const registrations = await listRegistrations(db, sessionId);
+  // Independent reads, so they cost one round trip between them rather than
+  // two. The team board is on the same screen as the roster and is wanted at
+  // the same moment.
+  const [registrations, teams] = await Promise.all([
+    listRegistrations(db, sessionId),
+    loadTeamDraw(db, sessionId),
+  ]);
+
   return {
     session,
     registrations,
     counts: countRegistrations(registrations),
     registrationOpen: isRegistrationOpen(session),
     me: registrations.find((r) => r.memberId === viewerMemberId) ?? null,
+    teams,
   };
 }
 
@@ -459,6 +598,33 @@ export async function loadMemberBalances(
 }
 
 /** Opaque `(outstanding, id)` position in the debt list. */
+/**
+ * Opaque `(starts_at, id)` position in a list of sessions, newest first.
+ *
+ * The id is in the tuple because two sessions can share a kickoff time — a
+ * midweek game added twice, a fixture moved onto another — and a keyset on the
+ * timestamp alone would make one of them unreachable. Both the group's fixture
+ * history and a member's own page on this.
+ */
+export function encodeSessionCursor(startsAt: string, id: string): string {
+  return btoa(unescape(encodeURIComponent(JSON.stringify({ s: startsAt, i: id }))));
+}
+
+export function decodeSessionCursor(
+  raw: string | undefined,
+): { startsAt: string; id: string } | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(decodeURIComponent(escape(atob(raw))));
+    if (typeof parsed?.s === 'string' && typeof parsed?.i === 'string') {
+      return { startsAt: parsed.s, id: parsed.i };
+    }
+  } catch {
+    // An unreadable cursor is the first page, not an error.
+  }
+  return null;
+}
+
 export function encodeBalanceCursor(outstanding: number, id: string): string {
   return btoa(unescape(encodeURIComponent(JSON.stringify({ o: outstanding, i: id }))));
 }
@@ -576,9 +742,19 @@ function toAttendance(status: string | null, attended: number | null): Attendanc
 export async function loadMemberHistory(
   db: D1Database,
   memberId: string,
-  limit = 30,
-): Promise<MemberHistoryEntry[]> {
-  const { results } = await db
+  opts: { limit?: number; cursor?: { startsAt: string; id: string } | null } = {},
+): Promise<{ history: MemberHistoryEntry[]; nextCursor: string | null }> {
+  const limit = Math.min(Math.max(opts.limit ?? 20, 1), 100);
+  const cursor = opts.cursor ?? null;
+
+  // Keyset on `(starts_at DESC, id ASC)`, the same tuple the group's fixture
+  // list pages on — see `encodeSessionCursor`. One row past the page is
+  // fetched to answer "is there more" without a second count query.
+  const keyset = cursor
+    ? `AND (s.starts_at < ?3 OR (s.starts_at = ?3 AND s.id > ?4))`
+    : '';
+
+  const statement = db
     .prepare(
       `SELECT ${SESSION_COLUMNS},
               r.status AS reg_status,
@@ -586,17 +762,25 @@ export async function loadMemberHistory(
               p.status AS pay_status,
               p.proof_key, p.note, p.reject_reason, p.claimed_at, p.confirmed_at,
               p.updated_at AS pay_updated_at,
-              m.name AS member_name
+              m.name AS member_name,
+              ts.team AS team
          ${SESSION_FROM}
          JOIN members m ON m.id = ?1
          LEFT JOIN registrations r ON r.session_id = s.id AND r.member_id = ?1
          LEFT JOIN payments p ON p.session_id = s.id AND p.member_id = ?1
-        WHERE r.id IS NOT NULL OR p.id IS NOT NULL
-        ORDER BY s.starts_at DESC
+         -- Their own slot, not their guests': guest_index 0 is the member.
+         LEFT JOIN team_slots ts
+                ON ts.session_id = s.id AND ts.member_id = ?1 AND ts.guest_index = 0
+        WHERE (r.id IS NOT NULL OR p.id IS NOT NULL)
+          ${keyset}
+        ORDER BY s.starts_at DESC, s.id ASC
         LIMIT ?2`,
-    )
-    .bind(memberId, limit)
-    .all<
+    );
+
+  const { results: page } = await (cursor
+    ? statement.bind(memberId, limit + 1, cursor.startsAt, cursor.id)
+    : statement.bind(memberId, limit + 1)
+  ).all<
       SessionWithVenueRow & {
         reg_status: string | null;
         pay_id: string | null;
@@ -611,12 +795,64 @@ export async function loadMemberHistory(
         confirmed_at: string | null;
         pay_updated_at: string | null;
         member_name: string;
+        team: number | null;
       }
     >();
 
-  return results.map((row) => ({
+  // The extra row was only ever the answer to "is there more".
+  const results = page.slice(0, limit);
+  const last = results.at(-1);
+  const nextCursor =
+    page.length > limit && last ? encodeSessionCursor(last.starts_at, last.id) : null;
+
+  // The fixtures for every session on the page, in one go.
+  //
+  // A second query rather than a join: a session has several games and this one
+  // has a row per session, so joining them would multiply the page out and then
+  // need collapsing again. A page at most — see the `limit` — which is
+  // comfortably inside D1's bound-parameter ceiling.
+  const played = results.filter((row) => row.team !== null).map((row) => row.id);
+  const fixtures = new Map<string, TeamMatch[]>();
+
+  if (played.length > 0) {
+    const { results: matchRows } = await db
+      .prepare(
+        `SELECT session_id, id, ordinal, first_team, second_team, first_goals, second_goals
+           FROM team_matches
+          WHERE session_id IN (${played.map((_, i) => `?${i + 1}`).join(', ')})
+          ORDER BY session_id, ordinal ASC`,
+      )
+      .bind(...played)
+      .all<TeamMatchRow & { session_id: string }>();
+
+    for (const row of matchRows) {
+      const list = fixtures.get(row.session_id) ?? [];
+      list.push({
+        id: row.id,
+        ordinal: row.ordinal,
+        firstTeam: row.first_team,
+        secondTeam: row.second_team,
+        firstGoals: row.first_goals ?? null,
+        secondGoals: row.second_goals ?? null,
+        recordedBy: null,
+        recordedAt: null,
+      });
+      fixtures.set(row.session_id, list);
+    }
+  }
+
+  const history = results.map((row) => ({
     session: toSession(row),
     registrationStatus: (row.reg_status as MemberHistoryEntry['registrationStatus']) ?? null,
+    teams:
+      row.team === null
+        ? null
+        : {
+            team: row.team,
+            // Resolved with the shared helper, so a row in the history list and
+            // the board on the session screen can never disagree about who won.
+            outcomes: teamOutcomes(row.team, fixtures.get(row.id) ?? []),
+          },
     payment: row.pay_id
       ? toPayment({
           id: row.pay_id,
@@ -636,6 +872,8 @@ export async function loadMemberHistory(
         })
       : null,
   }));
+
+  return { history, nextCursor };
 }
 
 /* ------------------------------------------------------------ form + ranks */

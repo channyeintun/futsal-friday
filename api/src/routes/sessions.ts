@@ -1,15 +1,24 @@
 import {
   type Registration,
+  type TeamDraw,
+  arrivedSlots,
+  canRedrawTeams,
+  canSplitInto,
   createSessionSchema,
+  drawTeams,
+  drawTeamsSchema,
   markAttendanceSchema,
+  maxTeamsFor,
   recordGoalsSchema,
+  recordMatchSchema,
+  roundRobin,
   sessionChannel,
   totalArrivedHeads,
   updateSessionSchema,
   LOBBY_CHANNEL,
   registerSchema,
 } from '@futsal/shared';
-import { Hono } from 'hono';
+import { type Context, Hono } from 'hono';
 import {
   SESSION_COLUMNS,
   SESSION_FROM,
@@ -19,6 +28,9 @@ import {
   isRegistrationOpen,
   listRegistrations,
   loadSessionDetail,
+  decodeSessionCursor,
+  encodeSessionCursor,
+  loadTeamDraw,
   toSession,
 } from '../db.js';
 import type { AppContext } from '../env.js';
@@ -35,22 +47,29 @@ import {
 import { requireOrganizer } from '../middleware.js';
 import { isUniqueViolation } from './members.js';
 
-/** Opaque `(starts_at, id)` position in the fixture history. */
-function encodePastCursor(startsAt: string, id: string): string {
-  return btoa(unescape(encodeURIComponent(JSON.stringify({ s: startsAt, i: id }))));
-}
+/**
+ * Ceiling on how many people one draw will deal out.
+ *
+ * Twice the largest cap a session can be given, so it can never be reached by
+ * a real fixture — it exists only so the write below stays a bounded batch on
+ * a session that was created without a cap at all.
+ */
+const MAX_DRAW_SLOTS = 120;
 
-function decodePastCursor(raw: string | undefined): { startsAt: string; id: string } | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(decodeURIComponent(escape(atob(raw))));
-    if (typeof parsed?.s === 'string' && typeof parsed?.i === 'string') {
-      return { startsAt: parsed.s, id: parsed.i };
-    }
-  } catch {
-    // An unreadable cursor is the first page, not an error.
-  }
-  return null;
+/**
+ * "This board is not settled, or you are an organizer" — as SQL.
+ *
+ * The same rule as `canRedrawTeams`, restated where the write happens. The
+ * route checks permission with a read first, for a clean 403 in the ordinary
+ * case; this is what stops a confirmation that lands in the gap between that
+ * read and the batch from being quietly undone by the request it should have
+ * refused. Written as a function of the parameter positions because each
+ * statement in the batch binds them in a different order.
+ */
+function mayWriteBoard(sessionParam: string, organizerParam: string): string {
+  return `(${organizerParam} = 1 OR NOT EXISTS (
+            SELECT 1 FROM team_draws d
+             WHERE d.session_id = ${sessionParam} AND d.confirmed_at IS NOT NULL))`;
 }
 
 export const sessionRoutes = new Hono<AppContext>()
@@ -92,7 +111,7 @@ export const sessionRoutes = new Hono<AppContext>()
    */
   .get('/past', async (c) => {
     const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 20) || 20, 1), 100);
-    const cursor = decodePastCursor(c.req.query('cursor'));
+    const cursor = decodeSessionCursor(c.req.query('cursor'));
     const now = nowIso();
 
     const statement = cursor
@@ -116,7 +135,7 @@ export const sessionRoutes = new Hono<AppContext>()
     return c.json({
       sessions: page.map(toSession),
       nextCursor:
-        results.length > limit && last ? encodePastCursor(last.starts_at, last.id) : null,
+        results.length > limit && last ? encodeSessionCursor(last.starts_at, last.id) : null,
     });
   })
 
@@ -534,7 +553,322 @@ export const sessionRoutes = new Hono<AppContext>()
     const after = await listRegistrations(c.env.DB, sessionId);
     return c.json({ registrations: after });
   })
+
+  /* -------------------------------------------------------------- teams */
+
+  /**
+   * Split whoever turned up into sides.
+   *
+   * Open to any member, on purpose. This is done standing on the pitch in the
+   * minute before kickoff, and gating it on the organizer being present, awake
+   * and holding their phone would make it useless at exactly the moment it is
+   * wanted. Nothing here is worth money and nothing is hard to undo — the
+   * remedy for a draw somebody thinks is unfair is another draw, which is why
+   * calling this again is an ordinary thing to do rather than an override.
+   *
+   * Not gated on kickoff having passed either, for the same reason attendance
+   * is not: the screen decides when the question is worth asking, and a group
+   * that turns up half an hour early is not doing anything wrong.
+   */
+  .post('/:id/teams', async (c) => {
+    const sessionId = c.req.param('id');
+    const identity = c.get('identity');
+    const { teamCount } = await parseBody(c.req.raw, drawTeamsSchema);
+
+    const session = await getSessionRow(c.env.DB, sessionId);
+    if (!session) throw notFound('No such session');
+    if (session.status === 'cancelled') throw conflict('That session was cancelled');
+
+    // Once the group has settled on a draw, moving anybody is an organizer's
+    // call — see `canRedrawTeams`. Up to that point it is deliberately not.
+    const existing = await loadTeamDraw(c.env.DB, sessionId);
+    if (!canRedrawTeams(existing, identity)) {
+      throw forbidden('These teams are settled — ask an organizer to redo them');
+    }
+
+    // The same presence rules as the bill, so the people being split are
+    // exactly the people being charged.
+    const registrations = await listRegistrations(c.env.DB, sessionId);
+    const slots = arrivedSlots(registrations);
+
+    if (slots.length === 0) {
+      throw conflict('Nobody is down as having played yet');
+    }
+    // The batch below is one statement per body on the pitch, and a session
+    // with no cap has no bound on how many bodies that is. Nothing near this
+    // is a futsal match, but an unbounded batch is worth closing anyway.
+    if (slots.length > MAX_DRAW_SLOTS) {
+      throw badRequest(`That is too many players to split — ${MAX_DRAW_SLOTS} at most`);
+    }
+    if (!canSplitInto(slots.length, teamCount)) {
+      throw badRequest(
+        `Only ${slots.length} on the pitch — that is at most ${maxTeamsFor(slots.length)} teams`,
+      );
+    }
+
+    const teams = drawTeams(slots, teamCount, cryptoRandom);
+    const timestamp = nowIso();
+
+    // The permission check above is a read, and a confirmation landing between
+    // that read and this write would be silently undone by somebody who should
+    // have been refused. So the rule is restated inside the statements, where
+    // it is evaluated against the row as it stands at write time.
+    const mayForce = identity.isOrganizer ? 1 : 0;
+    const insertSlot = c.env.DB.prepare(
+      `INSERT INTO team_slots (session_id, member_id, guest_index, team)
+       SELECT ?1, ?2, ?3, ?4 WHERE ${mayWriteBoard('?1', '?5')}`,
+    );
+
+    // One batch, so a reshuffle is never observable half-applied: D1 runs it as
+    // a single transaction, and two people tapping at once resolve to one whole
+    // draw rather than a mix of both.
+    //
+    // A new draw resets the confirmation and wipes the fixtures. It has to:
+    // the scorelines were recorded against sides that no longer exist, and
+    // keeping them would attribute somebody's win to a team they were never on.
+    await c.env.DB.batch([
+      c.env.DB
+        .prepare(`DELETE FROM team_slots WHERE session_id = ?1 AND ${mayWriteBoard('?1', '?2')}`)
+        .bind(sessionId, mayForce),
+      c.env.DB
+        .prepare(`DELETE FROM team_matches WHERE session_id = ?1 AND ${mayWriteBoard('?1', '?2')}`)
+        .bind(sessionId, mayForce),
+      c.env.DB.prepare(
+        `INSERT INTO team_draws (session_id, team_count, drawn_by, drawn_at)
+         VALUES (?1, ?3, ?4, ?5)
+         ON CONFLICT (session_id) DO UPDATE
+           SET team_count = excluded.team_count,
+               drawn_by = excluded.drawn_by,
+               drawn_at = excluded.drawn_at,
+               confirmed_at = NULL,
+               confirmed_by = NULL
+           WHERE ?2 = 1 OR team_draws.confirmed_at IS NULL`,
+      ).bind(sessionId, mayForce, teamCount, identity.memberId, timestamp),
+      // Guarded like the rest — and read *after* the upsert above, which has
+      // by then either cleared `confirmed_at` or been blocked itself, so the
+      // slots can never land without the draw row that describes them.
+      ...teams.flatMap((team, index) =>
+        team.map((slot) =>
+          insertSlot.bind(sessionId, slot.memberId, slot.guestIndex, index, mayForce),
+        ),
+      ),
+    ]);
+
+    const draw = await loadTeamDraw(c.env.DB, sessionId);
+    // Nothing moved: the guards refused, which means somebody settled the
+    // teams while this request was in flight.
+    if (draw?.drawnAt !== timestamp) {
+      throw forbidden('These teams were settled while you were dealing — ask an organizer');
+    }
+
+    return c.json({ draw: await announceBoard(c, sessionId, timestamp) });
+  })
+
+  /**
+   * "These are the teams."
+   *
+   * Open to anybody, like the draw itself: the group agrees out loud and
+   * whoever is holding a phone taps it. What it changes is who may reshuffle
+   * afterwards — from anyone to organizers only — because from here people put
+   * bibs on and results start being recorded.
+   *
+   * Confirming is also what produces the fixture list, so that finishing a game
+   * later is only ever a score against a line that already exists. Idempotent:
+   * confirming twice does not regenerate the fixtures and so cannot wipe a
+   * score somebody already entered.
+   */
+  .post('/:id/teams/confirm', async (c) => {
+    const sessionId = c.req.param('id');
+    const identity = c.get('identity');
+
+    const session = await getSessionRow(c.env.DB, sessionId);
+    if (!session) throw notFound('No such session');
+    if (session.status === 'cancelled') throw conflict('That session was cancelled');
+
+    const existing = await loadTeamDraw(c.env.DB, sessionId);
+    if (!existing) throw conflict('Split the teams first');
+    if (existing.confirmedAt) return c.json({ draw: existing });
+
+    const timestamp = nowIso();
+    // `DO NOTHING` rather than a plain insert, and `confirmed_at IS NULL` on
+    // the update: the read above makes confirming twice a no-op in the normal
+    // case, but two people tapping at the same moment both see an unconfirmed
+    // draw. Without these the second batch collides with the fixture list the
+    // first one just wrote, and the tap fails for no reason the group can see.
+    const insertMatch = c.env.DB.prepare(
+      `INSERT INTO team_matches
+         (id, session_id, ordinal, first_team, second_team, created_at)
+       SELECT ?1, ?2, ?3, ?4, ?5, ?6
+        WHERE EXISTS (SELECT 1 FROM team_draws d
+                       WHERE d.session_id = ?2 AND d.confirmed_at = ?6)
+       ON CONFLICT (session_id, ordinal) DO NOTHING`,
+    );
+
+    await c.env.DB.batch([
+      // Guarded on the draw still being the one that was read.
+      //
+      // The fixture list is generated from `existing.teamCount`, so a redraw
+      // landing between that read and this write would settle the new teams
+      // against the old draw's fixtures — a three-team list bolted onto two
+      // sides, naming a Team C that nobody is on. `confirmed_at IS NULL`
+      // covers the other half: two people confirming at the same moment.
+      c.env.DB.prepare(
+        `UPDATE team_draws SET confirmed_at = ?2, confirmed_by = ?3
+          WHERE session_id = ?1 AND confirmed_at IS NULL AND drawn_at = ?4`,
+      ).bind(sessionId, timestamp, identity.memberId, existing.drawnAt),
+      // Everyone plays everyone. Two teams is one fixture; three is three.
+      //
+      // Each insert is conditional on the update above having been ours —
+      // `confirmed_at` equals this request's timestamp only in that case — so
+      // fixtures can never land against somebody else's draw.
+      ...roundRobin(existing.teamCount).map(([firstTeam, secondTeam], ordinal) =>
+        insertMatch.bind(newId('mat'), sessionId, ordinal, firstTeam, secondTeam, timestamp),
+      ),
+    ]);
+
+    // Somebody else got there first, or redrew underneath us. Either way the
+    // board in the database is the answer, and this stays idempotent.
+    return c.json({ draw: await announceBoard(c, sessionId, timestamp) });
+  })
+
+  /**
+   * How a game finished.
+   *
+   * Anybody may record it and anybody may correct it, on the same reasoning as
+   * attendance and goals: the person who knows the score is whoever is
+   * standing there, not whoever holds the organizer flag. Sending both goals
+   * as null puts the fixture back to "not played yet", which is a different
+   * state from nil-nil and has to stay expressible.
+   */
+  .post('/:id/matches/:matchId', async (c) => {
+    const sessionId = c.req.param('id');
+    const matchId = c.req.param('matchId');
+    const identity = c.get('identity');
+    const input = await parseBody(c.req.raw, recordMatchSchema);
+
+    // One score or the other alone is not a result, and storing half of one
+    // would make "played" ambiguous everywhere it is read.
+    if ((input.firstGoals == null) !== (input.secondGoals == null)) {
+      throw badRequest('A score needs both sides');
+    }
+
+    // The same gate every other write to a session carries. A cancelled
+    // fixture has no games in it to have a score.
+    const session = await getSessionRow(c.env.DB, sessionId);
+    if (!session) throw notFound('No such session');
+    if (session.status === 'cancelled') throw conflict('That session was cancelled');
+
+    const timestamp = nowIso();
+    const played = input.firstGoals != null;
+    const updated = await c.env.DB.prepare(
+      `UPDATE team_matches
+          SET first_goals = ?3, second_goals = ?4,
+              recorded_at = ?5, recorded_by = ?6
+        WHERE session_id = ?1 AND id = ?2`,
+    )
+      .bind(
+        sessionId,
+        matchId,
+        input.firstGoals,
+        input.secondGoals,
+        played ? timestamp : null,
+        played ? identity.memberId : null,
+      )
+      .run();
+
+    if ((updated.meta?.changes ?? 0) === 0) throw notFound('No such match in this session');
+
+    return c.json({ draw: await announceBoard(c, sessionId, timestamp) });
+  })
+
+  /** Take the board down. Same permission rule as redrawing it. */
+  .delete('/:id/teams', async (c) => {
+    const sessionId = c.req.param('id');
+    const identity = c.get('identity');
+
+    const session = await getSessionRow(c.env.DB, sessionId);
+    if (!session) throw notFound('No such session');
+
+    const existing = await loadTeamDraw(c.env.DB, sessionId);
+    if (!canRedrawTeams(existing, identity)) {
+      throw forbidden('These teams are settled — ask an organizer to clear them');
+    }
+
+    // Neither child table has a foreign key to `team_draws`, so both are
+    // cleared explicitly rather than by cascade. Guarded like the redraw, and
+    // in this order: both children read the draw row before it is removed.
+    const mayForce = identity.isOrganizer ? 1 : 0;
+    await c.env.DB.batch([
+      c.env.DB
+        .prepare(`DELETE FROM team_slots WHERE session_id = ?1 AND ${mayWriteBoard('?1', '?2')}`)
+        .bind(sessionId, mayForce),
+      c.env.DB
+        .prepare(`DELETE FROM team_matches WHERE session_id = ?1 AND ${mayWriteBoard('?1', '?2')}`)
+        .bind(sessionId, mayForce),
+      c.env.DB
+        .prepare(
+          `DELETE FROM team_draws
+            WHERE session_id = ?1 AND (?2 = 1 OR confirmed_at IS NULL)`,
+        )
+        .bind(sessionId, mayForce),
+    ]);
+
+    if (await loadTeamDraw(c.env.DB, sessionId)) {
+      throw forbidden('These teams were settled while you were clearing — ask an organizer');
+    }
+
+    await c.get('pubsub').emit(sessionChannel(sessionId), 'teams.changed', {
+      sessionId,
+      draw: null,
+      byMemberId: identity.memberId,
+      byMemberName: identity.name,
+      at: nowIso(),
+    });
+
+    return c.json({ draw: null });
+  })
 ;
+
+/**
+ * Read the board back and tell everybody about it.
+ *
+ * Read back rather than assembled from what was just written: the board people
+ * see is the one in the database, including whichever of two simultaneous
+ * taps actually won. Every write to the board goes out as the same event
+ * carrying the whole thing, so a viewer never has to work out which half of
+ * their screen a change applies to.
+ */
+async function announceBoard(
+  c: Context<AppContext>,
+  sessionId: string,
+  at: string,
+): Promise<TeamDraw | null> {
+  const draw = await loadTeamDraw(c.env.DB, sessionId);
+  const identity = c.get('identity');
+
+  await c.get('pubsub').emit(sessionChannel(sessionId), 'teams.changed', {
+    sessionId,
+    draw,
+    byMemberId: identity.memberId,
+    byMemberName: identity.name,
+    at,
+  });
+
+  return draw;
+}
+
+/**
+ * Uniform floats from the platform CSPRNG.
+ *
+ * `Math.random()` would do for picking teams, but a draw people are meant to
+ * accept as fair should not be seeded by something a Worker isolate shares
+ * across requests. This costs nothing and removes the question.
+ */
+function cryptoRandom(): number {
+  const buffer = new Uint32Array(1);
+  crypto.getRandomValues(buffer);
+  return buffer[0]! / 2 ** 32;
+}
 
 /**
  * Promote the longest-waiting player, if the cap allows. The head of the

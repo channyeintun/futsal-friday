@@ -8,6 +8,7 @@ export * from './banks.js';
 export * from './invite.js';
 export * from './names.js';
 export * from './streak.js';
+export * from './teams.js';
 export * from './vietqr.js';
 export * from './summary.js';
 export * from './i18n/index.js';

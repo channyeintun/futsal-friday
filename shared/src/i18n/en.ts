@@ -268,6 +268,54 @@ export const en = {
     loading: 'Loading session…',
   },
 
+  /* ------------------------------------------------------------- teams */
+
+  teams: {
+    title: 'Teams',
+    split: 'Split into teams',
+    body: 'Everyone who turned up, dealt out at random. Anyone can shuffle again.',
+    nobodyYet: 'Mark who turned up first — the draw uses the same list the bill does.',
+    howMany: 'How many teams?',
+    onThePitch: (heads: number) =>
+      heads === 1 ? '1 player on the pitch' : `${heads} players on the pitch`,
+    willBe: (sizes: string) => `Sides of ${sizes}`,
+    deal: 'Deal the teams',
+    dealing: 'Dealing…',
+    teamName: (letter: string) => `Team ${letter}`,
+    teamSize: (count: number) => (count === 1 ? '1 player' : `${count} players`),
+    /* A guest has no name of their own, so the row carries whoever brought
+       them. Two guests from the same person are interchangeable, which is
+       true of them on the pitch as well. */
+    guest: 'guest',
+    empty: 'Nobody',
+    drawnBy: (name: string, when: string) => `${name} shuffled these ${when}`,
+    shuffle: 'Shuffle again',
+    clear: 'Clear',
+    missing: (count: number) =>
+      count === 1
+        ? '1 more player has turned up since. Shuffle again to deal them in.'
+        : `${count} more players have turned up since. Shuffle again to deal them in.`,
+    failed: 'Could not split the teams',
+
+    /* ------------------------------------------- settling on a draw */
+    confirm: 'These are the teams',
+    confirmHint: 'Everyone happy? This fixes the sides and lists the games.',
+    settledBy: (name: string, when: string) => `${name} settled these ${when}`,
+    locked: 'Settled. Only an organizer can change the sides now.',
+    redoWarning: 'Dealing again unsettles the teams and clears any scores recorded against them.',
+
+    /* -------------------------------------------------- the fixtures */
+    matches: 'Games',
+    matchesHint: 'Everyone plays everyone. Put the score in when a game finishes.',
+    neverSettled: 'These sides were never settled, so no games were listed.',
+    notPlayed: 'Not played yet',
+    scoreTitle: (first: string, second: string) => `${first} v ${second}`,
+    markNotPlayed: 'Mark as not played',
+    scoredBy: (name: string) => `entered by ${name}`,
+    record: (won: number, drawn: number, lost: number) => `${won}W ${drawn}D ${lost}L`,
+    scoreFailed: 'Could not save the score',
+  },
+
   connection: {
     live: 'Live',
     polling: 'Updating every 30s',
@@ -327,6 +375,7 @@ export const en = {
     everyone: (count: number) => `Everyone (${count})`,
     nothingToSplit: 'Nothing to split yet.',
     copyStatus: 'Copy status for chat',
+    seeSession: 'The teams and who played',
     splittingBetween: (heads: number) =>
       heads === 1 ? '1 person played' : `${heads} people played`,
     splitTitle: 'Split the bill',

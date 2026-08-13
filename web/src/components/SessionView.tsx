@@ -5,6 +5,8 @@ import {
   formatVnd,
   registrationSummary,
   relativeToNow,
+  teamBoardLive,
+  teamDrawOpen,
   totalArrivedHeads,
 } from '@futsal/shared';
 import { useState } from 'react';
@@ -24,6 +26,7 @@ import { GuestPicker } from './GuestPicker.js';
 import { CopyButton } from './CopyButton.js';
 import { Icon } from './Icon.js';
 import { SessionEditor } from './SessionEditor.js';
+import { TeamBoards } from './TeamBoards.js';
 import { Button, Dialog, ErrorBanner } from './ui.js';
 
 /**
@@ -68,6 +71,16 @@ export function SessionView({
 
   const kickedOff = new Date(session.startsAt).getTime() <= Date.now();
   const showAttendance = kickedOff && session.status !== 'cancelled';
+  // Teams are picked standing on the pitch, which happens before the clock
+  // strikes 19:30 — so this board opens earlier than the attendance controls,
+  // and for a different reason. See `teamDrawOpen`.
+  //
+  // It then stops being a control and becomes a record: two hours after
+  // kickoff there is nobody left to reshuffle for, and offering to split teams
+  // for a game played weeks ago is the screen asking a question that has no
+  // answer. A finished session keeps the board only if there is one to keep.
+  const teamsLive = teamBoardLive(session);
+  const showTeams = teamDrawOpen(session) && (teamsLive || detail.teams !== null);
   const arrived = totalArrivedHeads(registrations);
   const checked = attendanceChecked(registrations);
 
@@ -326,6 +339,12 @@ export function SessionView({
           </>
         ) : null}
       </div>
+
+      {/* Directly under the roster: the list of who is here is what the board
+          is dealt from, and picking sides is the next thing that happens. */}
+      {showTeams ? (
+        <TeamBoards detail={detail} live={teamsLive} onChanged={onChanged} />
+      ) : null}
 
       {session.notes ? (
         <div className="card">

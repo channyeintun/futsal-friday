@@ -263,6 +263,115 @@ export const markAttendanceSchema = z.object({
 });
 export type MarkAttendanceInput = z.infer<typeof markAttendanceSchema>;
 
+/* ------------------------------------------------------------------- teams */
+
+/**
+ * Two sides is the game; six is the most a futsal pitch could plausibly host
+ * as rotating teams. The lower bound is what makes the question worth asking
+ * at all — "one team" is not a split.
+ */
+export const MIN_TEAMS = 2;
+export const MAX_TEAMS = 6;
+
+/**
+ * One body on the pitch.
+ *
+ * A member is one slot; each guest they brought is another. Guests are dealt
+ * independently rather than kept beside whoever brought them — they are their
+ * own body in the game, and pinning a party of three to one side is exactly
+ * the imbalance a random draw is for.
+ */
+export const teamSlotSchema = z.object({
+  memberId: idSchema,
+  memberName: z.string(),
+  memberAvatarUpdatedAt: isoSchema.nullable().default(null),
+  /** 0 is the member themselves; 1..5 are the guests they brought. */
+  guestIndex: z.number().int().min(0).max(5),
+});
+export type TeamSlot = z.infer<typeof teamSlotSchema>;
+
+/**
+ * A scoreline nobody is going to exceed in a friendly. Past this is a typo.
+ *
+ * The same ceiling as a player's own goal tally, and the same one the score
+ * stepper stops at — so a number the UI cannot produce is also a number the
+ * API will not take. The column allows more, as a backstop should.
+ */
+export const matchGoalsSchema = z.number().int().min(0).max(30);
+
+const actorSchema = z.object({ memberId: idSchema, memberName: z.string() });
+
+/**
+ * One fixture: two of the drawn teams, and how it finished.
+ *
+ * Who plays whom is settled when the teams are confirmed, not when a match
+ * ends — walking off the pitch and *then* being asked who you just played is
+ * the wrong order, and with three teams rotating it is a question nobody can
+ * answer reliably an hour later. So the fixture list exists first and each
+ * entry only ever needs its score.
+ *
+ * `firstTeam` and `secondTeam` are positions in the fixture, not team letters:
+ * they index into {@link teamDrawSchema}'s `teams`.
+ */
+export const teamMatchSchema = z.object({
+  id: idSchema,
+  /** Position in the fixture list; stable, so the order never jumps around. */
+  ordinal: z.number().int().min(0),
+  firstTeam: z.number().int().min(0).max(MAX_TEAMS - 1),
+  secondTeam: z.number().int().min(0).max(MAX_TEAMS - 1),
+  /** Both null until somebody records it. A played 0-0 is two zeroes. */
+  firstGoals: matchGoalsSchema.nullable(),
+  secondGoals: matchGoalsSchema.nullable(),
+  recordedBy: actorSchema.nullable(),
+  recordedAt: isoSchema.nullable(),
+});
+export type TeamMatch = z.infer<typeof teamMatchSchema>;
+
+/**
+ * The teams as they currently stand.
+ *
+ * Stored rather than derived. A draw computed on the fly from whoever is
+ * currently marked present would silently rearrange everybody the moment a
+ * late arrival was added or somebody was marked a no-show — and by then the
+ * teams are people standing in two groups on a pitch, not a query result.
+ */
+export const teamDrawSchema = z.object({
+  teamCount: z.number().int().min(MIN_TEAMS).max(MAX_TEAMS),
+  /** `teams[i]` is everyone on team i. May be empty if people have left. */
+  teams: z.array(z.array(teamSlotSchema)).max(MAX_TEAMS),
+  /** Whoever last pressed shuffle. Null if they have since been removed. */
+  drawnBy: actorSchema.nullable(),
+  drawnAt: isoSchema,
+  /**
+   * When the group settled on these teams.
+   *
+   * Null while it is still being argued about, and until then anybody may
+   * reshuffle. Once it is set the draw stops being a suggestion — people have
+   * put bibs on — so only an organizer can move anybody after it.
+   */
+  confirmedAt: isoSchema.nullable(),
+  confirmedBy: actorSchema.nullable(),
+  /** Empty until the teams are confirmed, which is what generates the list. */
+  matches: z.array(teamMatchSchema),
+});
+export type TeamDraw = z.infer<typeof teamDrawSchema>;
+
+export const drawTeamsSchema = z.object({
+  teamCount: z.number().int().min(MIN_TEAMS).max(MAX_TEAMS),
+});
+export type DrawTeamsInput = z.infer<typeof drawTeamsSchema>;
+
+/** How one game went for one of the two sides in it. */
+export const matchOutcomeSchema = z.enum(['won', 'drawn', 'lost']);
+export type MatchOutcome = z.infer<typeof matchOutcomeSchema>;
+
+/** Both together, or both null to put a fixture back to unplayed. */
+export const recordMatchSchema = z.object({
+  firstGoals: matchGoalsSchema.nullable(),
+  secondGoals: matchGoalsSchema.nullable(),
+});
+export type RecordMatchInput = z.infer<typeof recordMatchSchema>;
+
 /* ------------------------------------------------------------- leaderboard */
 
 /** One player's recent form: the last few games, newest last. */
@@ -359,6 +468,13 @@ export const sessionDetailSchema = z.object({
   registrationOpen: z.boolean(),
   /** The caller's own registration, if any. */
   me: registrationSchema.nullable(),
+  /**
+   * The teams, once somebody has split them. Carried here rather than fetched
+   * separately: the one screen that wants it already loads this, and it is
+   * wanted at a pitch on a phone connection where a second round trip is the
+   * expensive part.
+   */
+  teams: teamDrawSchema.nullable().default(null),
 });
 export type SessionDetail = z.infer<typeof sessionDetailSchema>;
 
@@ -386,6 +502,21 @@ export const memberHistoryEntrySchema = z.object({
   session: sessionSchema,
   registrationStatus: registrationStatusSchema.nullable(),
   payment: paymentSchema.nullable(),
+  /**
+   * Which side they were on that week and how its games went.
+   *
+   * Null when no teams were drawn, which is most of the group's history — the
+   * feature is new, and plenty of Fridays are a kickabout nobody split. The
+   * outcomes are resolved server-side with the shared helper rather than
+   * shipping every fixture, because a list row only ever draws the marks.
+   */
+  teams: z
+    .object({
+      team: z.number().int().min(0).max(MAX_TEAMS - 1),
+      outcomes: z.array(matchOutcomeSchema),
+    })
+    .nullable()
+    .default(null),
 });
 export type MemberHistoryEntry = z.infer<typeof memberHistoryEntrySchema>;
 

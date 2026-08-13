@@ -28,6 +28,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys, usePayments, useSession } from '../hooks/queries.js';
 import { useLive } from '../hooks/useLive.js';
 import { platform } from '../platform/index.js';
+import { navigate } from '../router.js';
 import { useApp } from '../state/app.js';
 import { useLocale, useMessages } from '../state/locale.js';
 
@@ -203,6 +204,20 @@ export function PaymentsPage({ sessionId }: { sessionId: string }) {
         label={m.payments.copyStatus}
         text={paymentsSummary(session, summary, { appUrl: platform.appUrl, locale })}
       />
+
+      {/*
+        The way back to the game this bill came out of.
+
+        The session screen has pointed here since payments existed, and nothing
+        pointed back — so once a session was settled, the roster, the goals and
+        the team board were only reachable by typing a URL. The history list
+        sends a settled session straight to this screen, which made that the
+        normal way in, and a dead end.
+      */}
+      <Button variant="outlined" onClick={() => navigate({ name: 'session', id: sessionId })}>
+        <Icon name="ball" size={18} slot="icon" />
+        {m.payments.seeSession}
+      </Button>
     </>
   );
 }

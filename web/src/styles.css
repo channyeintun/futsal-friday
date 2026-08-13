@@ -82,6 +82,24 @@
   --ff-pending: #8a5a00;
   --ff-pending-container: #ffe8b0;
 
+  /*
+   * Team colours.
+   *
+   * The one place the app spends more than a single accent, because that is
+   * the whole job here: two names next to each other have to be readable as
+   * "different sides" from arm's length, in daylight, on a phone. Kept to a
+   * coloured dot and a heading rather than a filled block — six saturated
+   * panels would be the only screen in the app that shouts.
+   *
+   * Ordered so the first two — the common case — are the furthest apart.
+   */
+  --ff-team-1: #007a43;
+  --ff-team-2: #1c6472;
+  --ff-team-3: #8a5a00;
+  --ff-team-4: #8b3a86;
+  --ff-team-5: #b5432c;
+  --ff-team-6: #3f4f9c;
+
   /* The shared shape language: big soft rectangles, fully round pills. */
   --ff-radius-card: 20px;
   --ff-radius-row: 16px;
@@ -143,6 +161,14 @@
     --ff-paid-container: #10331f;
     --ff-pending: #ffc857;
     --ff-pending-container: #3a2c07;
+
+    /* Lifted well clear of black — the light-mode set goes muddy on it. */
+    --ff-team-1: #4ade80;
+    --ff-team-2: #8ccfe0;
+    --ff-team-3: #ffc857;
+    --ff-team-4: #f0a6e8;
+    --ff-team-5: #ff8f6b;
+    --ff-team-6: #9fb0ff;
 
     color-scheme: dark;
   }
@@ -599,35 +625,6 @@ md-outlined-text-field {
   margin: 0;
   font-size: 0.85rem;
   color: var(--md-sys-color-on-surface-variant);
-}
-
-/*
- * A control that belongs to a card rather than to the page.
- *
- * `.icon-button` is the wrong thing here: it is filled with
- * `surface-container`, which is exactly a card's own background, so inside one
- * it disappears. This takes the step above instead, and is smaller — 36px
- * rather than 40px — because it sits beside a heading as a second thought,
- * not as the reason the card exists.
- */
-.card-action {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--ff-radius-pill);
-  background: var(--md-sys-color-surface-container-highest);
-  color: var(--md-sys-color-on-surface-variant);
-  cursor: pointer;
-}
-
-/* Lit while it is holding the screen open, so the state reads at a glance. */
-.card-action[aria-expanded='true'] {
-  color: var(--md-sys-color-on-surface);
 }
 
 .row {
@@ -1193,13 +1190,17 @@ md-outlined-text-field {
 
 /* ------------------------------------------------------------------- guests */
 
-.guest-choices {
+/* Shared by the guest picker and the "how many teams" step: both ask for a
+   small whole number, and both answer it with taps rather than a keypad. */
+.guest-choices,
+.team-choices {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.guest-choice {
+.guest-choice,
+.team-choice {
   flex: 1;
   min-width: 44px;
   /* A 44px target: this is a row of small buttons on a phone. */
@@ -1213,10 +1214,395 @@ md-outlined-text-field {
   cursor: pointer;
 }
 
-.guest-choice.is-chosen {
+.guest-choice.is-chosen,
+.team-choice.is-chosen {
   background: var(--md-sys-color-primary);
   border-color: var(--md-sys-color-primary);
   color: var(--md-sys-color-on-primary);
+}
+
+/* ----------------------------------------------------------- team boards */
+
+/*
+ * Two sides fit across a phone; four wrap to a 2x2. `auto-fit` with a floor
+ * rather than `repeat(var(--teams), 1fr)`, which would squeeze six columns
+ * onto a 390px screen and truncate every name to two characters.
+ */
+.team-boards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+  gap: 10px;
+}
+
+.team-board {
+  background: var(--md-sys-color-surface-container-high);
+  border-radius: var(--ff-radius-row);
+  padding: 10px 10px 6px;
+  min-width: 0;
+}
+
+.team-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+/*
+ * The team's colour lands on one custom property and everything in the header
+ * reads it, so adding a seventh side is one variable rather than three rules.
+ */
+.team-1 { --team-colour: var(--ff-team-1); }
+.team-2 { --team-colour: var(--ff-team-2); }
+.team-3 { --team-colour: var(--ff-team-3); }
+.team-4 { --team-colour: var(--ff-team-4); }
+.team-5 { --team-colour: var(--ff-team-5); }
+.team-6 { --team-colour: var(--ff-team-6); }
+
+.team-dot {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--team-colour, var(--md-sys-color-primary));
+}
+
+.team-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--team-colour, var(--md-sys-color-primary));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-count {
+  flex: none;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.team-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.team-slot {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 2px;
+  min-width: 0;
+}
+
+/* Find yourself on the board without reading it. */
+.team-slot.is-me .team-player {
+  font-weight: 700;
+  color: var(--md-sys-color-primary);
+}
+
+/* A guest's row is their bringer's name; the weight is what says it is not
+   them. Said this way rather than with a chip — see the note in the JSX. */
+.team-slot.is-guest .team-player {
+  font-weight: 400;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.team-player {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+/* A guest has no picture to show, and no account behind the circle. */
+.team-guest {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px dashed var(--md-sys-color-outline);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/*
+ * Dealing.
+ *
+ * Each name arrives on its own beat, ordered across the boards rather than
+ * down them (`--deal` is set per slot in TeamBoards.tsx), so a reshuffle looks
+ * like cards being dealt to the group rather than a list being replaced. That
+ * is the part that makes a second draw feel like another go instead of
+ * somebody overruling the first one.
+ *
+ * The whole run is capped by the number of players — about 600ms for a full
+ * pitch — so nobody is waiting on it to read the board.
+ */
+@keyframes ff-deal-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.team-boards .team-slot {
+  animation: ff-deal-in 260ms cubic-bezier(0.2, 0, 0, 1) both;
+  animation-delay: calc(var(--deal, 0) * 45ms);
+}
+
+/* The old board steps back while the new draw is on its way. */
+.team-boards.is-dealing {
+  opacity: 0.45;
+  transform: scale(0.99);
+  transition: opacity 160ms ease-out, transform 160ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .team-boards .team-slot {
+    animation: none;
+  }
+
+  .team-boards.is-dealing {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------ the fixtures */
+
+/* How each side's afternoon went. Only drawn once anything has been played. */
+.team-record {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.match-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/*
+ * A fixture reads as a scoreline: side, score, side, with the two teams'
+ * colours bracketing it. The whole row is the control — unlike the roster,
+ * where a whole-row tap would fight the list's scrolling, this list is short
+ * and every row does exactly one thing.
+ */
+.match-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* A comfortable target on a phone, with the score still centred. */
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--ff-radius-row);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.match-side {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.align-end {
+  text-align: right;
+}
+
+.match-score {
+  flex: none;
+  min-width: 3.6rem;
+  text-align: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Not played yet: present, but not pretending to be a result. */
+.match-score.is-blank {
+  color: var(--md-sys-color-on-surface-variant);
+  font-weight: 500;
+}
+
+/*
+ * The same row once the game is over and nobody may change it.
+ *
+ * Flat rather than raised, and no pointer: a finished result is text that
+ * happens to be laid out like a scoreboard, and anything that looks pressable
+ * on a record is promising something that will not happen.
+ */
+.match-row.is-static {
+  background: transparent;
+  padding-inline: 2px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 0;
+  cursor: default;
+}
+
+.match-list li:last-child .match-row.is-static {
+  border-bottom: 0;
+}
+
+/* ------------------------------------------------------ result in history */
+
+/*
+ * Which side, and how it went — sized to sit under a date in the history list
+ * without taking a line of its own.
+ */
+/*
+ * Sits after the venue on the same line, so a history row stays two lines
+ * tall. The gap and the coloured dot do the separating — the " · " the row
+ * uses elsewhere would put a divider in front of a divider.
+ */
+.team-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 10px;
+  /* Never the thing that wraps the line: the date and venue come first. */
+  white-space: nowrap;
+}
+
+.team-result-name {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--team-colour, var(--md-sys-color-primary));
+}
+
+.result-marks {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+  flex: 0 0 auto;
+  margin-left: 2px;
+}
+
+/*
+ * Deliberately the same 7px square as `.form-square`.
+ *
+ * The two rows say different things — one is turning up, the other is winning
+ * — but they are read the same way, at a glance and as a pattern, so they are
+ * drawn the same way. A second, differently-shaped mark would imply a
+ * difference in kind that is not there.
+ */
+.result-mark {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--md-sys-color-outline-variant);
+}
+
+.result-mark.is-won {
+  background: var(--ff-paid);
+}
+
+/* Neither won nor lost: the neutral of the pair, not a dimmed win. */
+.result-mark.is-drawn {
+  background: var(--md-sys-color-outline);
+}
+
+.result-mark.is-lost {
+  background: var(--md-sys-color-error);
+  opacity: 0.75;
+}
+
+/* ---------------------------------------------------------- score entry */
+
+.score-entry {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 10px;
+}
+
+.score-side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.score-label {
+  max-width: 100%;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--team-colour, var(--md-sys-color-primary));
+}
+
+.score-stepper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.score-step {
+  /* 44px: this is a repeated tap while somebody talks at you. */
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: 12px;
+  background: none;
+  color: var(--md-sys-color-on-surface);
+  font: inherit;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.score-step:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.score-value {
+  min-width: 2.2rem;
+  text-align: center;
+  font-size: 1.7rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.score-dash {
+  padding-top: 30px;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 /* ------------------------------------------------------- virtualized list */
@@ -1355,7 +1741,7 @@ md-outlined-text-field {
  * A cap the list does not reach costs nothing: `max-height` is a ceiling, so a
  * group of four still renders as four rows and a short card.
  */
-.owes-list {
+.list-card {
   max-height: min(420px, 52vh);
   max-height: min(420px, 52dvh);
   /*
@@ -1378,7 +1764,7 @@ md-outlined-text-field {
  * makes scrolling it up under the header land perfectly, with the bottom row
  * finishing flush above the nav and nothing left to scroll.
  */
-.owes-list.is-expanded {
+.list-card.is-expanded {
   max-height: calc(100vh - var(--ff-chrome-h));
   max-height: calc(100dvh - var(--ff-chrome-h));
 }
@@ -1392,15 +1778,86 @@ md-outlined-text-field {
  * pixels. The heading and the caption keep theirs, so shrinking the card
  * shrinks the rows rather than crushing the text above them.
  */
-.owes-list .virtual-scroller {
+.list-card .virtual-scroller {
   max-height: none;
   min-height: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .owes-list {
+  .list-card {
     transition: none;
   }
+}
+
+/*
+ * The grab bar on the card's bottom edge.
+ *
+ * It replaced a pair of arrows in the top corner, which read as a control
+ * belonging to the heading — something that acts on the list — when all it
+ * does is change how much of the list you can see. A notch on the edge that
+ * moves is the shape phones have taught everybody for that, and it needs no
+ * label beside it.
+ *
+ * Full width and 32px tall, so the target is enormous even though what is
+ * drawn is four pixels of it. The negative bottom margin pulls the bar onto
+ * the card's padding rather than adding a band of its own.
+ */
+.list-handle {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 32px;
+  margin-bottom: -10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.list-handle-bar {
+  width: 36px;
+  height: 4px;
+  border-radius: var(--ff-radius-pill);
+  background: var(--md-sys-color-outline-variant);
+  transition: background-color 140ms ease-out, width 140ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Lit and drawn in while it is holding the screen open, so the state reads at
+   a glance — the same rule the card actions follow. */
+.list-handle:hover .list-handle-bar,
+.list-handle:focus-visible .list-handle-bar {
+  background: var(--md-sys-color-outline);
+}
+
+.list-handle[aria-expanded='true'] .list-handle-bar {
+  width: 24px;
+  background: var(--md-sys-color-outline);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .list-handle-bar {
+    transition: none;
+  }
+}
+
+/*
+ * A history row is a button, and buttons bring their own everything.
+ *
+ * Was six inline style declarations repeated on the element; it moved here
+ * when the list was virtualized and the row started being rendered from a
+ * callback, where a style object would be rebuilt on every scroll frame.
+ */
+.session-row {
+  width: 100%;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 /* ------------------------------------------------------------ attendance */

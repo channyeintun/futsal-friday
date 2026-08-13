@@ -403,6 +403,33 @@ const run = async () => {
   const spying = await call('GET', `/members/${bob.id}/history`, { token: carol.token });
   check('members cannot read each other\'s history', spying.status === 403, spying.status);
 
+  // Paged on the same `(starts_at DESC, id ASC)` keyset as the group's fixture
+  // list. Walked to the end here rather than sampled: the bug a cursor has is
+  // dropping or repeating a row at a page boundary, which only shows up when
+  // the pages are stitched back together.
+  const historyPage = await call('GET', `/members/${bob.id}/history?limit=2`, { token: bob.token });
+  check('history comes back a page at a time', historyPage.body?.history?.length <= 2,
+    historyPage.body?.history?.length);
+
+  const walked = [];
+  let cursor = null;
+  for (let guard = 0; guard < 50; guard++) {
+    const page = await call(
+      'GET',
+      `/members/${bob.id}/history?limit=2${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+      { token: bob.token },
+    );
+    walked.push(...page.body.history.map((e) => e.session.id));
+    cursor = page.body.nextCursor;
+    if (!cursor) break;
+  }
+  const wholeThing = await call('GET', `/members/${bob.id}/history?limit=100`, { token: bob.token });
+  const inOneGo = wholeThing.body.history.map((e) => e.session.id);
+  check('PAGING THE HISTORY LOSES NOBODY AND REPEATS NOBODY',
+    walked.join('|') === inOneGo.join('|'), `${walked.length} paged vs ${inOneGo.length} at once`);
+  check('and the last page says there is no more', cursor === null, cursor);
+  check('every id appears exactly once', new Set(walked).size === walked.length, walked.length);
+
   section('registration closes at kickoff');
   const pastStart = new Date(Date.now() - 3 * 86_400_000).toISOString();
   const past = await call('POST', '/sessions', { token: organizer, body: { startsAt: pastStart, venueId } });
@@ -943,6 +970,256 @@ const run = async () => {
     guestOwed[bob.id]?.guests === 1, JSON.stringify(guestOwed[bob.id]));
   const guestSum = guestBill.body.payments.reduce((s, p) => s + p.amountDue, 0);
   check('and that bill sums exactly too', guestSum === 600_000, guestSum);
+
+  section('picking sides');
+  // Five heads on the pitch — alice, bob and the two friends he brought, and
+  // carol, who will drop out. Enough that a balanced split is 2/2 rather than
+  // something a broken deal could stumble into.
+  const teamFixture = await call('POST', '/sessions', {
+    token: organizer,
+    body: { startsAt: new Date(Date.now() + 8 * 86_400_000).toISOString() },
+  });
+  const ts = teamFixture.body.session.id;
+
+  const nobodyThere = await call('POST', `/sessions/${ts}/teams`, {
+    token: alice.token, body: { teamCount: 2 },
+  });
+  check('an empty pitch cannot be split', nobodyThere.status === 409, nobodyThere.body);
+
+  await call('POST', `/sessions/${ts}/register`, { token: alice.token });
+  await call('POST', `/sessions/${ts}/register`, { token: bob.token, body: { guests: 2 } });
+  await call('POST', `/sessions/${ts}/register`, { token: carol.token });
+  await call('POST', `/sessions/${ts}/attendance`, { token: carol.token, body: { attended: false } });
+
+  // The point of the whole feature: this is not an organizer's button. Alice
+  // is an ordinary member and the split happens when she is the one holding a
+  // phone at the pitch.
+  const drawn = await call('POST', `/sessions/${ts}/teams`, {
+    token: alice.token, body: { teamCount: 2 },
+  });
+  check('ANY MEMBER CAN SPLIT THE TEAMS, NOT ONLY AN ORGANIZER', drawn.status === 200, drawn.body);
+
+  const board = drawn.body?.draw;
+  const dealt = board ? board.teams.flat() : [];
+  check('two sides come back', board?.teams.length === 2, board?.teams.length);
+  check('everybody who turned up is dealt', dealt.length === 4, dealt.length);
+  check('and the sides are even', board?.teams.every((t) => t.length === 2),
+    JSON.stringify(board?.teams.map((t) => t.length)));
+  check('THE NO-SHOW IS NOT ON A TEAM', dealt.every((s) => s.memberId !== carol.id),
+    JSON.stringify(dealt.map((s) => s.memberName)));
+  check('a guest is a body of its own, not a passenger',
+    dealt.filter((s) => s.memberId === bob.id).length === 3,
+    JSON.stringify(dealt.filter((s) => s.memberId === bob.id)));
+  check('and the guests are numbered off their member',
+    JSON.stringify(dealt.filter((s) => s.memberId === bob.id).map((s) => s.guestIndex).sort()) === '[0,1,2]',
+    JSON.stringify(dealt.filter((s) => s.memberId === bob.id).map((s) => s.guestIndex)));
+  check('the board records who dealt it', board?.drawnBy?.memberId === alice.id, board?.drawnBy);
+
+  const tooManyTeams = await call('POST', `/sessions/${ts}/teams`, {
+    token: alice.token, body: { teamCount: 5 },
+  });
+  check('cannot field more teams than there are players', tooManyTeams.status === 400,
+    tooManyTeams.body);
+  const oneTeam = await call('POST', `/sessions/${ts}/teams`, {
+    token: alice.token, body: { teamCount: 1 },
+  });
+  check('one team is not a split', oneTeam.status === 400, oneTeam.status);
+
+  // Reshuffling is the feature, not an escape hatch: a group that dislikes a
+  // draw presses it again, so it has to give a genuinely different answer and
+  // stay complete every time.
+  const arrangements = new Set();
+  let incomplete = '';
+  for (let i = 0; i < 12; i++) {
+    const again = await call('POST', `/sessions/${ts}/teams`, {
+      token: bob.token, body: { teamCount: 2 },
+    });
+    const teams = again.body?.draw?.teams ?? [];
+    const heads = teams.flat();
+    if (heads.length !== 4 || teams.some((t) => t.length !== 2)) {
+      incomplete = JSON.stringify(teams.map((t) => t.length));
+    }
+    arrangements.add(
+      teams.map((t) => t.map((s) => `${s.memberId}:${s.guestIndex}`).sort().join(',')).sort().join('|'),
+    );
+  }
+  check('every reshuffle is complete and balanced', incomplete === '', incomplete);
+  check('and reshuffling actually reshuffles', arrangements.size > 1, [...arrangements]);
+
+  const withTeams = await call('GET', `/sessions/${ts}`, { token: carol.token });
+  check('the board rides along with the session, for everyone',
+    withTeams.body?.teams?.teams.flat().length === 4, withTeams.body?.teams);
+  check('and names whoever shuffled last', withTeams.body?.teams?.drawnBy?.memberId === bob.id,
+    withTeams.body?.teams?.drawnBy);
+
+  // A latecomer does not silently rearrange two groups of people who have
+  // already kicked off — they are simply not on a team until somebody deals
+  // again.
+  await call('POST', `/sessions/${ts}/attendance`, { token: carol.token, body: { attended: true } });
+  const unchanged = await call('GET', `/sessions/${ts}`, { token: alice.token });
+  check('A LATE ARRIVAL DOES NOT MOVE ANYBODY',
+    unchanged.body?.teams?.teams.flat().every((s) => s.memberId !== carol.id),
+    JSON.stringify(unchanged.body?.teams?.teams));
+
+  const cleanedUp = await call('DELETE', `/sessions/${ts}/teams`, { token: carol.token });
+  check('anybody can take the board down too', cleanedUp.status === 200, cleanedUp.body);
+  const noTeams = await call('GET', `/sessions/${ts}`, { token: alice.token });
+  check('and it is gone', noTeams.body?.teams === null, noTeams.body?.teams);
+
+  section('settling the teams, and the games that follow');
+  const early = await call('POST', `/sessions/${ts}/teams/confirm`, { token: alice.token });
+  check('nothing to settle before a draw exists', early.status === 409, early.status);
+
+  // Three sides this time, so the fixture list is worth looking at.
+  await call('POST', `/sessions/${ts}/attendance`, { token: carol.token, body: { attended: true } });
+  const three = await call('POST', `/sessions/${ts}/teams`, {
+    token: alice.token, body: { teamCount: 3 },
+  });
+  check('five heads split three ways', three.body?.draw?.teams.flat().length === 5,
+    JSON.stringify(three.body?.draw?.teams.map((t) => t.length)));
+  check('an unsettled draw has no fixtures yet', three.body?.draw?.matches.length === 0,
+    three.body?.draw?.matches);
+  check('and is not confirmed', three.body?.draw?.confirmedAt === null,
+    three.body?.draw?.confirmedAt);
+
+  const agreed = await call('POST', `/sessions/${ts}/teams/confirm`, { token: bob.token });
+  check('anybody can settle the teams', agreed.status === 200, agreed.body);
+  check('and it records who did', agreed.body?.draw?.confirmedBy?.memberId === bob.id,
+    agreed.body?.draw?.confirmedBy);
+  const fixtures = agreed.body?.draw?.matches ?? [];
+  check('THREE TEAMS MAKE THREE GAMES, GENERATED UP FRONT', fixtures.length === 3, fixtures.length);
+  check('every pair plays once, and nobody plays themselves',
+    JSON.stringify(fixtures.map((x) => [x.firstTeam, x.secondTeam])) === '[[0,1],[0,2],[1,2]]',
+    JSON.stringify(fixtures.map((x) => [x.firstTeam, x.secondTeam])));
+  check('and no game has a score yet',
+    fixtures.every((x) => x.firstGoals === null && x.secondGoals === null), fixtures);
+
+  const settledTwice = await call('POST', `/sessions/${ts}/teams/confirm`, { token: alice.token });
+  check('settling twice is a no-op, not a second fixture list',
+    settledTwice.body?.draw?.matches.length === 3, settledTwice.body?.draw?.matches.length);
+  check('and does not move the settled time',
+    settledTwice.body?.draw?.confirmedAt === agreed.body?.draw?.confirmedAt,
+    settledTwice.body?.draw?.confirmedAt);
+
+  // The whole point of the confirm step.
+  const lockedOut = await call('POST', `/sessions/${ts}/teams`, {
+    token: alice.token, body: { teamCount: 2 },
+  });
+  check('ONCE SETTLED, AN ORDINARY MEMBER CANNOT REDRAW', lockedOut.status === 403, lockedOut.body);
+  const lockedClear = await call('DELETE', `/sessions/${ts}/teams`, { token: alice.token });
+  check('nor clear the board', lockedClear.status === 403, lockedClear.status);
+
+  // Scores. Anybody may enter one, on the same reasoning as attendance.
+  const opener = fixtures[0];
+  const scored = await call('POST', `/sessions/${ts}/matches/${opener.id}`, {
+    token: carol.token, body: { firstGoals: 4, secondGoals: 2 },
+  });
+  check('anybody can record how a game finished', scored.status === 200, scored.body);
+  const afterScore = scored.body?.draw?.matches.find((x) => x.id === opener.id);
+  check('and the scoreline comes back', afterScore?.firstGoals === 4 && afterScore?.secondGoals === 2,
+    afterScore);
+  check('with who entered it', afterScore?.recordedBy?.memberId === carol.id, afterScore?.recordedBy);
+
+  const nilNil = await call('POST', `/sessions/${ts}/matches/${fixtures[1].id}`, {
+    token: alice.token, body: { firstGoals: 0, secondGoals: 0 },
+  });
+  const nilRow = nilNil.body?.draw?.matches.find((x) => x.id === fixtures[1].id);
+  check('A GOALLESS DRAW IS A RESULT, NOT AN UNPLAYED GAME',
+    nilRow?.firstGoals === 0 && nilRow?.secondGoals === 0 && nilRow?.recordedAt !== null, nilRow);
+
+  const halfScore = await call('POST', `/sessions/${ts}/matches/${fixtures[2].id}`, {
+    token: alice.token, body: { firstGoals: 3, secondGoals: null },
+  });
+  check('half a scoreline is refused', halfScore.status === 400, halfScore.body);
+  const silly = await call('POST', `/sessions/${ts}/matches/${fixtures[2].id}`, {
+    token: alice.token, body: { firstGoals: 400, secondGoals: 1 },
+  });
+  check('and a typo of a scoreline is refused', silly.status === 400, silly.status);
+
+  const unplayed = await call('POST', `/sessions/${ts}/matches/${opener.id}`, {
+    token: bob.token, body: { firstGoals: null, secondGoals: null },
+  });
+  const clearedRow = unplayed.body?.draw?.matches.find((x) => x.id === opener.id);
+  check('a score entered against the wrong game can be taken off',
+    clearedRow?.firstGoals === null && clearedRow?.recordedAt === null, clearedRow);
+
+  const strangerMatch = await call('POST', `/sessions/${ts}/matches/mat_nothing`, {
+    token: alice.token, body: { firstGoals: 1, secondGoals: 0 },
+  });
+  check('a score against a fixture that does not exist is refused',
+    strangerMatch.status === 404, strangerMatch.status);
+
+  // The organizer overrules — and a fresh draw cannot keep results belonging
+  // to sides that no longer exist.
+  const organizerRedraw = await call('POST', `/sessions/${ts}/teams`, {
+    token: organizer, body: { teamCount: 2 },
+  });
+  check('an organizer can still redraw a settled board', organizerRedraw.status === 200,
+    organizerRedraw.body);
+  check('WHICH UNSETTLES IT', organizerRedraw.body?.draw?.confirmedAt === null,
+    organizerRedraw.body?.draw?.confirmedAt);
+  check('and takes the old results with it, because those sides are gone',
+    organizerRedraw.body?.draw?.matches.length === 0, organizerRedraw.body?.draw?.matches);
+
+  const unlocked = await call('POST', `/sessions/${ts}/teams`, {
+    token: alice.token, body: { teamCount: 2 },
+  });
+  check('and an ordinary member may reshuffle again', unlocked.status === 200, unlocked.status);
+
+  await call('DELETE', `/sessions/${ts}/teams`, { token: alice.token });
+
+  // A cancelled fixture has no games in it to have a score. Every other write
+  // to a session refuses one, and this has to agree with them.
+  const doomed = await call('POST', '/sessions', {
+    token: organizer,
+    body: { startsAt: new Date(Date.now() + 9 * 86_400_000).toISOString() },
+  });
+  const ds = doomed.body.session.id;
+  await call('POST', `/sessions/${ds}/register`, { token: alice.token });
+  await call('POST', `/sessions/${ds}/register`, { token: bob.token });
+  await call('POST', `/sessions/${ds}/teams`, { token: alice.token, body: { teamCount: 2 } });
+  const doomedFixtures = await call('POST', `/sessions/${ds}/teams/confirm`, { token: alice.token });
+  const doomedMatch = doomedFixtures.body?.draw?.matches[0];
+
+  // The record, as the history list reads it back. Bob was on some side of the
+  // two-team draw and his side played exactly one game.
+  const bobHistory = await call('GET', `/members/${bob.id}/history`, { token: bob.token });
+  const doomedEntry = bobHistory.body?.history?.find((e) => e.session.id === ds);
+  check('history says which side you were on', typeof doomedEntry?.teams?.team === 'number',
+    doomedEntry?.teams);
+  check('and a game with no score yet is not a result',
+    JSON.stringify(doomedEntry?.teams?.outcomes) === '[]', doomedEntry?.teams?.outcomes);
+
+  await call('POST', `/sessions/${ds}/matches/${doomedMatch.id}`, {
+    token: alice.token, body: { firstGoals: 3, secondGoals: 1 },
+  });
+  const afterResult = await call('GET', `/members/${bob.id}/history`, { token: bob.token });
+  const resultEntry = afterResult.body?.history?.find((e) => e.session.id === ds);
+  check('THE HISTORY ROW CARRIES HOW THE GAME WENT',
+    JSON.stringify(resultEntry?.teams?.outcomes) ===
+      (resultEntry?.teams?.team === 0 ? '["won"]' : '["lost"]'),
+    resultEntry?.teams);
+
+  // A session from before any of this existed has no team record at all, and
+  // must not grow an empty one.
+  const unsplit = afterResult.body?.history?.find((e) => e.session.id === as);
+  check('a session nobody split reports no teams', unsplit?.teams === null, unsplit?.teams);
+
+  await call('PATCH', `/sessions/${ds}`, { token: organizer, body: { status: 'cancelled' } });
+
+  const scoreOnCancelled = await call('POST', `/sessions/${ds}/matches/${doomedMatch.id}`, {
+    token: alice.token, body: { firstGoals: 2, secondGoals: 1 },
+  });
+  check('a cancelled session cannot be given a scoreline', scoreOnCancelled.status === 409,
+    scoreOnCancelled.body);
+  const drawOnCancelled = await call('POST', `/sessions/${ds}/teams`, {
+    token: organizer, body: { teamCount: 2 },
+  });
+  check('nor be split into teams', drawOnCancelled.status === 409, drawOnCancelled.status);
+  const confirmOnCancelled = await call('POST', `/sessions/${ds}/teams/confirm`, {
+    token: organizer,
+  });
+  check('nor settled', confirmOnCancelled.status === 409, confirmOnCancelled.status);
 
   section('self-add and the waiting room');
   const selfAdd = await call('POST', '/auth/group/self-add', {

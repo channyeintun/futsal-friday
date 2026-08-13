@@ -13,7 +13,9 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node test/logic.test.ts && esbuild test/i18n.test.ts --bundle --platform=node --format=esm --outfile=.i18n-test.mjs --log-level=error && node .i18n-test.mjs"
+    "test": "npm run test:logic && npm run test:i18n",
+    "test:logic": "esbuild test/logic.test.ts --bundle --platform=node --format=esm --outfile=.logic-test.mjs --log-level=error && node .logic-test.mjs",
+    "test:i18n": "esbuild test/i18n.test.ts --bundle --platform=node --format=esm --outfile=.i18n-test.mjs --log-level=error && node .i18n-test.mjs"
   },
   "dependencies": {
     "zod": "^4.1.5"

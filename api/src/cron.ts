@@ -1,4 +1,9 @@
-import { LOBBY_CHANNEL, nextFridayKickoff, sessionChannel } from '@futsal/shared';
+import {
+  LOBBY_CHANNEL,
+  SESSION_RUNS_FOR_MS,
+  nextFridayKickoff,
+  sessionChannel,
+} from '@futsal/shared';
 import { type SessionRow, getSessionRow } from './db.js';
 import type { Env } from './env.js';
 import { newId, nowIso } from './http.js';
@@ -69,12 +74,11 @@ export async function runSessionMaintenance(env: Env, now: Date = new Date()): P
 }
 
 /**
- * A session is "finished" two hours after kickoff — long enough that a late
- * start cannot close registration early, short enough that the organizer can
- * settle up the same evening.
+ * A session is "finished" two hours after kickoff — see `SESSION_RUNS_FOR_MS`,
+ * which the team board reads too so that both agree about when the game ended.
  */
 async function completeFinishedSessions(env: Env, now: Date): Promise<SessionRow[]> {
-  const cutoff = new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString();
+  const cutoff = new Date(now.getTime() - SESSION_RUNS_FOR_MS).toISOString();
 
   const { results } = await env.DB.prepare(
     `SELECT * FROM sessions WHERE status = 'scheduled' AND starts_at < ?1`,

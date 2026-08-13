@@ -3,6 +3,7 @@ import type {
   Registration,
   Session,
   SessionDetail,
+  TeamDraw,
   UpdateSessionInput,
 } from '@futsal/shared';
 import { del, get, patch, post } from './client.js';
@@ -86,3 +87,29 @@ export const markAttendance = (
   id: string,
   body: { memberId?: string; attended?: boolean | null; guestsArrived?: number | null },
 ) => post<AttendanceResult>(`/sessions/${id}/attendance`, body);
+
+/**
+ * Deal whoever turned up into `teamCount` sides.
+ *
+ * Not an organizer's call, and calling it again is the ordinary way to use it:
+ * a group that dislikes a draw reshuffles rather than argues.
+ */
+export const drawSessionTeams = (id: string, teamCount: number) =>
+  post<{ draw: TeamDraw }>(`/sessions/${id}/teams`, { teamCount });
+
+/**
+ * "These are the teams." Fixes the sides — after this only an organizer may
+ * redraw — and generates the fixture list.
+ */
+export const confirmSessionTeams = (id: string) =>
+  post<{ draw: TeamDraw }>(`/sessions/${id}/teams/confirm`, {});
+
+/** A finished game. Both goals null puts it back to not-played-yet. */
+export const recordMatch = (
+  id: string,
+  matchId: string,
+  body: { firstGoals: number | null; secondGoals: number | null },
+) => post<{ draw: TeamDraw }>(`/sessions/${id}/matches/${matchId}`, body);
+
+export const clearSessionTeams = (id: string) =>
+  del<{ draw: null }>(`/sessions/${id}/teams`);

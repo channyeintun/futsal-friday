@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { idSchema, isoSchema, paymentStatusSchema, registrationStatusSchema, sessionStatusSchema, vndSchema } from './models.js';
+import { idSchema, isoSchema, paymentStatusSchema, registrationStatusSchema, sessionStatusSchema, teamDrawSchema, vndSchema } from './models.js';
 
 /**
  * Typed realtime events.
@@ -112,6 +112,27 @@ export const paymentRejectedSchema = z.object({
   at: isoSchema,
 });
 
+/**
+ * The team board changed: split, reshuffled, confirmed, scored or cleared.
+ *
+ * One event for all of it, carrying the whole board. That is the point:
+ * everyone is standing on the same pitch looking at the same six phones, and a
+ * change that arrived as "go and refetch" would land on each of them at a
+ * slightly different moment. The payload is a dozen names and a handful of
+ * scorelines, so sending it costs less than the round trip it saves.
+ *
+ * `draw` is null when the teams were cleared — the same fact ("the board is
+ * now this") with nothing on it.
+ */
+export const teamsChangedSchema = z.object({
+  sessionId: idSchema,
+  draw: teamDrawSchema.nullable(),
+  /** Who did it — anybody may, so this is not implied by the session. */
+  byMemberId: idSchema,
+  byMemberName: z.string(),
+  at: isoSchema,
+});
+
 export const sessionUpdatedSchema = z.object({
   sessionId: idSchema,
   status: sessionStatusSchema,
@@ -138,6 +159,9 @@ export const realtimeSchema = {
     confirmed: paymentConfirmedSchema,
     rejected: paymentRejectedSchema,
   },
+  teams: {
+    changed: teamsChangedSchema,
+  },
   session: {
     updated: sessionUpdatedSchema,
   },
@@ -154,6 +178,7 @@ export interface EventPayloadMap {
   'payment.claimed': z.infer<typeof paymentClaimedSchema>;
   'payment.confirmed': z.infer<typeof paymentConfirmedSchema>;
   'payment.rejected': z.infer<typeof paymentRejectedSchema>;
+  'teams.changed': z.infer<typeof teamsChangedSchema>;
   'session.updated': z.infer<typeof sessionUpdatedSchema>;
 }
 
@@ -167,6 +192,7 @@ export const EVENT_NAMES = [
   'payment.claimed',
   'payment.confirmed',
   'payment.rejected',
+  'teams.changed',
   'session.updated',
 ] as const satisfies readonly EventName[];
 
@@ -198,6 +224,7 @@ export type EventCatalogueIsConsistent = Assert<
   Assert<
     Exact<EventPayloadMap['payment.rejected'], z.infer<typeof realtimeSchema.payment.rejected>>
   > &
+  Assert<Exact<EventPayloadMap['teams.changed'], z.infer<typeof realtimeSchema.teams.changed>>> &
   Assert<Exact<EventPayloadMap['session.updated'], z.infer<typeof realtimeSchema.session.updated>>>;
 
 /** Discriminated union of every event, handy for exhaustive `switch`es. */

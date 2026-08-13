@@ -76,10 +76,32 @@ export const listLeaderboard = (
   );
 };
 
-export const memberHistory = (memberId: string, signal?: AbortSignal) =>
-  get<{ history: MemberHistoryEntry[] }>(`/members/${memberId}/history`, signal).then(
-    (r) => r.history,
+export interface HistoryPage {
+  history: MemberHistoryEntry[];
+  nextCursor: string | null;
+}
+
+/**
+ * One member's season, a page at a time.
+ *
+ * Paged for the same reason the debt list is: a group that has been playing
+ * for two years has a hundred Fridays behind it, and a screen that quietly
+ * stops at whatever the server felt like returning is worse than one that
+ * keeps asking.
+ */
+export const memberHistory = (
+  memberId: string,
+  opts: { cursor?: string | null; limit?: number } = {},
+  signal?: AbortSignal,
+) => {
+  const query = new URLSearchParams();
+  if (opts.cursor) query.set('cursor', opts.cursor);
+  if (opts.limit) query.set('limit', String(opts.limit));
+  return get<HistoryPage>(
+    `/members/${memberId}/history${query.size ? `?${query}` : ''}`,
+    signal,
   );
+};
 
 export const createMember = (input: CreateMemberInput) =>
   post<{ member: Member }>('/members', input).then((r) => r.member);

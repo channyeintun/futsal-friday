@@ -24,6 +24,17 @@ const MS_PER_DAY = 86_400_000;
 /** Default kickoff: Friday 19:30 ICT. */
 export const DEFAULT_KICKOFF = { weekday: 5, hour: 19, minute: 30 } as const;
 
+/**
+ * How long after kickoff a session counts as finished.
+ *
+ * Long enough that a late start cannot close registration early, short enough
+ * that the organizer can settle up the same evening. The cron uses it to mark
+ * sessions completed and the team board uses it to stop being a live control
+ * and start being a record — one definition, so the two cannot disagree about
+ * when the game ended.
+ */
+export const SESSION_RUNS_FOR_MS = 2 * 60 * 60 * 1000;
+
 export interface ZonedParts {
   year: number;
   month: number; // 1-12
