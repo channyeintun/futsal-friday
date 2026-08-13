@@ -556,6 +556,7 @@ export const en = {
     open: 'Write an announcement',
     shuffle: 'Another one',
     copy: 'Copy announcement',
+    writeIn: 'Write it in',
     openerLabel: 'Your own first line',
     openerHint: 'Leave it empty and the app picks one.',
     openers: [

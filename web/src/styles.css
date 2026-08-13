@@ -1470,6 +1470,57 @@ md-outlined-text-field {
   border-bottom: 0;
 }
 
+/* ------------------------------------------------------- language switch */
+
+/*
+ * Two segments in one track, sized as a control rather than as a decision.
+ *
+ * The onboarding screens ask "what language do you read?" as most of what is
+ * on them, and a pair of full-height Material buttons belongs there. In a
+ * dialog that also carries body copy, a text field and a message preview it
+ * does not — two 40px buttons plus a button's padding were taking a strip of
+ * the screen to answer a question people answer once.
+ *
+ * `align-self: flex-start` because the card is a flex column: without it the
+ * track stretches the full width and the two segments drift apart, which is
+ * the opposite of reading as one control.
+ */
+.lang-switch {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--ff-radius-pill);
+  background: var(--md-sys-color-surface-container-highest);
+}
+
+.lang-option {
+  /* 34px, against the 44px this app gives a row of small number buttons.
+     There are two of these and they are wide, so the target is generous
+     where it counts even though the control is short. */
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--ff-radius-pill);
+  background: none;
+  color: var(--md-sys-color-on-surface-variant);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lang-option.is-on {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+}
+
+/* Myanmar stacks diacritics above and below, and at this height the default
+   line box clips them. */
+.lang-option:lang(my) {
+  line-height: 1.6;
+}
+
 /* -------------------------------------------------------------- the thread */
 
 .talk-list {

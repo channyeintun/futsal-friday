@@ -1,11 +1,12 @@
 import type { Locale, SessionDetail } from '@futsal/shared';
-import { LOCALE_LABELS, LOCALES, sessionAnnouncement } from '@futsal/shared';
+import { sessionAnnouncement } from '@futsal/shared';
 import { useCallback, useState } from 'react';
 import { platform } from '../platform/index.js';
 import { useApp } from '../state/app.js';
 import { useLocale } from '../state/locale.js';
 import { Button, Dialog, ErrorBanner, TextField } from './ui.js';
 import { Icon } from './Icon.js';
+import { LanguageToggle } from './LanguageToggle.js';
 
 /**
  * "Hype the group" — a random announcement to paste into the chat.
@@ -89,21 +90,14 @@ export function AnnounceButton({ detail }: { detail: SessionDetail }) {
         </p>
 
         {/* Which language the *message* is in — not the app. */}
-        <div className="row wrap" style={{ gap: 8 }}>
-          {LOCALES.map((code) => (
-            <Button
-              key={code}
-              lang={code}
-              variant={code === writeIn ? 'filled' : 'outlined'}
-              onClick={() => {
-                setWriteIn(code);
-                setText(write(null, code));
-              }}
-            >
-              {LOCALE_LABELS[code]}
-            </Button>
-          ))}
-        </div>
+        <LanguageToggle
+          value={writeIn}
+          label={m.announce.writeIn}
+          onChange={(code) => {
+            setWriteIn(code);
+            setText(write(null, code));
+          }}
+        />
 
         {/* Your own first line, when the week has something the joke bank
             cannot know about. Left empty it shuffles like it always did, so

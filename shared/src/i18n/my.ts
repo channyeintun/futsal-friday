@@ -544,6 +544,7 @@ export const my: Messages = {
     open: 'ကြေညာချက် ရေးမယ်',
     shuffle: 'နောက်တစ်ခု',
     copy: 'ကြေညာချက် ကူးမည်',
+    writeIn: 'ဘာသာစကား ရွေးပါ',
     openerLabel: 'ကိုယ်ပိုင် ပထမစာကြောင်း',
     openerHint: 'ဗလာထားလျှင် အက်ပ်က ရွေးပေးပါမည်။',
     openers: [
