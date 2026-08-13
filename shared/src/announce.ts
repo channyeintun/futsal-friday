@@ -36,6 +36,15 @@ export interface AnnounceOptions {
    * you get the jokes back rather than a separate control.
    */
   opener?: string | null;
+  /**
+   * The writer's clock. Defaults to 24h, which is what it always was.
+   *
+   * The message language is chosen per announcement — the group chat is in
+   * Burmese even when the organizer reads the app in English — but the clock
+   * is not a property of the message, it is how the person writing it reads a
+   * time. So this follows them rather than the language beside it.
+   */
+  hour12?: boolean;
 }
 
 function pick<T>(list: readonly T[], random: () => number): T {
@@ -48,6 +57,7 @@ export function sessionAnnouncement(
   options: AnnounceOptions = {},
 ): string {
   const locale = options.locale ?? 'en';
+  const hour12 = options.hour12 ?? false;
   const random = options.random ?? Math.random;
   const m = messagesFor(locale);
   const { session, counts } = detail;
@@ -56,7 +66,7 @@ export function sessionAnnouncement(
   // Nothing funny about a cancelled game; say it plainly and stop.
   if (session.status === 'cancelled') {
     return [
-      `🚫 ${m.summary.cancelled} — ${formatKickoff(session.startsAt, locale)}`,
+      `🚫 ${m.summary.cancelled} — ${formatKickoff(session.startsAt, locale, hour12)}`,
       ...(session.notes ? [session.notes] : []),
     ].join('\n');
   }
@@ -65,7 +75,7 @@ export function sessionAnnouncement(
   lines.push(written ? written : pick(m.announce.openers, random));
   lines.push('');
 
-  lines.push(`⚽ ${formatKickoff(session.startsAt, locale)}`);
+  lines.push(`⚽ ${formatKickoff(session.startsAt, locale, hour12)}`);
   if (session.venue) {
     lines.push(`📍 ${session.venue.name}${session.venue.address ? ` — ${session.venue.address}` : ''}`);
     if (session.venue.mapUrl) lines.push(`🗺 ${session.venue.mapUrl}`);

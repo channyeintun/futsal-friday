@@ -134,7 +134,7 @@ export function SessionView({
     }
   };
 
-  const summary = registrationSummary(detail, { appUrl: platform.appUrl, locale });
+  const summary = registrationSummary(detail, { appUrl: platform.appUrl, locale, hour12 });
 
   return (
     <>

@@ -42,7 +42,7 @@ import { useLocale, useMessages } from '../state/locale.js';
  */
 export function PaymentsPage({ sessionId }: { sessionId: string }) {
   const { identity, toast } = useApp();
-  const { m, locale } = useLocale();
+  const { m, locale, hour12 } = useLocale();
 
   const queryClient = useQueryClient();
   const sessionState = useSession(sessionId);
@@ -202,7 +202,7 @@ export function PaymentsPage({ sessionId }: { sessionId: string }) {
 
       <CopyButton
         label={m.payments.copyStatus}
-        text={paymentsSummary(session, summary, { appUrl: platform.appUrl, locale })}
+        text={paymentsSummary(session, summary, { appUrl: platform.appUrl, locale, hour12 })}
       />
 
       {/*

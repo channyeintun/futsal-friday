@@ -24,7 +24,7 @@ import { LanguageToggle } from './LanguageToggle.js';
  */
 export function AnnounceButton({ detail }: { detail: SessionDetail }) {
   const { toast } = useApp();
-  const { m, locale } = useLocale();
+  const { m, locale, hour12 } = useLocale();
   // Starts at whatever the app is in, which is the right guess most of the
   // time; it is only a starting point, and it never touches the app's own
   // language.
@@ -41,6 +41,8 @@ export function AnnounceButton({ detail }: { detail: SessionDetail }) {
           locale: inLocale,
           appUrl: platform.appUrl,
           opener: firstLine,
+          // Their clock, not the message's language: see `AnnounceOptions`.
+          hour12,
         });
       // Shuffling and getting the same message back reads as a broken button,
       // and with eight openers that happens often enough to notice. A few
@@ -51,7 +53,7 @@ export function AnnounceButton({ detail }: { detail: SessionDetail }) {
       for (let i = 0; i < 8 && candidate === previous; i++) candidate = next();
       return candidate;
     },
-    [detail, writeIn, opener],
+    [detail, writeIn, opener, hour12],
   );
 
   const copy = async () => {

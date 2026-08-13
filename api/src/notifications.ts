@@ -205,11 +205,18 @@ async function sendPaymentNudges(env: Env, now: Date, removed: Set<string>): Pro
   let sent = 0;
 
   for (const debt of debts) {
-    const message = (locale: Locale): PushMessage => {
+    // `hour12` alongside the locale, like the match reminder above. Both are
+    // properties of the person being written to, and the column exists so the
+    // server can honour them — a member reading 7:30 PM in the app should not
+    // be pushed 19:30 by it.
+    const message = (locale: Locale, hour12: boolean): PushMessage => {
       const m = messagesFor(locale);
       return {
         title: m.push.unpaidTitle,
-        body: m.push.unpaidBody(formatVnd(debt.amount_due), formatKickoff(debt.starts_at, locale)),
+        body: m.push.unpaidBody(
+          formatVnd(debt.amount_due),
+          formatKickoff(debt.starts_at, locale, hour12),
+        ),
         url: `/payments/${debt.session_id}`,
         tag: `payment-${debt.session_id}`,
         ttl: 3 * 24 * 3600,

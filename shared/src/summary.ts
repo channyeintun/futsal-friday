@@ -15,15 +15,25 @@ export interface SummaryOptions {
   /** Appended as a call-to-action so newcomers can find the app. */
   appUrl?: string;
   locale?: Locale;
+  /**
+   * The writer's clock. Defaults to 24h, which is what it always was.
+   *
+   * Threaded in rather than left to the default because these strings are the
+   * app talking on somebody's behalf, and a person who reads 7:30 PM
+   * everywhere else in the app should not paste 19:30 into the chat under
+   * their own name.
+   */
+  hour12?: boolean;
 }
 
 export function registrationSummary(detail: SessionDetail, options: SummaryOptions = {}): string {
   const locale = options.locale ?? 'en';
+  const hour12 = options.hour12 ?? false;
   const m = messagesFor(locale);
   const { session, registrations, counts } = detail;
   const lines: string[] = [];
 
-  lines.push(`⚽ ${m.summary.matchHeader} — ${formatKickoff(session.startsAt, locale)}`);
+  lines.push(`⚽ ${m.summary.matchHeader} — ${formatKickoff(session.startsAt, locale, hour12)}`);
 
   if (session.status === 'cancelled') {
     lines.push('');
@@ -83,10 +93,11 @@ export function paymentsSummary(
   options: SummaryOptions = {},
 ): string {
   const locale = options.locale ?? 'en';
+  const hour12 = options.hour12 ?? false;
   const m = messagesFor(locale);
   const lines: string[] = [];
 
-  lines.push(`💰 ${m.summary.paymentsHeader} — ${formatKickoff(session.startsAt, locale)}`);
+  lines.push(`💰 ${m.summary.paymentsHeader} — ${formatKickoff(session.startsAt, locale, hour12)}`);
   if (summary.totalCharge != null) {
     lines.push(m.summary.fieldTotal(formatVnd(summary.totalCharge)));
   }

@@ -6,6 +6,7 @@ import {
 } from '../src/teams.ts';
 import { SESSION_RUNS_FOR_MS } from '../src/time.ts';
 import { sessionAnnouncement } from '../src/announce.ts';
+import { paymentsSummary, registrationSummary } from '../src/summary.ts';
 import { en } from '../src/i18n/en.ts';
 import { totalArrivedHeads } from '../src/attendance.ts';
 import type { TeamMatch, TeamSlot } from '../src/models.ts';
@@ -403,6 +404,49 @@ check('opener: it is trimmed', firstLineOf('  Bring bibs  '), 'Bring bibs');
 check('opener: the kickoff still follows it',
   sessionAnnouncement(announceFixture, { opener: 'anything', random: () => 0 })
     .includes(formatKickoff('2026-08-07T12:30:00.000Z', 'en')), true);
+
+// --- the writer's clock reaches the text they paste ------------------------
+//
+// These three build the strings that leave the app under somebody's name, and
+// each of them dropped `hour12` on the floor: a person reading 7:30 PM
+// everywhere else pasted 19:30 into the chat.
+
+const clockFixture = {
+  ...announceFixture,
+  session: { ...announceFixture.session, maxPlayers: 14 },
+};
+const paymentsFixture = {
+  sessionId: 'ses_x', totalCharge: 600_000, collected: 0, pending: 0,
+  outstanding: 600_000, payments: [],
+};
+
+for (const [label, twelve, want] of [
+  ['24h', false, '19:30'],
+  ['12h', true, '7:30 PM'],
+] as const) {
+  check(`announcement follows the writer's clock (${label})`,
+    sessionAnnouncement(clockFixture, { hour12: twelve, random: () => 0 }).includes(want), true);
+  check(`registration summary follows it too (${label})`,
+    registrationSummary(clockFixture, { hour12: twelve }).includes(want), true);
+  check(`and so does the payment status (${label})`,
+    paymentsSummary(clockFixture.session, paymentsFixture, { hour12: twelve }).includes(want), true);
+}
+
+// A cancelled announcement is a different branch, and had the same bug.
+check('a cancelled announcement follows it as well',
+  sessionAnnouncement(
+    { ...clockFixture, session: { ...clockFixture.session, status: 'cancelled' as const } },
+    { hour12: true },
+  ).includes('7:30 PM'), true);
+
+// Unset stays 24h — every existing caller and every stored string.
+check('left unset, nothing moves',
+  sessionAnnouncement(clockFixture, { random: () => 0 }).includes('19:30'), true);
+
+// Burmese keeps Arabic numerals on both clocks; only the separator is its own.
+check('Burmese on a 12h clock is still Arabic numerals',
+  sessionAnnouncement(clockFixture, { locale: 'my', hour12: true, random: () => 0 })
+    .includes('7:30 PM'), true);
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
