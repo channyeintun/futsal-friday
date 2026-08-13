@@ -14,7 +14,12 @@ import {
 import { getPaymentDetails } from '../api/payment-details.js';
 import { getPayments } from '../api/payments.js';
 import { pushStatus } from '../api/push.js';
-import { getSession, listPastSessions, listSessions } from '../api/sessions.js';
+import {
+  getSession,
+  listPastSessions,
+  listSessionMessages,
+  listSessions,
+} from '../api/sessions.js';
 import { listVenues } from '../api/venues.js';
 
 /**
@@ -56,6 +61,7 @@ export const queryKeys = {
     ['avatar', memberId, updatedAt] as const,
   pushStatus: ['push-status'] as const,
   paymentDetails: ['payment-details'] as const,
+  sessionMessages: (sessionId: string) => ['session', sessionId, 'messages'] as const,
 };
 
 /** Kept for the call sites that still spell it out. */
@@ -90,6 +96,24 @@ export function usePayments(sessionId: string) {
     queryKey: queryKeys.payments(sessionId),
     queryFn: ({ signal }) => getPayments(sessionId, signal),
     staleTime: 30_000,
+  });
+}
+
+/**
+ * The banter on a session.
+ *
+ * Its own query rather than a field on the session detail, for the same reason
+ * the form squares are: the roster has to paint the moment the screen opens,
+ * and the thread is the part you scroll to. Posts and deletions arrive over
+ * the session's existing stream and patch this cache directly — see
+ * `useLiveSession` — so a five-message exchange costs one request, not ten.
+ */
+export function useSessionMessages(sessionId: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.sessionMessages(sessionId),
+    queryFn: ({ signal }) => listSessionMessages(sessionId, signal),
+    enabled,
+    staleTime: 60_000,
   });
 }
 

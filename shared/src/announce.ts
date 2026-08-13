@@ -23,6 +23,19 @@ export interface AnnounceOptions {
    * shuffle button uses it to avoid handing back the line it just showed.
    */
   random?: () => number;
+  /**
+   * The organizer's own first line, in place of one of the canned ones.
+   *
+   * Only the opener is overridable, and deliberately so: it is the sentence
+   * that carries whatever is actually going on this week — a birthday, a new
+   * pitch, somebody flying in — and it is the only line the joke bank cannot
+   * know about. Everything under it is the kickoff, the venue and the price,
+   * which are facts and are not the writer's to change.
+   *
+   * Blank or whitespace falls back to the shuffle, so clearing the box is how
+   * you get the jokes back rather than a separate control.
+   */
+  opener?: string | null;
 }
 
 function pick<T>(list: readonly T[], random: () => number): T {
@@ -48,7 +61,8 @@ export function sessionAnnouncement(
     ].join('\n');
   }
 
-  lines.push(pick(m.announce.openers, random));
+  const written = options.opener?.trim();
+  lines.push(written ? written : pick(m.announce.openers, random));
   lines.push('');
 
   lines.push(`⚽ ${formatKickoff(session.startsAt, locale)}`);

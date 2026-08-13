@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react';
 import { platform } from '../platform/index.js';
 import { useApp } from '../state/app.js';
 import { useLocale } from '../state/locale.js';
-import { Button, Dialog, ErrorBanner } from './ui.js';
+import { Button, Dialog, ErrorBanner, TextField } from './ui.js';
 import { Icon } from './Icon.js';
 
 /**
@@ -30,19 +30,27 @@ export function AnnounceButton({ detail }: { detail: SessionDetail }) {
   const [writeIn, setWriteIn] = useState<Locale>(locale);
   const [text, setText] = useState<string | null>(null);
   const [failedCopy, setFailedCopy] = useState(false);
+  /** The organizer's own first line. Empty means "use the joke bank". */
+  const [opener, setOpener] = useState('');
 
   const write = useCallback(
-    (previous: string | null, inLocale: Locale = writeIn) => {
+    (previous: string | null, inLocale: Locale = writeIn, firstLine = opener) => {
       const next = () =>
-        sessionAnnouncement(detail, { locale: inLocale, appUrl: platform.appUrl });
+        sessionAnnouncement(detail, {
+          locale: inLocale,
+          appUrl: platform.appUrl,
+          opener: firstLine,
+        });
       // Shuffling and getting the same message back reads as a broken button,
       // and with eight openers that happens often enough to notice. A few
-      // retries is plenty; give up rather than spin if the bank is tiny.
+      // retries is plenty; give up rather than spin if the bank is tiny — and
+      // a written opener pins the first line, so the retries are only ever
+      // working on the tease and the sign-off.
       let candidate = next();
       for (let i = 0; i < 8 && candidate === previous; i++) candidate = next();
       return candidate;
     },
-    [detail, writeIn],
+    [detail, writeIn, opener],
   );
 
   const copy = async () => {
@@ -96,6 +104,19 @@ export function AnnounceButton({ detail }: { detail: SessionDetail }) {
             </Button>
           ))}
         </div>
+
+        {/* Your own first line, when the week has something the joke bank
+            cannot know about. Left empty it shuffles like it always did, so
+            this costs nothing to ignore. */}
+        <TextField
+          label={m.announce.openerLabel}
+          value={opener}
+          onChange={(value) => {
+            setOpener(value);
+            setText((current) => write(current, writeIn, value));
+          }}
+          supportingText={m.announce.openerHint}
+        />
 
         {/* Tagged with the message's own language, so Burmese gets Burmese
             line-height even while the app is running in English. */}

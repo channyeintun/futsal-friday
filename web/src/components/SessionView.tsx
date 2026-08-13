@@ -17,6 +17,7 @@ import { navigate } from '../router.js';
 import { useApp } from '../state/app.js';
 import { useLocale, useMessages } from '../state/locale.js';
 import { useRecentForm } from '../hooks/queries.js';
+import { useExpandPin } from '../hooks/useExpandPin.js';
 import { AnnounceButton } from './AnnounceButton.js';
 import { AttendanceToggle } from './AttendanceToggle.js';
 import { FormSquares } from './FormSquares.js';
@@ -25,8 +26,11 @@ import { Avatar } from './Avatar.js';
 import { GuestPicker } from './GuestPicker.js';
 import { CopyButton } from './CopyButton.js';
 import { Icon } from './Icon.js';
+import { ExpandHandle } from './ExpandHandle.js';
 import { SessionEditor } from './SessionEditor.js';
 import { TeamBoards } from './TeamBoards.js';
+import { TrashTalk } from './TrashTalk.js';
+import { VirtualList } from './VirtualList.js';
 import { Button, Dialog, ErrorBanner } from './ui.js';
 
 /**
@@ -51,9 +55,15 @@ export function SessionView({
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [rosterExpanded, setRosterExpanded] = useState(false);
+  const rosterRef = useExpandPin<HTMLDivElement>(rosterExpanded);
 
   const playing = registrations.filter((r) => r.status === 'in');
   const waiting = registrations.filter((r) => r.status === 'waitlist');
+  // Worth offering only when there is something below the fold. Kept on while
+  // expanded regardless, so a roster that shrinks under it — somebody drops
+  // out — cannot strand the screen in the tall state.
+  const canExpandRoster = playing.length > 5 || rosterExpanded;
 
   /**
    * Attendance is only offered once the game has kicked off.
@@ -198,7 +208,10 @@ export function SessionView({
         </div>
       )}
 
-      <div className="card">
+      <div
+        ref={rosterRef}
+        className={`card list-card${rosterExpanded ? ' is-expanded' : ''}`}
+      >
         <div className="row between">
           <h2 className="card-title">
             {m.session.playing(counts.in, session.maxPlayers)}
@@ -226,13 +239,27 @@ export function SessionView({
           </div>
         ) : null}
 
-        {playing.length === 0 ? (
-          <p className="empty">{m.session.nobodyYet}</p>
-        ) : (
-          <div>
-            {playing.map((registration, index) => (
+        {/*
+          Windowed, not paged.
+
+          The roster arrives whole with the session and has to stay whole: the
+          team draw deals from `arrivedSlots(registrations)` and the settle
+          screen counts heads from the same array, so handing either a page
+          would quietly draw teams from a subset. What was actually too long
+          was the *card* — twenty wrapped rows with attendance controls push
+          everything under them off the screen — so this caps the height and
+          renders a window, and the cap lifts on the grab bar below.
+        */}
+        <VirtualList
+          items={playing}
+          // A plain row is about 56px; one carrying goals and an attendance
+          // toggle wraps to a second line. Rows re-measure, so this only has
+          // to be close enough to stop the first paint jumping.
+          estimateSize={showAttendance ? 104 : 58}
+          itemKey={(registration) => registration.memberId}
+          empty={<p className="empty">{m.session.nobodyYet}</p>}
+          renderItem={(registration, index) => (
               <div
-                key={registration.memberId}
                 className={[
                   'player-row',
                   'wrap',
@@ -297,9 +324,8 @@ export function SessionView({
                   </div>
                 ) : null}
               </div>
-            ))}
-          </div>
-        )}
+          )}
+        />
 
         {waiting.length > 0 ? (
           <>
@@ -338,12 +364,29 @@ export function SessionView({
             </div>
           </>
         ) : null}
+
+        {/* Below the waitlist, so it is the last thing in the card — the same
+            place it sits on the history lists. Offered only when the roster is
+            long enough that there is something under the fold to reveal. */}
+        {canExpandRoster ? (
+          <ExpandHandle
+            expanded={rosterExpanded}
+            onToggle={() => setRosterExpanded((open) => !open)}
+          />
+        ) : null}
       </div>
 
       {/* Directly under the roster: the list of who is here is what the board
           is dealt from, and picking sides is the next thing that happens. */}
       {showTeams ? (
         <TeamBoards detail={detail} live={teamsLive} onChanged={onChanged} />
+      ) : null}
+
+      {/* Under the teams, because most of what gets said is about them. Open
+          on any session that still exists — the winding up starts days before
+          and the gloating runs for a week after. */}
+      {session.status !== 'cancelled' ? (
+        <TrashTalk sessionId={session.id} canPost />
       ) : null}
 
       {session.notes ? (

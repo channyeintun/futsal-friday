@@ -27,7 +27,16 @@ export function VirtualList<T>({
   empty,
   endNote,
 }: {
-  query: Pick<
+  /**
+   * The paging half, when there is one.
+   *
+   * Optional because the two halves are separable: a session's roster is
+   * bounded by its own cap and arrives whole with the session — it needs the
+   * windowing but has nothing to fetch, and it *cannot* be paged, because the
+   * team draw and the head count are computed from the complete list. Left out,
+   * this renders a window over what it was given and never asks for more.
+   */
+  query?: Pick<
     UseInfiniteQueryResult<unknown>,
     'hasNextPage' | 'isFetchingNextPage' | 'fetchNextPage'
   >;
@@ -42,11 +51,12 @@ export function VirtualList<T>({
   endNote?: ReactNode;
 }) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const hasNextPage = query?.hasNextPage ?? false;
 
   const virtualizer = useVirtualizer({
     // One row past the end while more is coming: that slot renders a spinner
     // and doubles as the "you have reached the bottom" signal below.
-    count: query.hasNextPage ? items.length + 1 : items.length,
+    count: hasNextPage ? items.length + 1 : items.length,
     getScrollElement: () => scrollerRef.current,
     estimateSize: () => estimateSize,
     overscan: 6,
@@ -59,12 +69,12 @@ export function VirtualList<T>({
   // offset: it works the same whatever the rows turn out to measure, and it
   // cannot fire early on a short list that has no next page.
   useEffect(() => {
-    if (!last || last.index < items.length) return;
+    if (!query || !last || last.index < items.length) return;
     if (!query.hasNextPage || query.isFetchingNextPage) return;
     void query.fetchNextPage();
   }, [last, items.length, query]);
 
-  if (items.length === 0 && !query.hasNextPage) return <>{empty}</>;
+  if (items.length === 0 && !hasNextPage) return <>{empty}</>;
 
   return (
     <>
@@ -92,7 +102,7 @@ export function VirtualList<T>({
           })}
         </div>
       </div>
-      {!query.hasNextPage && items.length > 0 && endNote ? endNote : null}
+      {!hasNextPage && items.length > 0 && endNote ? endNote : null}
     </>
   );
 }

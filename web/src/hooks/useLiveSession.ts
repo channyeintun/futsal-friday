@@ -1,4 +1,9 @@
-import { type Registration, type SessionDetail, sessionChannel } from '@futsal/shared';
+import {
+  type Registration,
+  type SessionDetail,
+  type SessionMessage,
+  sessionChannel,
+} from '@futsal/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import type { ConnectionState } from '../api/realtime.js';
@@ -48,6 +53,10 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
   const reload = useCallback(() => {
     if (!sessionId) return;
     void queryClient.invalidateQueries({ queryKey: queryKeys.session(sessionId) });
+    // The thread too. This is also the polling fallback's only path — where
+    // realtime is unavailable, `onRefresh` fires on a timer and is the sole
+    // way somebody else's messages ever arrive.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.sessionMessages(sessionId) });
   }, [queryClient, sessionId]);
 
   const flash = useCallback((memberId: string) => {
@@ -161,6 +170,40 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
             const { draw } = event.data;
             patch((current) =>
               current.session.id === event.data.sessionId ? { ...current, teams: draw } : current,
+            );
+            return;
+          }
+
+          case 'message.posted': {
+            // Appended straight onto the thread's own cache entry. Handled
+            // here rather than in the banter component so the screen keeps one
+            // stream: a second `useLive` on the same channel would double
+            // every connection, and the keepalives are the Upstash budget.
+            const { sessionId: forSession, id, memberId, memberName, memberAvatarUpdatedAt, body, at } =
+              event.data;
+            if (forSession !== sessionId) return;
+            queryClient.setQueryData<SessionMessage[]>(
+              queryKeys.sessionMessages(forSession),
+              (current) => {
+                if (!current) return current;
+                // The poster gets their own message back over the stream as
+                // well as in the response; whichever lands second is a no-op.
+                if (current.some((message) => message.id === id)) return current;
+                return [
+                  ...current,
+                  { id, sessionId: forSession, memberId, memberName, memberAvatarUpdatedAt, body, createdAt: at },
+                ];
+              },
+            );
+            return;
+          }
+
+          case 'message.deleted': {
+            const { sessionId: forSession, id } = event.data;
+            if (forSession !== sessionId) return;
+            queryClient.setQueryData<SessionMessage[]>(
+              queryKeys.sessionMessages(forSession),
+              (current) => current?.filter((message) => message.id !== id),
             );
             return;
           }

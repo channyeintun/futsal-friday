@@ -5,6 +5,8 @@ import {
   slotsMissingFrom, teamBoardLive, teamDrawOpen, teamOutcomes, teamRecords,
 } from '../src/teams.ts';
 import { SESSION_RUNS_FOR_MS } from '../src/time.ts';
+import { sessionAnnouncement } from '../src/announce.ts';
+import { en } from '../src/i18n/en.ts';
 import { totalArrivedHeads } from '../src/attendance.ts';
 import type { TeamMatch, TeamSlot } from '../src/models.ts';
 
@@ -377,6 +379,30 @@ check('OUTCOMES: THE RUN AND THE TALLY CANNOT DISAGREE',
     ].every(Boolean);
   }),
   [true, true, true]);
+
+// --- announcements: the writer's own opener ---------------------------------
+const announceFixture = {
+  session: {
+    id: 'ses_x', startsAt: '2026-08-07T12:30:00.000Z', venueId: null, venue: null,
+    status: 'scheduled' as const, feePerPerson: null, totalCharge: null, maxPlayers: null,
+    notes: null, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+  registrations: [], counts: { in: 0, waitlist: 0, guests: 0 },
+  registrationOpen: true, me: null, teams: null,
+};
+const firstLineOf = (opener?: string | null) =>
+  sessionAnnouncement(announceFixture, { opener, random: () => 0 }).split('\n')[0];
+
+check('opener: a written line replaces the joke', firstLineOf('Aung is back from Yangon 🛬'),
+  'Aung is back from Yangon 🛬');
+check('opener: whitespace is not a line', firstLineOf('   '), en.announce.openers[0]);
+check('opener: empty falls back to the bank', firstLineOf(''), en.announce.openers[0]);
+check('opener: absent falls back to the bank', firstLineOf(undefined), en.announce.openers[0]);
+check('opener: it is trimmed', firstLineOf('  Bring bibs  '), 'Bring bibs');
+// The facts underneath are not the writer's to change.
+check('opener: the kickoff still follows it',
+  sessionAnnouncement(announceFixture, { opener: 'anything', random: () => 0 })
+    .includes(formatKickoff('2026-08-07T12:30:00.000Z', 'en')), true);
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

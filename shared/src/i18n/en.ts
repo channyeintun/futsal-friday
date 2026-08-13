@@ -268,6 +268,20 @@ export const en = {
     loading: 'Loading session…',
   },
 
+  /* -------------------------------------------------------- trash talk */
+
+  talk: {
+    title: 'Trash talk',
+    count: (n: number) => (n === 1 ? '1 message' : `${n} messages`),
+    empty: 'Nobody has said anything. Somebody has to start it 😏',
+    emptyClosed: 'Nothing was said about this one.',
+    placeholder: 'Say something',
+    send: 'Post it',
+    remove: 'Take it down',
+    tooLong: (max: number) => `A bit long — ${max} characters at most.`,
+    failed: 'Could not post that',
+  },
+
   /* ------------------------------------------------------------- teams */
 
   teams: {
@@ -542,6 +556,8 @@ export const en = {
     open: 'Write an announcement',
     shuffle: 'Another one',
     copy: 'Copy announcement',
+    openerLabel: 'Your own first line',
+    openerHint: 'Leave it empty and the app picks one.',
     openers: [
       'Legs itching yet? 🦵',
       'Futsal Friday is back ⚽',

@@ -11,6 +11,7 @@ import type {
   Registration,
   Session,
   SessionDetail,
+  SessionMessage,
   TeamDraw,
   TeamMatch,
   TeamSlot,
@@ -386,6 +387,57 @@ export async function loadTeamDraw(
       recordedAt: row.recorded_at ?? null,
     })),
   };
+}
+
+export interface SessionMessageRow {
+  id: string;
+  session_id: string;
+  member_id: string;
+  member_name: string;
+  member_avatar_updated_at: string | null;
+  body: string;
+  created_at: string;
+}
+
+/**
+ * A session's thread, oldest first.
+ *
+ * Capped rather than paged. A thread is one week of banter about one game, so
+ * the realistic ceiling is a few dozen; a cursor here would be machinery for a
+ * case that does not arrive, and a chat that starts halfway through is worse
+ * than one that starts at the beginning. The cap exists only so a runaway
+ * cannot put a megabyte on somebody's phone.
+ */
+export async function listSessionMessages(
+  db: D1Database,
+  sessionId: string,
+  limit = 200,
+): Promise<SessionMessage[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT x.id, x.session_id, x.member_id, m.name AS member_name,
+              m.avatar_updated_at AS member_avatar_updated_at,
+              x.body, x.created_at
+         FROM session_messages x
+         JOIN members m ON m.id = x.member_id
+        WHERE x.session_id = ?1
+        ORDER BY x.created_at DESC, x.id DESC
+        LIMIT ?2`,
+    )
+    .bind(sessionId, limit)
+    .all<SessionMessageRow>();
+
+  // Newest-first in SQL so the cap keeps the *latest* messages, then flipped
+  // for display: a conversation reads downwards.
+  return results.reverse().map((row) => ({
+    id: row.id,
+    sessionId: row.session_id,
+    memberId: row.member_id,
+    memberName: row.member_name,
+    memberAvatarUpdatedAt: row.member_avatar_updated_at ?? null,
+    body: row.body,
+    createdAt: row.created_at,
+  }));
 }
 
 /* -------------------------------------------------------- composite reads */

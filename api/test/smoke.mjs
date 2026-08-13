@@ -1221,6 +1221,84 @@ const run = async () => {
   });
   check('nor settled', confirmOnCancelled.status === 409, confirmOnCancelled.status);
 
+  section('trash talk');
+  const talkSession = await call('POST', '/sessions', {
+    token: organizer,
+    body: { startsAt: new Date(Date.now() + 10 * 86_400_000).toISOString() },
+  });
+  const tk = talkSession.body.session.id;
+
+  const emptyThread = await call('GET', `/sessions/${tk}/messages`, { token: alice.token });
+  check('a new session has an empty thread',
+    emptyThread.status === 200 && emptyThread.body.messages.length === 0, emptyThread.body);
+
+  // Deliberately open to anyone: carol is not registered for this session and
+  // still gets to wind everybody up.
+  const jab = await call('POST', `/sessions/${tk}/messages`, {
+    token: carol.token, body: { body: 'Bring your boots, not your excuses 😏' },
+  });
+  check('ANYBODY CAN POST, REGISTERED OR NOT', jab.status === 201, jab.body);
+  check('and it comes back with who said it', jab.body?.message?.memberId === carol.id,
+    jab.body?.message);
+
+  await call('POST', `/sessions/${tk}/messages`, {
+    token: bob.token, body: { body: 'Big talk from the bench' },
+  });
+  const thread = await call('GET', `/sessions/${tk}/messages`, { token: alice.token });
+  check('the thread reads oldest first',
+    thread.body.messages.map((x) => x.memberId).join('|') === `${carol.id}|${bob.id}`,
+    thread.body.messages.map((x) => x.memberName));
+
+  const empty = await call('POST', `/sessions/${tk}/messages`, {
+    token: alice.token, body: { body: '   ' },
+  });
+  check('whitespace is not a message', empty.status === 400, empty.status);
+  const essay = await call('POST', `/sessions/${tk}/messages`, {
+    token: alice.token, body: { body: 'x'.repeat(281) },
+  });
+  check('and neither is an essay', essay.status === 400, essay.status);
+
+  // Stored exactly as typed. Nothing here is markup, and the client renders it
+  // as text — but the round trip is worth pinning.
+  const sneaky = await call('POST', `/sessions/${tk}/messages`, {
+    token: alice.token, body: { body: '<script>alert(1)</script> & "quotes"' },
+  });
+  check('a message is stored verbatim, not escaped or stripped',
+    sneaky.body?.message?.body === '<script>alert(1)</script> & "quotes"',
+    sneaky.body?.message?.body);
+
+  const notYours = await call('DELETE', `/sessions/${tk}/messages/${jab.body.message.id}`, {
+    token: bob.token,
+  });
+  check('A MEMBER CANNOT DELETE SOMEBODY ELSE\'S MESSAGE', notYours.status === 403, notYours.status);
+
+  const mine = await call('DELETE', `/sessions/${tk}/messages/${sneaky.body.message.id}`, {
+    token: alice.token,
+  });
+  check('but can delete their own', mine.status === 200, mine.body);
+
+  const struckOut = await call('DELETE', `/sessions/${tk}/messages/${jab.body.message.id}`, {
+    token: organizer,
+  });
+  check('and an organizer can delete anybody\'s', struckOut.status === 200, struckOut.body);
+
+  const afterDeletes = await call('GET', `/sessions/${tk}/messages`, { token: alice.token });
+  check('deleted means gone, not hidden', afterDeletes.body.messages.length === 1,
+    afterDeletes.body.messages.map((x) => x.body));
+
+  const noSuchMessage = await call('DELETE', `/sessions/${tk}/messages/msg_nothing`, {
+    token: organizer,
+  });
+  check('deleting a message that never existed is refused',
+    noSuchMessage.status === 404, noSuchMessage.status);
+
+  await call('PATCH', `/sessions/${tk}`, { token: organizer, body: { status: 'cancelled' } });
+  const onCancelled = await call('POST', `/sessions/${tk}/messages`, {
+    token: alice.token, body: { body: 'anyone still up for it?' },
+  });
+  check('a cancelled session has nothing to talk about', onCancelled.status === 409,
+    onCancelled.body);
+
   section('self-add and the waiting room');
   const selfAdd = await call('POST', '/auth/group/self-add', {
     body: { nonce: nonceOf(rotated.body.invite.url), name: `Walkin ${stamp}` },

@@ -2,6 +2,7 @@ import {
   type Registration,
   type TeamDraw,
   arrivedSlots,
+  canDeleteMessage,
   canRedrawTeams,
   canSplitInto,
   createSessionSchema,
@@ -9,6 +10,7 @@ import {
   drawTeamsSchema,
   markAttendanceSchema,
   maxTeamsFor,
+  postMessageSchema,
   recordGoalsSchema,
   recordMatchSchema,
   roundRobin,
@@ -24,9 +26,11 @@ import {
   SESSION_FROM,
   type SessionWithVenueRow,
   countRegistrations,
+  getMemberById,
   getSessionRow,
   isRegistrationOpen,
   listRegistrations,
+  listSessionMessages,
   loadSessionDetail,
   decodeSessionCursor,
   encodeSessionCursor,
@@ -779,6 +783,107 @@ export const sessionRoutes = new Hono<AppContext>()
     if ((updated.meta?.changes ?? 0) === 0) throw notFound('No such match in this session');
 
     return c.json({ draw: await announceBoard(c, sessionId, timestamp) });
+  })
+
+  /* --------------------------------------------------------- trash talk */
+
+  /**
+   * The session's thread.
+   *
+   * Its own route rather than a field on the session detail: the roster has to
+   * paint the moment the screen opens, and the banter is the part you scroll
+   * to. Same reasoning as the form squares.
+   */
+  .get('/:id/messages', async (c) =>
+    c.json({ messages: await listSessionMessages(c.env.DB, c.req.param('id')) }),
+  )
+
+  /**
+   * Say something.
+   *
+   * Not gated on kickoff, on having registered, or on being an organizer. The
+   * winding up starts days before the game and the gloating runs for a week
+   * after, and somebody who is not playing this week has the most to say about
+   * it. A cancelled session is the one exception: there is nothing to talk
+   * about, and its thread goes down with it.
+   */
+  .post('/:id/messages', async (c) => {
+    const sessionId = c.req.param('id');
+    const identity = c.get('identity');
+    const { body } = await parseBody(c.req.raw, postMessageSchema);
+
+    const session = await getSessionRow(c.env.DB, sessionId);
+    if (!session) throw notFound('No such session');
+    if (session.status === 'cancelled') throw conflict('That session was cancelled');
+
+    const id = newId('msg');
+    const timestamp = nowIso();
+    await c.env.DB.prepare(
+      `INSERT INTO session_messages (id, session_id, member_id, body, created_at)
+       VALUES (?1, ?2, ?3, ?4, ?5)`,
+    )
+      .bind(id, sessionId, identity.memberId, body, timestamp)
+      .run();
+
+    // Read back for the writer's picture, so every phone draws the row
+    // complete rather than popping the avatar in on the next refresh.
+    const author = await getMemberById(c.env.DB, identity.memberId);
+    const message = {
+      id,
+      sessionId,
+      memberId: identity.memberId,
+      memberName: author?.name ?? identity.name,
+      memberAvatarUpdatedAt: author?.avatarUpdatedAt ?? null,
+      body,
+      createdAt: timestamp,
+    };
+
+    await c.get('pubsub').emit(sessionChannel(sessionId), 'message.posted', {
+      sessionId,
+      id,
+      memberId: message.memberId,
+      memberName: message.memberName,
+      memberAvatarUpdatedAt: message.memberAvatarUpdatedAt,
+      body,
+      at: timestamp,
+    });
+
+    return c.json({ message }, 201);
+  })
+
+  /**
+   * Take one down.
+   *
+   * Whoever wrote it, or an organizer — see `canDeleteMessage`. Somebody will
+   * post something that lands wrong, and the person whose joke it was is not
+   * always the person who will remove it.
+   */
+  .delete('/:id/messages/:messageId', async (c) => {
+    const sessionId = c.req.param('id');
+    const messageId = c.req.param('messageId');
+    const identity = c.get('identity');
+
+    const existing = await c.env.DB.prepare(
+      `SELECT member_id FROM session_messages WHERE id = ?1 AND session_id = ?2`,
+    )
+      .bind(messageId, sessionId)
+      .first<{ member_id: string }>();
+    if (!existing) throw notFound('No such message');
+
+    if (!canDeleteMessage({ memberId: existing.member_id }, identity)) {
+      throw forbidden('That is not yours to delete');
+    }
+
+    await c.env.DB.prepare(`DELETE FROM session_messages WHERE id = ?1`).bind(messageId).run();
+
+    await c.get('pubsub').emit(sessionChannel(sessionId), 'message.deleted', {
+      sessionId,
+      id: messageId,
+      byMemberId: identity.memberId,
+      at: nowIso(),
+    });
+
+    return c.json({ ok: true });
   })
 
   /** Take the board down. Same permission rule as redrawing it. */

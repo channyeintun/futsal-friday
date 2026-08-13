@@ -372,6 +372,43 @@ export const recordMatchSchema = z.object({
 });
 export type RecordMatchInput = z.infer<typeof recordMatchSchema>;
 
+/* ------------------------------------------------------------ trash talk */
+
+/** A jab across the pitch, not a post — see the migration for why it is short. */
+export const MAX_MESSAGE_LENGTH = 280;
+
+export const sessionMessageSchema = z.object({
+  id: idSchema,
+  sessionId: idSchema,
+  memberId: idSchema,
+  memberName: z.string(),
+  /** Cache token for the writer's picture; null when they have none. */
+  memberAvatarUpdatedAt: isoSchema.nullable().default(null),
+  body: z.string().min(1).max(MAX_MESSAGE_LENGTH),
+  createdAt: isoSchema,
+});
+export type SessionMessage = z.infer<typeof sessionMessageSchema>;
+
+export const postMessageSchema = z.object({
+  body: z.string().trim().min(1, 'Say something').max(MAX_MESSAGE_LENGTH),
+});
+export type PostMessageInput = z.infer<typeof postMessageSchema>;
+
+/**
+ * Who may take a message down: whoever wrote it, or an organizer.
+ *
+ * The same pair the app trusts everywhere else it stores something one person
+ * said — attendance, goals, a scoreline. The author because it is theirs, and
+ * an organizer because the person whose joke landed badly is not always the
+ * person who will delete it.
+ */
+export function canDeleteMessage(
+  message: { memberId: string },
+  viewer: { memberId: string; isOrganizer: boolean },
+): boolean {
+  return message.memberId === viewer.memberId || viewer.isOrganizer;
+}
+
 /* ------------------------------------------------------------- leaderboard */
 
 /** One player's recent form: the last few games, newest last. */

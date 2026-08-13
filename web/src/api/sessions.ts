@@ -3,6 +3,7 @@ import type {
   Registration,
   Session,
   SessionDetail,
+  SessionMessage,
   TeamDraw,
   UpdateSessionInput,
 } from '@futsal/shared';
@@ -113,3 +114,17 @@ export const recordMatch = (
 
 export const clearSessionTeams = (id: string) =>
   del<{ draw: null }>(`/sessions/${id}/teams`);
+
+/* ----------------------------------------------------------- trash talk */
+
+export const listSessionMessages = (id: string, signal?: AbortSignal) =>
+  get<{ messages: SessionMessage[] }>(`/sessions/${id}/messages`, signal).then(
+    (r) => r.messages,
+  );
+
+export const postSessionMessage = (id: string, body: string) =>
+  post<{ message: SessionMessage }>(`/sessions/${id}/messages`, { body });
+
+/** Yours, or anyone's if you are an organizer. */
+export const deleteSessionMessage = (id: string, messageId: string) =>
+  del<{ ok: true }>(`/sessions/${id}/messages/${messageId}`);

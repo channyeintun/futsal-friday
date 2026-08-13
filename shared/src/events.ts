@@ -133,6 +133,33 @@ export const teamsChangedSchema = z.object({
   at: isoSchema,
 });
 
+/**
+ * Somebody said something.
+ *
+ * Carries the whole message rather than a nudge to refetch — the same rule as
+ * `player.joined`, and it matters more here: a thread that goes back to the
+ * server for every jab turns a five-message exchange into ten round trips on
+ * fifteen phones. The board, by contrast, ships whole because it is one object
+ * that changes at once; a thread only ever grows by one at the end.
+ */
+export const messagePostedSchema = z.object({
+  sessionId: idSchema,
+  id: idSchema,
+  memberId: idSchema,
+  memberName: z.string(),
+  memberAvatarUpdatedAt: isoSchema.nullable().default(null),
+  body: z.string(),
+  at: isoSchema,
+});
+
+/** Taken down by its author or an organizer. The id is all a client needs. */
+export const messageDeletedSchema = z.object({
+  sessionId: idSchema,
+  id: idSchema,
+  byMemberId: idSchema,
+  at: isoSchema,
+});
+
 export const sessionUpdatedSchema = z.object({
   sessionId: idSchema,
   status: sessionStatusSchema,
@@ -162,6 +189,10 @@ export const realtimeSchema = {
   teams: {
     changed: teamsChangedSchema,
   },
+  message: {
+    posted: messagePostedSchema,
+    deleted: messageDeletedSchema,
+  },
   session: {
     updated: sessionUpdatedSchema,
   },
@@ -179,6 +210,8 @@ export interface EventPayloadMap {
   'payment.confirmed': z.infer<typeof paymentConfirmedSchema>;
   'payment.rejected': z.infer<typeof paymentRejectedSchema>;
   'teams.changed': z.infer<typeof teamsChangedSchema>;
+  'message.posted': z.infer<typeof messagePostedSchema>;
+  'message.deleted': z.infer<typeof messageDeletedSchema>;
   'session.updated': z.infer<typeof sessionUpdatedSchema>;
 }
 
@@ -193,6 +226,8 @@ export const EVENT_NAMES = [
   'payment.confirmed',
   'payment.rejected',
   'teams.changed',
+  'message.posted',
+  'message.deleted',
   'session.updated',
 ] as const satisfies readonly EventName[];
 
@@ -225,6 +260,12 @@ export type EventCatalogueIsConsistent = Assert<
     Exact<EventPayloadMap['payment.rejected'], z.infer<typeof realtimeSchema.payment.rejected>>
   > &
   Assert<Exact<EventPayloadMap['teams.changed'], z.infer<typeof realtimeSchema.teams.changed>>> &
+  Assert<
+    Exact<EventPayloadMap['message.posted'], z.infer<typeof realtimeSchema.message.posted>>
+  > &
+  Assert<
+    Exact<EventPayloadMap['message.deleted'], z.infer<typeof realtimeSchema.message.deleted>>
+  > &
   Assert<Exact<EventPayloadMap['session.updated'], z.infer<typeof realtimeSchema.session.updated>>>;
 
 /** Discriminated union of every event, handy for exhaustive `switch`es. */

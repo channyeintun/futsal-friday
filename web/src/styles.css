@@ -1470,6 +1470,96 @@ md-outlined-text-field {
   border-bottom: 0;
 }
 
+/* -------------------------------------------------------------- the thread */
+
+.talk-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.talk-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.talk-bubble {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: var(--ff-radius-row);
+  background: var(--md-sys-color-surface-container-high);
+}
+
+/* Your own, tinted rather than moved to the other side: this is a thread on a
+   card, not a messaging app, and a two-column layout would halve the width a
+   joke gets on a phone. */
+.talk-row.is-me .talk-bubble {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.talk-who {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.talk-row.is-me .talk-who {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.talk-when {
+  flex: none;
+  font-size: 0.7rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.talk-row.is-me .talk-when {
+  color: inherit;
+  opacity: 0.6;
+}
+
+/*
+ * As typed, newlines and all.
+ *
+ * `pre-wrap` rather than a formatter: nothing in a message is markup, and
+ * `overflow-wrap` is what stops one long unbroken string — a URL, or Burmese,
+ * which is written without spaces — pushing the card wider than the screen.
+ */
+.talk-body {
+  margin: 2px 0 0;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Small and quiet: taking a message down is a correction, not an action the
+   row is offering you. */
+.talk-remove {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--ff-radius-pill);
+  background: none;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.talk-remove:hover,
+.talk-remove:focus-visible {
+  color: var(--md-sys-color-error);
+}
+
 /* ------------------------------------------------------ result in history */
 
 /*
