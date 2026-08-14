@@ -330,8 +330,9 @@ export function TeamBoards({
               {m.teams.confirmHint}
             </p>
           ) : (
-            /* Drawn but never settled, and now too late to. Nothing to nudge
-               about — the sides above are the whole record there is. */
+            /* Drawn and never settled — the group put bibs on and nobody
+               tapped the button. Said as a thing still to do, because it is:
+               the confirmation below outlives the game. */
             <p className="muted" style={{ margin: 0 }}>
               {m.teams.neverSettled}
             </p>
@@ -364,7 +365,22 @@ export function TeamBoards({
             </p>
           ) : null}
 
-          {live && !settled ? (
+          {/*
+            Offered for as long as the sides are unsettled, including after
+            the board has otherwise become a record.
+
+            This used to close with the rest of the card two hours after
+            kickoff, which stranded the one group that needed it: everybody
+            who splits teams and forgets to tap this. Their sides could then
+            never hold a game — confirming is what writes the fixture list —
+            and nothing on the screen could put it right.
+
+            Nothing about a late confirmation is destructive. Shuffling and
+            clearing stay shut because they throw work away; this only turns
+            a draw into a record, and the server never gated it by time in
+            the first place.
+          */}
+          {!settled ? (
             <Button
               variant="filled"
               onClick={() => void run(() => confirmSessionTeams(detail.session.id), m.teams.failed)}

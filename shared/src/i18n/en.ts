@@ -346,7 +346,8 @@ export const en = {
     /* -------------------------------------------------- the fixtures */
     matches: 'Games',
     matchesHint: 'Everyone plays everyone. Put the score in when a game finishes.',
-    neverSettled: 'These sides were never settled, so no games were listed.',
+    neverSettled:
+      'These sides were never settled, so no games were listed. It is not too late to settle them.',
     notPlayed: 'Not played yet',
     scoreTitle: (first: string, second: string) => `${first} v ${second}`,
     markNotPlayed: 'Mark as not played',
