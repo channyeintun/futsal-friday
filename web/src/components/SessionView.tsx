@@ -6,7 +6,6 @@ import {
   registrationSummary,
   relativeToNow,
   teamBoardLive,
-  teamDrawOpen,
   totalArrivedHeads,
 } from '@futsal/shared';
 import { useState } from 'react';
@@ -81,16 +80,16 @@ export function SessionView({
 
   const kickedOff = new Date(session.startsAt).getTime() <= Date.now();
   const showAttendance = kickedOff && session.status !== 'cancelled';
-  // Teams are picked standing on the pitch, which happens before the clock
-  // strikes 19:30 — so this board opens earlier than the attendance controls,
-  // and for a different reason. See `teamDrawOpen`.
+  // The board is open for the whole life of the fixture, unlike the attendance
+  // controls above it. Those ask a question that has no answer until the game
+  // has been played; the teams are a thing the group argues about all week.
   //
-  // It then stops being a control and becomes a record: two hours after
-  // kickoff there is nobody left to reshuffle for, and offering to split teams
-  // for a game played weeks ago is the screen asking a question that has no
-  // answer. A finished session keeps the board only if there is one to keep.
+  // It stops being a control two hours after kickoff and becomes a record —
+  // see `teamBoardLive`. A finished session keeps the board only if there is
+  // one to keep, and a cancelled one never shows it: teams for a game that did
+  // not happen are not a record of anything.
   const teamsLive = teamBoardLive(session);
-  const showTeams = teamDrawOpen(session) && (teamsLive || detail.teams !== null);
+  const showTeams = session.status !== 'cancelled' && (teamsLive || detail.teams !== null);
   const arrived = totalArrivedHeads(registrations);
   const checked = attendanceChecked(registrations);
 
@@ -379,7 +378,12 @@ export function SessionView({
       {/* Directly under the roster: the list of who is here is what the board
           is dealt from, and picking sides is the next thing that happens. */}
       {showTeams ? (
-        <TeamBoards detail={detail} live={teamsLive} onChanged={onChanged} />
+        <TeamBoards
+          detail={detail}
+          live={teamsLive}
+          kickedOff={kickedOff}
+          onChanged={onChanged}
+        />
       ) : null}
 
       {/* Under the teams, because most of what gets said is about them. Open

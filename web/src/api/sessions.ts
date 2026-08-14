@@ -125,6 +125,15 @@ export const listSessionMessages = (id: string, signal?: AbortSignal) =>
 export const postSessionMessage = (id: string, body: string) =>
   post<{ message: SessionMessage }>(`/sessions/${id}/messages`, { body });
 
+/**
+ * Add whoever signed up since the draw, onto the smallest sides.
+ *
+ * Additive on purpose: nobody already on a team moves, and a confirmed board
+ * keeps its fixtures and scores. Open to any member for the same reason.
+ */
+export const addLatecomers = (id: string) =>
+  post<{ draw: TeamDraw }>(`/sessions/${id}/teams/latecomers`, {});
+
 /** Yours, or anyone's if you are an organizer. */
 export const deleteSessionMessage = (id: string, messageId: string) =>
   del<{ ok: true }>(`/sessions/${id}/messages/${messageId}`);

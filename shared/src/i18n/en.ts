@@ -288,6 +288,8 @@ export const en = {
     title: 'Teams',
     split: 'Split into teams',
     body: 'Everyone who turned up, dealt out at random. Anyone can shuffle again.',
+    bodyBefore: 'Everyone who is in, dealt out at random. Anyone can shuffle again.',
+    notEnoughYet: 'Not enough players signed up yet.',
     nobodyYet: 'Mark who turned up first — the draw uses the same list the bill does.',
     howMany: 'How many teams?',
     onThePitch: (heads: number) =>
@@ -309,6 +311,10 @@ export const en = {
       count === 1
         ? '1 more player has turned up since. Shuffle again to deal them in.'
         : `${count} more players have turned up since. Shuffle again to deal them in.`,
+    // Annotated, or two string literals narrow the type and every other
+    // locale is forced to return one of these exact English strings.
+    dealThemIn: (count: number): string =>
+      count === 1 ? 'Add them to a side' : 'Add them to the sides',
     failed: 'Could not split the teams',
 
     /* ------------------------------------------- settling on a draw */

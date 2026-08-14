@@ -30,33 +30,26 @@ export interface TeamCandidate extends AttendanceInput {
 }
 
 /**
- * How long before kickoff the board appears.
- *
- * People turn up early and stand around; making them wait for the clock to
- * strike 19:30 before they can pick sides would be the app getting in the way
- * of the exact moment it exists for. The server does not enforce this — it is
- * a decision about when to *offer* the question, the same way the attendance
- * controls only appear once there is an answer worth giving.
- */
-export const TEAM_DRAW_OPENS_BEFORE_MS = 30 * 60_000;
-
-/** Whether the team board is worth putting on screen yet. */
-export function teamDrawOpen(
-  session: { startsAt: string; status: string },
-  now: Date = new Date(),
-): boolean {
-  if (session.status === 'cancelled') return false;
-  return now.getTime() >= new Date(session.startsAt).getTime() - TEAM_DRAW_OPENS_BEFORE_MS;
-}
-
-/**
  * Whether the board is still something to *do*, rather than something that
  * happened.
  *
- * Two hours after kickoff everybody has gone home, and from then on the board
- * is a record: no shuffling, no confirming, no offer to split teams for a game
- * that was played weeks ago. `SESSION_RUNS_FOR_MS` is the same window the cron
- * uses to call a session finished, so the screen and the schedule agree.
+ * Open from the moment the fixture exists. It used to wait until half an hour
+ * before kickoff, on the theory that picking sides is something you do
+ * standing on the pitch — which is where it *ends*, not where it starts. A
+ * group that wants to argue about the teams on Tuesday should be able to, and
+ * hiding the board until Friday evening made the app useless for the part of
+ * the week the argument actually happens in.
+ *
+ * Nothing is lost by opening early: the draw deals from whoever is down as
+ * playing, and `slotsMissingFrom` already tells the screen when people have
+ * signed up since — so a Tuesday draw quietly asks to be reshuffled as the
+ * roster fills, rather than going stale.
+ *
+ * It closes two hours after kickoff, when everybody has gone home, and from
+ * then on the board is a record: no shuffling, no confirming, no offer to
+ * split teams for a game played weeks ago. `SESSION_RUNS_FOR_MS` is the same
+ * window the cron uses to call a session finished, so the screen and the
+ * schedule agree.
  *
  * Deliberately measured off the clock rather than off `status`. Settling the
  * bill also completes a session, and that often happens while the last game is
@@ -66,7 +59,7 @@ export function teamBoardLive(
   session: { startsAt: string; status: string },
   now: Date = new Date(),
 ): boolean {
-  if (!teamDrawOpen(session, now)) return false;
+  if (session.status === 'cancelled') return false;
   return now.getTime() < new Date(session.startsAt).getTime() + SESSION_RUNS_FOR_MS;
 }
 
@@ -151,6 +144,46 @@ export function balancedSizes(headCount: number, teamCount: number): number[] {
   const base = Math.floor(headCount / count);
   const spare = headCount % count;
   return Array.from({ length: count }, (_, index) => base + (index < spare ? 1 : 0));
+}
+
+/**
+ * Fold late arrivals into a board that already exists.
+ *
+ * Registration stays open until kickoff and the board opens days before it, so
+ * the ordinary case is teams settled on Tuesday and two more people signing up
+ * on Thursday. Redrawing would answer that, but it is the wrong answer twice
+ * over: it moves people who have already been told which side they are on, and
+ * once the teams are confirmed it throws away the fixture list and every score
+ * recorded against it.
+ *
+ * So a latecomer is *added* rather than dealt. Each one goes to the smallest
+ * side, which keeps the sides within one of each other exactly as the original
+ * draw promised — and because it only ever appends, nobody already on a team
+ * moves and no result is lost. That is also why it needs no permission beyond
+ * membership: there is nothing here for anyone to object to.
+ *
+ * Ties are broken at random rather than by index. Always filling team A first
+ * would make the earliest side the one that absorbs every latecomer.
+ */
+export function assignLatecomers(
+  teams: readonly (readonly TeamSlot[])[],
+  newcomers: readonly TeamSlot[],
+  random: () => number,
+): { slot: TeamSlot; team: number }[] {
+  if (teams.length === 0) return [];
+
+  const sizes = teams.map((team) => team.length);
+  const placed: { slot: TeamSlot; team: number }[] = [];
+
+  for (const slot of shuffled(newcomers, random)) {
+    const smallest = Math.min(...sizes);
+    const tied = sizes.flatMap((size, index) => (size === smallest ? [index] : []));
+    const team = tied[Math.floor(random() * tied.length)] ?? 0;
+    placed.push({ slot, team });
+    sizes[team]!++;
+  }
+
+  return placed;
 }
 
 /**

@@ -2,6 +2,7 @@ import {
   type Registration,
   type TeamDraw,
   arrivedSlots,
+  assignLatecomers,
   canDeleteMessage,
   canRedrawTeams,
   canSplitInto,
@@ -15,6 +16,7 @@ import {
   recordMatchSchema,
   roundRobin,
   sessionChannel,
+  slotsMissingFrom,
   totalArrivedHeads,
   updateSessionSchema,
   LOBBY_CHANNEL,
@@ -732,6 +734,57 @@ export const sessionRoutes = new Hono<AppContext>()
 
     // Somebody else got there first, or redrew underneath us. Either way the
     // board in the database is the answer, and this stays idempotent.
+    return c.json({ draw: await announceBoard(c, sessionId, timestamp) });
+  })
+
+  /**
+   * Deal in whoever signed up after the teams were drawn.
+   *
+   * The board opens days before kickoff and registration stays open right up to
+   * it, so "teams settled on Tuesday, two more people on Thursday" is the
+   * ordinary case rather than an edge one. Redrawing answers it badly: it moves
+   * people who already know their side, and on a confirmed board it takes the
+   * fixture list and every recorded score with it.
+   *
+   * This only ever appends — each latecomer onto the smallest side — so nobody
+   * moves and nothing is lost. Open to any member for that reason: there is
+   * nothing here to object to, and the person watching somebody walk up is not
+   * always the organizer.
+   */
+  .post('/:id/teams/latecomers', async (c) => {
+    const sessionId = c.req.param('id');
+    const identity = c.get('identity');
+
+    const session = await getSessionRow(c.env.DB, sessionId);
+    if (!session) throw notFound('No such session');
+    if (session.status === 'cancelled') throw conflict('That session was cancelled');
+
+    const draw = await loadTeamDraw(c.env.DB, sessionId);
+    if (!draw) throw conflict('Split the teams first');
+
+    const registrations = await listRegistrations(c.env.DB, sessionId);
+    const missing = slotsMissingFrom(draw, arrivedSlots(registrations));
+    // Idempotent: nothing to add is a no-op, not an error. Two people tapping
+    // it at once means the second finds nobody missing.
+    if (missing.length === 0) return c.json({ draw });
+
+    if (draw.teams.flat().length + missing.length > MAX_DRAW_SLOTS) {
+      throw badRequest(`That is too many players to split — ${MAX_DRAW_SLOTS} at most`);
+    }
+
+    const timestamp = nowIso();
+    const insertSlot = c.env.DB.prepare(
+      `INSERT INTO team_slots (session_id, member_id, guest_index, team)
+       VALUES (?1, ?2, ?3, ?4)
+       ON CONFLICT (session_id, member_id, guest_index) DO NOTHING`,
+    );
+
+    await c.env.DB.batch(
+      assignLatecomers(draw.teams, missing, cryptoRandom).map(({ slot, team }) =>
+        insertSlot.bind(sessionId, slot.memberId, slot.guestIndex, team),
+      ),
+    );
+
     return c.json({ draw: await announceBoard(c, sessionId, timestamp) });
   })
 

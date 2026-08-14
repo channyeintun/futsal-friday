@@ -1221,6 +1221,65 @@ const run = async () => {
   });
   check('nor settled', confirmOnCancelled.status === 409, confirmOnCancelled.status);
 
+  section('somebody signs up after the teams are settled');
+  const lateSession = await call('POST', '/sessions', {
+    token: organizer,
+    body: { startsAt: new Date(Date.now() + 11 * 86_400_000).toISOString() },
+  });
+  const ls = lateSession.body.session.id;
+  for (const who of [alice, bob]) {
+    await call('POST', `/sessions/${ls}/register`, { token: who.token });
+  }
+  await call('POST', `/sessions/${ls}/teams`, { token: alice.token, body: { teamCount: 2 } });
+  const settledBoard = await call('POST', `/sessions/${ls}/teams/confirm`, { token: alice.token });
+  const lateFixture = settledBoard.body.draw.matches[0];
+  await call('POST', `/sessions/${ls}/matches/${lateFixture.id}`, {
+    token: alice.token, body: { firstGoals: 2, secondGoals: 1 },
+  });
+
+  const beforeLate = await call('GET', `/sessions/${ls}`, { token: alice.token });
+  const sidesBefore = JSON.stringify(
+    beforeLate.body.teams.teams.map((t) => t.map((s) => s.memberId).sort()),
+  );
+
+  // Carol signs up days after the sides were fixed.
+  await call('POST', `/sessions/${ls}/register`, { token: carol.token });
+  const stillMissing = await call('GET', `/sessions/${ls}`, { token: alice.token });
+  check('a latecomer is not silently on a team',
+    stillMissing.body.teams.teams.flat().every((s) => s.memberId !== carol.id),
+    stillMissing.body.teams.teams);
+
+  // Anybody can fold them in — it moves nobody, so it needs no permission.
+  const folded = await call('POST', `/sessions/${ls}/teams/latecomers`, { token: bob.token });
+  check('ANYBODY CAN ADD A LATECOMER TO A SETTLED BOARD', folded.status === 200, folded.body);
+  const after = folded.body.draw;
+  check('and they land on a side', after.teams.flat().some((s) => s.memberId === carol.id),
+    after.teams.map((t) => t.map((s) => s.memberName)));
+  check('on the smaller one, so the sides stay within one',
+    Math.max(...after.teams.map((t) => t.length)) - Math.min(...after.teams.map((t) => t.length)) <= 1,
+    after.teams.map((t) => t.length));
+
+  // The two things a redraw would have destroyed.
+  const sidesAfter = JSON.stringify(
+    after.teams.map((t) => t.map((s) => s.memberId).filter((id) => id !== carol.id).sort()),
+  );
+  check('NOBODY ALREADY PLACED WAS MOVED', sidesAfter === sidesBefore,
+    `${sidesBefore} -> ${sidesAfter}`);
+  check('the board is still settled', after.confirmedAt !== null, after.confirmedAt);
+  check('AND THE RECORDED SCORE SURVIVED',
+    after.matches.find((x) => x.id === lateFixture.id)?.firstGoals === 2,
+    after.matches);
+
+  const nothingToAdd = await call('POST', `/sessions/${ls}/teams/latecomers`, { token: bob.token });
+  check('running it again with nobody missing is a no-op', nothingToAdd.status === 200,
+    nothingToAdd.status);
+  check('and does not duplicate anybody',
+    nothingToAdd.body.draw.teams.flat().length === after.teams.flat().length,
+    nothingToAdd.body.draw.teams.flat().length);
+
+  const noBoard = await call('POST', `/sessions/${ts}/teams/latecomers`, { token: alice.token });
+  check('with no draw there is nothing to add to', noBoard.status === 409, noBoard.status);
+
   section('trash talk');
   const talkSession = await call('POST', '/sessions', {
     token: organizer,

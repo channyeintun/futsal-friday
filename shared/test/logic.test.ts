@@ -1,8 +1,8 @@
 import { nextFridayKickoff, formatKickoff, toZonedParts, zonedDateKey, fromDatetimeLocal, toDatetimeLocal } from '../src/time.ts';
 import { splitEqually, splitWithOverrides, formatVnd, parseVnd } from '../src/money.ts';
 import {
-  arrivedSlots, canRedrawTeams, canSplitInto, drawTeams, matchPlayed, maxTeamsFor, roundRobin,
-  slotsMissingFrom, teamBoardLive, teamDrawOpen, teamOutcomes, teamRecords,
+  arrivedSlots, assignLatecomers, canRedrawTeams, canSplitInto, drawTeams, matchPlayed, maxTeamsFor, roundRobin,
+  slotsMissingFrom, teamBoardLive, teamOutcomes, teamRecords,
 } from '../src/teams.ts';
 import { SESSION_RUNS_FOR_MS } from '../src/time.ts';
 import { sessionAnnouncement } from '../src/announce.ts';
@@ -247,21 +247,78 @@ check('teams: latecomers are reported as missing from the draw',
 check('teams: nobody is missing from a fresh draw',
   slotsMissingFrom({ teams: drawTeams(partySlots, 2, seeded(9)) }, partySlots), []);
 
+// --- teams: latecomers are added, never dealt -------------------------------
+//
+// The board opens days before kickoff and registration runs to the whistle, so
+// "settled on Tuesday, two more on Thursday" is ordinary. Adding must not move
+// anybody already placed, or a confirmed board would lose its fixtures.
+
+const placed = (n: number, prefix = 'p'): TeamSlot[] =>
+  Array.from({ length: n }, (_, i) => ({
+    memberId: `${prefix}${i}`, memberName: `${prefix}${i}`, memberAvatarUpdatedAt: null, guestIndex: 0,
+  }));
+
+let addFault = '';
+for (let a = 0; a <= 6 && !addFault; a++) {
+  for (let b = 0; b <= 6; b++) {
+    for (let late = 1; late <= 5; late++) {
+      for (let seed = 1; seed <= 12; seed++) {
+        const board = [placed(a, 'a'), placed(b, 'b')];
+        const newcomers = placed(late, 'late');
+        const out = assignLatecomers(board, newcomers, seeded(seed * 13 + late));
+
+        if (out.length !== late) addFault = `a=${a} b=${b} late=${late} placed ${out.length}`;
+        if (new Set(out.map((x) => x.slot.memberId)).size !== late) {
+          addFault = `a=${a} b=${b} late=${late} duplicated somebody`;
+        }
+        if (out.some((x) => x.team < 0 || x.team >= board.length)) {
+          addFault = `a=${a} b=${b} late=${late} assigned off the board`;
+        }
+        // The promise the original draw made must still hold afterwards.
+        const sizes = board.map((t, i) => t.length + out.filter((x) => x.team === i).length);
+        if (Math.max(...sizes) - Math.min(...sizes) > Math.max(1, Math.abs(a - b))) {
+          addFault = `a=${a} b=${b} late=${late} left it lopsided ${sizes.join('/')}`;
+        }
+      }
+    }
+  }
+}
+check('LATECOMERS: EVERY ONE PLACED, ONTO A REAL SIDE', addFault, '');
+
+// The whole point: the smaller side absorbs them.
+check('latecomers: go to the smaller side',
+  assignLatecomers([placed(5, 'a'), placed(2, 'b')], placed(1, 'late'), seeded(3))[0]!.team, 1);
+check('latecomers: three of them even it up',
+  assignLatecomers([placed(5, 'a'), placed(2, 'b')], placed(3, 'late'), seeded(3))
+    .filter((x) => x.team === 1).length, 3);
+
+// Ties must not always fall on team A, or the first side absorbs everybody.
+const tieLanded = new Set<number>();
+for (let seed = 1; seed <= 60; seed++) {
+  tieLanded.add(assignLatecomers([placed(3, 'a'), placed(3, 'b')], placed(1, 'late'), seeded(seed))[0]!.team);
+}
+check('latecomers: a tie is broken at random', [...tieLanded].sort(), [0, 1]);
+
+check('latecomers: nobody to add is nothing to do',
+  assignLatecomers([placed(3, 'a'), placed(3, 'b')], [], seeded(1)), []);
+check('latecomers: no board is nothing to add to',
+  assignLatecomers([], placed(2, 'late'), seeded(1)), []);
+
 check('teams: two is the floor', canSplitInto(10, 1), false);
 check('teams: cannot field more teams than players', canSplitInto(3, 4), false);
 check('teams: three players make three teams', canSplitInto(3, 3), true);
 check('teams: the cap is six', maxTeamsFor(40), 6);
 
-// The board opens before kickoff, because people arrive before kickoff.
+// The board is open for the whole life of the fixture. It used to wait until
+// half an hour before kickoff, which hid it for the entire week the group
+// actually argues about the teams in.
 const kickoffAt = '2026-08-07T12:30:00.000Z';
-check('teams: closed an hour before kickoff',
-  teamDrawOpen({ startsAt: kickoffAt, status: 'scheduled' }, new Date('2026-08-07T11:30:00Z')), false);
-check('teams: open ten minutes before kickoff',
-  teamDrawOpen({ startsAt: kickoffAt, status: 'scheduled' }, new Date('2026-08-07T12:20:00Z')), true);
-check('teams: still open after the whistle',
-  teamDrawOpen({ startsAt: kickoffAt, status: 'completed' }, new Date('2026-08-07T14:00:00Z')), true);
-check('teams: never open on a cancelled session',
-  teamDrawOpen({ startsAt: kickoffAt, status: 'cancelled' }, new Date('2026-08-07T14:00:00Z')), false);
+check('BOARD: OPEN DAYS BEFORE THE GAME',
+  teamBoardLive({ startsAt: kickoffAt, status: 'scheduled' }, new Date('2026-08-04T09:00:00Z')), true);
+check('board: open an hour before kickoff',
+  teamBoardLive({ startsAt: kickoffAt, status: 'scheduled' }, new Date('2026-08-07T11:30:00Z')), true);
+check('board: never open on a cancelled session',
+  teamBoardLive({ startsAt: kickoffAt, status: 'cancelled' }, new Date('2026-08-04T09:00:00Z')), false);
 
 // And it stops being a control once everybody has gone home. Measured off the
 // clock, not off `status`: settling the bill completes a session too, and that

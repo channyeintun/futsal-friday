@@ -16,6 +16,7 @@ import {
 } from '@futsal/shared';
 import { useState } from 'react';
 import {
+  addLatecomers,
   clearSessionTeams,
   confirmSessionTeams,
   drawSessionTeams,
@@ -58,6 +59,7 @@ const MAX_MATCH_GOALS = 30;
 export function TeamBoards({
   detail,
   live,
+  kickedOff,
   onChanged,
 }: {
   detail: SessionDetail;
@@ -67,6 +69,12 @@ export function TeamBoards({
    * on which side, and how each game finished.
    */
   live: boolean;
+  /**
+   * Whether the game has started. Only the wording turns on this — before
+   * kickoff the roster is who is *in*, and telling somebody to mark who turned
+   * up is instructions for a game that has not happened.
+   */
+  kickedOff: boolean;
   onChanged(): void;
 }) {
   const { identity } = useApp();
@@ -281,11 +289,30 @@ export function TeamBoards({
                 : null}
           </p>
 
-          {/* Only worth saying while the teams can still absorb them. */}
-          {live && !settled && missing.length > 0 ? (
-            <p className="attend-note" style={{ margin: 0 }}>
-              {m.teams.missing(missing.length)}
-            </p>
+          {/*
+            Said loudest exactly when it used to be hidden.
+
+            This was gated on `!settled`, which suppressed it in the one case
+            that matters: the board opens days before kickoff and registration
+            runs right up to it, so teams settled on Tuesday and two more
+            people on Thursday is ordinary. Silently leaving them off — with
+            only a full redraw, which destroys the fixtures and their scores,
+            to put it right — was the worst of both.
+          */}
+          {live && missing.length > 0 ? (
+            <div className="attend-note">
+              <p style={{ margin: 0 }}>{m.teams.missing(missing.length)}</p>
+              <Button
+                variant="tonal"
+                onClick={() =>
+                  void run(() => addLatecomers(detail.session.id), m.teams.failed)
+                }
+                disabled={busy}
+              >
+                <Icon name="person" size={18} slot="icon" />
+                {m.teams.dealThemIn(missing.length)}
+              </Button>
+            </div>
           ) : null}
 
           {settled ? (
@@ -349,11 +376,11 @@ export function TeamBoards({
           ) : null}
         </>
       ) : !canSplit ? (
-        <p className="empty">{m.teams.nobodyYet}</p>
+        <p className="empty">{kickedOff ? m.teams.nobodyYet : m.teams.notEnoughYet}</p>
       ) : (
         <>
           <p className="muted" style={{ margin: 0 }}>
-            {m.teams.body}
+            {kickedOff ? m.teams.body : m.teams.bodyBefore}
           </p>
           <Button variant="filled" onClick={ask} disabled={busy}>
             <Icon name="tune" size={18} slot="icon" />
