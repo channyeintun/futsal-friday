@@ -5,12 +5,14 @@ import {
   relativeToNow,
 } from '@futsal/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { deleteSessionMessage, postSessionMessage } from '../api/sessions.js';
 import { queryKeys, useSessionMessages } from '../hooks/queries.js';
+import { useExpandPin } from '../hooks/useExpandPin.js';
 import { useApp } from '../state/app.js';
 import { useLocale } from '../state/locale.js';
 import { Avatar } from './Avatar.js';
+import { ExpandHandle } from './ExpandHandle.js';
 import { Button, ErrorBanner, TextField } from './ui.js';
 
 /**
@@ -38,6 +40,25 @@ export function TrashTalk({ sessionId, canPost }: { sessionId: string; canPost: 
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const cardRef = useExpandPin<HTMLDivElement>(expanded);
+
+  /*
+   * A thread scrolls inside the card, and the composer stays put below it.
+   *
+   * Without this the list grew until it pushed the box you type in off the
+   * bottom of the screen — on the one card where the whole point is to reply.
+   *
+   * Not virtualized, unlike the roster and the debt list. The server caps a
+   * thread at 200 and the bubbles are variable-height, and a virtualizer
+   * fights the one behaviour a chat has to get right: staying at the newest
+   * message. Two hundred short paragraphs is a cost worth paying for that.
+   */
+  const listRef = useRef<HTMLUListElement>(null);
+  /* Only follow the conversation for somebody who is already at the end of
+     it. Yanking the view down while they are reading last week's argument is
+     worse than making them scroll. */
+  const following = useRef(true);
 
   const body = draft.trim();
   const tooLong = body.length > MAX_MESSAGE_LENGTH;
@@ -93,8 +114,16 @@ export function TrashTalk({ sessionId, canPost }: { sessionId: string; canPost: 
 
   const thread = messages.data ?? [];
 
+  useEffect(() => {
+    const list = listRef.current;
+    if (list && following.current) list.scrollTop = list.scrollHeight;
+  }, [thread.length, expanded]);
+
+  // Worth offering only when there is something above the fold to reveal.
+  const canExpand = thread.length > 5 || expanded;
+
   return (
-    <div className="card">
+    <div ref={cardRef} className={`card list-card${expanded ? ' is-expanded' : ''}`}>
       <div className="row between">
         <h2 className="card-title">{m.talk.title}</h2>
         {thread.length > 0 ? <span className="muted">{m.talk.count(thread.length)}</span> : null}
@@ -105,7 +134,14 @@ export function TrashTalk({ sessionId, canPost }: { sessionId: string; canPost: 
       {messages.isPending ? null : thread.length === 0 ? (
         <p className="empty">{canPost ? m.talk.empty : m.talk.emptyClosed}</p>
       ) : (
-        <ul className="talk-list">
+        <ul
+          ref={listRef}
+          className="talk-list"
+          onScroll={(event) => {
+            const el = event.currentTarget;
+            following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+          }}
+        >
           {thread.map((message) => {
             const mine = message.memberId === identity.memberId;
             return (
@@ -160,6 +196,10 @@ export function TrashTalk({ sessionId, canPost }: { sessionId: string; canPost: 
             {busy ? m.app.working : m.talk.send}
           </Button>
         </>
+      ) : null}
+
+      {canExpand ? (
+        <ExpandHandle expanded={expanded} onToggle={() => setExpanded((open) => !open)} />
       ) : null}
     </div>
   );

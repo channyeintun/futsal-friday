@@ -1523,6 +1523,18 @@ md-outlined-text-field {
 
 /* -------------------------------------------------------------- the thread */
 
+/*
+ * The thread scrolls; the composer does not.
+ *
+ * `flex: 0 1 auto` rather than `1 1 auto`: it may shrink so the card's cap can
+ * hold it, but it must not *grow*. Growing would stretch a three-message
+ * thread to the full 420px and park the box you type in at the bottom of a
+ * mostly empty card.
+ *
+ * `min-height: 0` is what lets it shrink at all — without it a flex item
+ * refuses to go below its content height, and the overflow would push the
+ * composer off the card instead of scrolling inside it.
+ */
 .talk-list {
   list-style: none;
   margin: 0;
@@ -1530,6 +1542,14 @@ md-outlined-text-field {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  /* Keeps the newest bubble off the composer's top edge. */
+  padding-bottom: 2px;
+  /* The bubbles have their own rounding; this stops a scroll from clipping
+     them squarely against the card's padding. */
+  scrollbar-width: thin;
 }
 
 .talk-row {
@@ -1882,16 +1902,24 @@ md-outlined-text-field {
  * A cap the list does not reach costs nothing: `max-height` is a ceiling, so a
  * group of four still renders as four rows and a short card.
  */
+/*
+ * No transition on `max-height`, deliberately.
+ *
+ * There was one — 220ms, matching the screen-to-screen cross-fade — and it did
+ * not work. The card never reached its expanded height: `getComputedStyle`
+ * reported the collapsed value indefinitely, on every list that used this, in
+ * both directions, and for a plain `420px -> 742px` pair as much as for the
+ * `min()`/`calc()` ones actually in the rules. Removing it opens the card
+ * correctly and instantly.
+ *
+ * That is worth stating plainly rather than quietly re-adding later: the
+ * affordance had been silently broken since this was `.owes-list`, and the
+ * animation was what was breaking it. An expansion that happens is better than
+ * an eased one that does not.
+ */
 .list-card {
   max-height: min(420px, 52vh);
   max-height: min(420px, 52dvh);
-  /*
-   * Short, in the same easing as the screen-to-screen cross-fade. A little
-   * longer than that 180ms because this moves several hundred pixels rather
-   * than fading in place, and an instant jump of that size loses the thread of
-   * which list grew into which.
-   */
-  transition: max-height 220ms cubic-bezier(0.2, 0, 0, 1);
   /* Keeps `scrollIntoView` from parking the card's heading behind the sticky
      header — see the pinning effect in `HistoryPage`. */
   scroll-margin-top: var(--ff-topbar-h, 68px);
@@ -1922,12 +1950,6 @@ md-outlined-text-field {
 .list-card .virtual-scroller {
   max-height: none;
   min-height: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .list-card {
-    transition: none;
-  }
 }
 
 /*
