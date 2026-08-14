@@ -451,14 +451,15 @@ export async function listSessionMessages(
 /**
  * The MVP vote on one session, as one caller is allowed to see it.
  *
- * Two withholdings, both deliberate and both done here rather than on the
- * screen:
+ * One withholding, deliberate and done here rather than on the screen: **no
+ * voter identity leaves this function.** `voter_id` is read only to find the
+ * caller's own choice and to count how many have voted; who voted for whom is
+ * never returned to anybody.
  *
- *  * **No voter identity leaves this function.** `voter_id` is read only to
- *    find the caller's own choice and to count how many have voted.
- *  * **No tally until the caller has voted.** Hiding it in the UI would leave
- *    it one devtools tab away, and the whole point is that an early lead
- *    cannot pull the rest of the votes after it.
+ * The count itself is not withheld from anyone. It belongs to the group, not
+ * only to the people who played or the people who got round to voting — the
+ * reserve who sat this one out and the member who never registered still want
+ * to know who was named best, and refusing them the answer buys nothing.
  */
 export async function loadMvp(
   db: D1Database,
@@ -508,12 +509,9 @@ export async function loadMvp(
   return {
     candidates,
     myVote,
-    // Withheld, not hidden — and `leaders` goes with it. Sending who is
-    // winning to somebody who has not voted would hand back exactly what
-    // withholding the tally was for.
-    tally: myVote === null ? null : tally,
-    leaders: myVote === null ? [] : mvpLeaders(tally),
-    // Safe either way: how many have voted says nothing about who for.
+    tally,
+    leaders: mvpLeaders(tally),
+    // How many have voted says nothing about who for.
     votesCast: votes.length,
     voterCount: candidates.length,
   };

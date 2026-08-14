@@ -209,10 +209,11 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
           }
 
           case 'mvp.changed': {
-            // The only event here that cannot be patched from its payload:
-            // what it would have to carry is what the read refuses anybody who
-            // has not voted. So this refetches, and the server decides again
-            // what this viewer may see.
+            // The only event here that cannot be patched from its payload: to
+            // move a number locally it would have to name the nominee, and a
+            // stream of those next to "somebody just voted" is the voter/
+            // nominee pairing the API refuses to hand out. So this refetches
+            // the counts instead.
             if (event.data.sessionId !== sessionId) return;
             void queryClient.invalidateQueries({ queryKey: queryKeys.mvp(sessionId) });
             return;

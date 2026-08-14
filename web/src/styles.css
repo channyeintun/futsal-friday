@@ -1655,6 +1655,13 @@ md-outlined-text-field {
   cursor: default;
 }
 
+/* A row that reports rather than offers: everybody's own name, everybody's
+   name to a reader who did not play. Full strength, because there is nothing
+   wrong with it — it simply is not a button. */
+.mvp-choice.is-static {
+  cursor: default;
+}
+
 .mvp-name {
   flex: 1;
   min-width: 0;
@@ -1667,14 +1674,6 @@ md-outlined-text-field {
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
-  color: var(--md-sys-color-on-surface-variant);
-}
-
-/* Said once, under the ballot, while the numbers are still withheld. */
-.mvp-sealed {
-  margin: 0;
-  text-align: center;
-  font-size: 0.8rem;
   color: var(--md-sys-color-on-surface-variant);
 }
 

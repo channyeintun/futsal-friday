@@ -275,9 +275,8 @@ export const en = {
 
   mvp: {
     title: 'Best player',
-    body: 'Who was the best today? Votes are hidden until you pick.',
+    body: 'Who was the best today? Tap a name.',
     changeBody: 'Changed your mind? Tap somebody else.',
-    hidden: 'The count appears once you have voted.',
     yours: 'your vote',
     takeItBack: 'Take my vote back',
     playersOnly: 'Only people who played can vote.',

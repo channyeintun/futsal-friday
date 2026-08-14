@@ -1299,10 +1299,12 @@ const run = async () => {
   const beforeVoting = await call('GET', `/sessions/${ms}/mvp`, { token: alice.token });
   check('everyone who played is a candidate', beforeVoting.body.mvp.candidates.length === 3,
     beforeVoting.body.mvp.candidates.length);
-  check('THE TALLY IS WITHHELD UNTIL YOU HAVE VOTED', beforeVoting.body.mvp.tally === null,
-    beforeVoting.body.mvp.tally);
-  check('and so is who is winning', JSON.stringify(beforeVoting.body.mvp.leaders) === '[]',
-    beforeVoting.body.mvp.leaders);
+  check('THE STANDING READS BEFORE YOU HAVE VOTED',
+    beforeVoting.body.mvp.tally?.length === 3, beforeVoting.body.mvp.tally);
+  check('and starts everybody on nought',
+    beforeVoting.body.mvp.tally.every((e) => e.votes === 0), beforeVoting.body.mvp.tally);
+  check('with nobody at the top on no votes',
+    JSON.stringify(beforeVoting.body.mvp.leaders) === '[]', beforeVoting.body.mvp.leaders);
   check('turnout is safe to show beforehand',
     beforeVoting.body.mvp.votesCast === 0 && beforeVoting.body.mvp.voterCount === 3,
     beforeVoting.body.mvp);
@@ -1316,8 +1318,8 @@ const run = async () => {
     token: alice.token, body: { nomineeId: bob.id },
   });
   check('a vote is accepted', cast.status === 200, cast.body);
-  check('and the tally opens up once you have voted', cast.body.mvp.tally !== null,
-    cast.body.mvp.tally);
+  check('and it lands on the nominee',
+    cast.body.mvp.tally.find((e) => e.memberId === bob.id)?.votes === 1, cast.body.mvp.tally);
   check('your own choice comes back', cast.body.mvp.myVote === bob.id, cast.body.mvp.myVote);
 
   // The whole promise of the feature. Note that a voter's id *does* appear —
@@ -1349,10 +1351,16 @@ const run = async () => {
   check('and the leader is the most voted',
     JSON.stringify(twoIn.body.mvp.leaders) === JSON.stringify([bob.id]), twoIn.body.mvp.leaders);
 
-  // Bob has not voted, so Bob still sees nothing — even while winning.
+  // Bob has not voted, and does not have to before he is allowed to see that
+  // he is winning. Reading the result is not the reward for casting a vote.
   const winnerSees = await call('GET', `/sessions/${ms}/mvp`, { token: bob.token });
-  check('EVEN THE LEADER SEES NOTHING UNTIL THEY VOTE', winnerSees.body.mvp.tally === null,
-    winnerSees.body.mvp.tally);
+  check('THE LEADER SEES THE STANDING WITHOUT HAVING VOTED',
+    winnerSees.body.mvp.myVote === null &&
+      winnerSees.body.mvp.tally.find((e) => e.memberId === bob.id)?.votes === 2,
+    winnerSees.body.mvp);
+  check('and is named as the leader to himself',
+    JSON.stringify(winnerSees.body.mvp.leaders) === JSON.stringify([bob.id]),
+    winnerSees.body.mvp.leaders);
 
   // Changing your mind moves the vote rather than adding one.
   await call('POST', `/sessions/${ms}/mvp`, { token: alice.token, body: { nomineeId: carol.id } });
@@ -1366,14 +1374,28 @@ const run = async () => {
     token: alice.token, body: { nomineeId: null },
   });
   check('a vote can be taken back', withdrawn.body.mvp.myVote === null, withdrawn.body.mvp.myVote);
-  check('and the tally closes again with it', withdrawn.body.mvp.tally === null,
-    withdrawn.body.mvp.tally);
+  check('and the standing stays up, one vote lighter',
+    withdrawn.body.mvp.votesCast === 1 &&
+      withdrawn.body.mvp.tally.find((e) => e.memberId === carol.id)?.votes === 0,
+    withdrawn.body.mvp);
 
-  // Somebody who did not play has no say.
+  // Somebody who did not play has no say — but is not shut out of the answer.
   const outsider = await call('POST', `/sessions/${ms}/mvp`, {
     token: dave?.token ?? organizer, body: { nomineeId: bob.id },
   });
   check('somebody who did not play cannot vote', outsider.status === 403, outsider.status);
+
+  const outsiderReads = await call('GET', `/sessions/${ms}/mvp`, {
+    token: dave?.token ?? organizer,
+  });
+  check('BUT CAN STILL SEE WHO WON IT',
+    outsiderReads.status === 200 &&
+      outsiderReads.body.mvp.tally.find((e) => e.memberId === bob.id)?.votes === 1,
+    outsiderReads.body.mvp?.tally);
+  check('with no ballot of their own',
+    outsiderReads.body.mvp.myVote === null &&
+      !outsiderReads.body.mvp.candidates.some((cd) => cd.memberId === organizerId),
+    outsiderReads.body.mvp?.myVote);
 
   // The career count is wins, not votes received.
   const bobProfile = await call('GET', `/members/${bob.id}/profile`, { token: bob.token });

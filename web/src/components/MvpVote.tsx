@@ -10,13 +10,17 @@ import { Button, ErrorBanner } from './ui.js';
 /**
  * Who was the best today.
  *
- * ## Why the numbers are not on screen until you have voted
+ * ## One list, two jobs
  *
- * In a group of twelve, a visible early lead is very hard to vote against: the
- * first two votes decide it and everyone after is ratifying. So the tally is
- * withheld — and withheld by the *server*, not by this component, because a
- * number the client has been sent is a number somebody can read. `Mvp.tally`
- * is simply null until you have picked.
+ * The standing is on screen for everybody — the reserve who did not play and
+ * the member who never signed up read the same numbers as the eleven who were
+ * there. Voting is the narrow part: the rows turn into buttons only for
+ * somebody who played, and never for their own row, since you cannot vote for
+ * yourself.
+ *
+ * That means a player's own name is in the list without being tappable, which
+ * would be a poor ballot but is the right result table — the alternative is
+ * the one person who cannot see how many votes they got.
  *
  * ## Anonymous
  *
@@ -56,7 +60,7 @@ export function MvpVote({ sessionId }: { sessionId: string }) {
   if (candidates.length < 3) return null;
 
   const canVote = candidates.some((candidate) => candidate.memberId === identity.memberId);
-  const winners = tally?.filter((entry) => leaders.includes(entry.memberId)) ?? [];
+  const winners = tally.filter((entry) => leaders.includes(entry.memberId));
 
   return (
     <div className="card">
@@ -68,7 +72,7 @@ export function MvpVote({ sessionId }: { sessionId: string }) {
       {error ? <ErrorBanner>{error}</ErrorBanner> : null}
 
       {/*
-        The winner, once you have earned the right to see it.
+        The winner, as soon as there is one, to whoever is looking.
 
         Deliberately the loudest thing on the card — a trophy, the name at
         display size, and the count under it. An award announced in a table row
@@ -101,64 +105,68 @@ export function MvpVote({ sessionId }: { sessionId: string }) {
         </div>
       ) : null}
 
-      {canVote ? (
-        <>
-          <p className="muted" style={{ margin: 0 }}>
-            {myVote ? m.mvp.changeBody : m.mvp.body}
-          </p>
+      <p className="muted" style={{ margin: 0 }}>
+        {!canVote ? m.mvp.playersOnly : myVote ? m.mvp.changeBody : m.mvp.body}
+      </p>
 
-          <ul className="mvp-list">
-            {candidates
-              // You cannot vote for yourself, so you are not on the ballot.
-              // Greying out a row you may never pick is a worse answer than
-              // not offering it.
-              .filter((candidate) => candidate.memberId !== identity.memberId)
-              .map((candidate) => {
-                const mine = candidate.memberId === myVote;
-                const count = tally?.find((e) => e.memberId === candidate.memberId)?.votes ?? 0;
-                return (
-                  <li key={candidate.memberId}>
-                    <button
-                      type="button"
-                      className={`mvp-choice${mine ? ' is-mine' : ''}`}
-                      aria-pressed={mine}
-                      disabled={busy}
-                      onClick={() => void vote(mine ? null : candidate.memberId)}
-                    >
-                      <Avatar
-                        memberId={candidate.memberId}
-                        name={candidate.memberName}
-                        avatarUpdatedAt={candidate.memberAvatarUpdatedAt}
-                        size={28}
-                      />
-                      <span className="mvp-name truncate">{candidate.memberName}</span>
-                      {/* Only ever drawn once the server has sent numbers,
-                          which it does only once you have voted. */}
-                      {tally ? (
-                        <span className="mvp-count" aria-label={m.mvp.votes(count)}>
-                          {count}
-                        </span>
-                      ) : null}
-                      {mine ? <span className="badge paid">{m.mvp.yours}</span> : null}
-                    </button>
-                  </li>
-                );
-              })}
-          </ul>
+      {/*
+        The standing, in the order it stands: highest first, as the server
+        sorted it. Anybody holding votes is here even if they were marked
+        absent afterwards, which is why this runs off the tally and not the
+        ballot — the two differ exactly in the cases worth showing.
+      */}
+      <ul className="mvp-list">
+        {tally.map((entry) => {
+          const mine = entry.memberId === myVote;
+          const votable =
+            canVote &&
+            entry.memberId !== identity.memberId &&
+            candidates.some((candidate) => candidate.memberId === entry.memberId);
 
-          {myVote ? (
-            <Button variant="text" onClick={() => void vote(null)} disabled={busy}>
-              {m.mvp.takeItBack}
-            </Button>
-          ) : (
-            <p className="mvp-sealed">{m.mvp.hidden}</p>
-          )}
-        </>
-      ) : (
-        <p className="muted" style={{ margin: 0 }}>
-          {m.mvp.playersOnly}
-        </p>
-      )}
+          const inside = (
+            <>
+              <Avatar
+                memberId={entry.memberId}
+                name={entry.memberName}
+                avatarUpdatedAt={entry.memberAvatarUpdatedAt}
+                size={28}
+              />
+              <span className="mvp-name truncate">{entry.memberName}</span>
+              <span className="mvp-count" aria-label={m.mvp.votes(entry.votes)}>
+                {entry.votes}
+              </span>
+              {mine ? <span className="badge paid">{m.mvp.yours}</span> : null}
+            </>
+          );
+
+          return (
+            <li key={entry.memberId}>
+              {votable ? (
+                <button
+                  type="button"
+                  className={`mvp-choice${mine ? ' is-mine' : ''}`}
+                  aria-pressed={mine}
+                  disabled={busy}
+                  onClick={() => void vote(mine ? null : entry.memberId)}
+                >
+                  {inside}
+                </button>
+              ) : (
+                // Not a disabled button: there is nothing here to enable. A
+                // row you may never press should not spend its life looking
+                // like a press that failed.
+                <div className="mvp-choice is-static">{inside}</div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      {myVote ? (
+        <Button variant="text" onClick={() => void vote(null)} disabled={busy}>
+          {m.mvp.takeItBack}
+        </Button>
+      ) : null}
     </div>
   );
 }

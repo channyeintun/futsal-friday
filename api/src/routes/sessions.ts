@@ -859,8 +859,9 @@ export const sessionRoutes = new Hono<AppContext>()
   /**
    * The vote, as this caller is allowed to see it.
    *
-   * `loadMvp` withholds the tally until they have voted, and never returns who
-   * voted for whom — see the note there and in the migration.
+   * The standing goes to anybody who can read the session at all — voting is
+   * the part reserved for the people who played. What `loadMvp` never returns
+   * is who voted for whom; see the note there and in the migration.
    */
   .get('/:id/mvp', async (c) =>
     c.json({ mvp: await loadMvp(c.env.DB, c.req.param('id'), c.get('identity').memberId) }),
@@ -917,9 +918,10 @@ export const sessionRoutes = new Hono<AppContext>()
         .run();
     }
 
-    // Everyone else is told only that the count moved. The payload carries no
-    // nominee and no voter: a viewer who has not voted must not learn who is
-    // ahead from an event, having been refused it by the read.
+    // Everyone else is told only that the count moved. The payload names
+    // neither the voter nor the nominee — the standing is public but the pair
+    // is not, and an event saying "X just voted for Y" would give away in
+    // passing exactly what the read is careful never to return.
     await c.get('pubsub').emit(sessionChannel(sessionId), 'mvp.changed', {
       sessionId,
       at: nowIso(),

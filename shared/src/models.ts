@@ -388,22 +388,25 @@ export type MvpTallyEntry = z.infer<typeof mvpTallyEntrySchema>;
 /**
  * The vote on one session.
  *
- * Two things are deliberately absent, and both absences are the feature:
+ * One thing is deliberately absent, and the absence is the feature: **who
+ * voted for whom.** The table needs a voter id to make one vote one vote;
+ * nothing that leaves the server carries it.
  *
- *  * **Who voted for whom.** The table needs a voter id to make one vote one
- *    vote; nothing that leaves the server carries it.
- *  * **The tally, until you have voted.** `tally` is null while `myVote` is,
- *    and the server withholds it rather than the screen hiding it — otherwise
- *    the numbers are one devtools tab away, and in a group of twelve a visible
- *    early lead is very hard to vote against.
+ * The result is not one of those things. Casting a vote is for the people who
+ * played; reading the outcome is for everybody, whether they voted, sat the
+ * game out, or were never on the sheet.
  */
 export const mvpSchema = z.object({
   /** Members who played and may be voted for. Guests have no name to award. */
   candidates: z.array(mvpTallyEntrySchema.omit({ votes: true })),
   /** The caller's own choice, and only theirs. Null until they vote. */
   myVote: idSchema.nullable(),
-  /** Withheld until the caller has voted. Highest first, then name. */
-  tally: z.array(mvpTallyEntrySchema).nullable(),
+  /**
+   * The standing, highest first and then by name. Everyone who could be voted
+   * for is here on nought votes, plus anybody holding votes who has since been
+   * marked absent — their votes were cast and are not ours to discard.
+   */
+  tally: z.array(mvpTallyEntrySchema),
   /** How many have voted, out of how many could. Safe to show beforehand. */
   votesCast: z.number().int().min(0),
   voterCount: z.number().int().min(0),
