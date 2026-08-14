@@ -551,8 +551,14 @@ const run = async () => {
   check('and they stay newest-first across pages',
     allPast.every((x, i) => i === 0 || allPast[i - 1].startsAt >= x.startsAt),
     allPast.find((x, i) => i > 0 && allPast[i - 1].startsAt < x.startsAt)?.startsAt);
-  check('every one of them has already happened or is finished',
-    allPast.every((x) => x.startsAt < new Date().toISOString() || x.status !== 'scheduled'));
+  // The line is the end of the day, not kickoff: tonight's game stays on the
+  // home screen while the score, the split and the votes are still going in.
+  const ictMidnight = new Date(
+    Math.floor((Date.now() + 7 * 3_600_000) / 86_400_000) * 86_400_000 - 7 * 3_600_000,
+  ).toISOString();
+  check('every one of them belongs to a day that is over, or was called off',
+    allPast.every((x) => x.startsAt < ictMidnight || x.status === 'cancelled'),
+    allPast.find((x) => x.startsAt >= ictMidnight && x.status !== 'cancelled'));
   check('an unreadable fixture cursor starts from the top',
     (await call('GET', '/sessions/past?cursor=zzz', { token: organizer })).body?.sessions?.[0]?.id
       === allPast[0]?.id);

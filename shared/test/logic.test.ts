@@ -1,4 +1,4 @@
-import { nextFridayKickoff, formatKickoff, toZonedParts, zonedDateKey, fromDatetimeLocal, toDatetimeLocal } from '../src/time.ts';
+import { nextFridayKickoff, formatKickoff, startOfZonedDay, toZonedParts, zonedDateKey, fromDatetimeLocal, toDatetimeLocal } from '../src/time.ts';
 import { splitEqually, splitWithOverrides, formatVnd, parseVnd } from '../src/money.ts';
 import {
   arrivedSlots, assignLatecomers, canRedrawTeams, canSplitInto, drawTeams, matchPlayed, maxTeamsFor, roundRobin,
@@ -45,6 +45,17 @@ check('late-UTC Thu is ICT Fri', nextFridayKickoff(new Date('2026-08-06T18:00:00
 
 check('zoned parts', toZonedParts('2026-08-07T12:30:00Z'), { year: 2026, month: 8, day: 7, hour: 19, minute: 30, weekday: 5 });
 check('date key uses ICT day', zonedDateKey('2026-08-06T18:00:00Z'), '2026-08-07');
+
+// The home screen's upcoming/previously line. Friday 19:30 ICT kickoff, read
+// an hour after the final whistle (22:00 ICT = 15:00 UTC): the day it belongs
+// to opened at Friday 00:00 ICT, which is Thursday 17:00 UTC. Kickoff is at or
+// after that instant, so the fixture is still today's.
+check('day starts at ICT midnight', startOfZonedDay('2026-08-07T15:00:00Z').toISOString(), '2026-08-06T17:00:00.000Z');
+check('a finished game is still today', '2026-08-07T12:30:00.000Z' >= startOfZonedDay('2026-08-07T15:00:00Z').toISOString(), true);
+// Half past midnight ICT on Saturday (17:30 UTC Friday) — now it is history.
+check('and is history once the day turns', '2026-08-07T12:30:00.000Z' >= startOfZonedDay('2026-08-07T17:30:00Z').toISOString(), false);
+// Same trap as above: late-UTC Friday is already Saturday in ICT.
+check('day boundary follows ICT, not UTC', startOfZonedDay('2026-08-07T18:00:00Z').toISOString(), '2026-08-07T17:00:00.000Z');
 check('formatKickoff', formatKickoff('2026-08-07T12:30:00Z'), 'Fri 07 Aug, 19:30');
 check('datetime-local roundtrip', fromDatetimeLocal(toDatetimeLocal('2026-08-07T12:30:00Z')).toISOString(), '2026-08-07T12:30:00.000Z');
 

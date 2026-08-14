@@ -20,6 +20,7 @@ import {
   roundRobin,
   sessionChannel,
   slotsMissingFrom,
+  startOfZonedDay,
   totalArrivedHeads,
   updateSessionSchema,
   LOBBY_CHANNEL,
@@ -84,24 +85,32 @@ function mayWriteBoard(sessionParam: string, organizerParam: string): string {
 
 export const sessionRoutes = new Hono<AppContext>()
 
-  /** Home screen: the next session plus a short history. */
+  /**
+   * Home screen: the session in play plus a short history.
+   *
+   * "In play" runs to the end of the day, not to kickoff — see
+   * `startOfZonedDay`. Neither a passed kickoff nor a `completed` status
+   * demotes tonight's game, because both happen while the group is still busy
+   * with it: the cron completes a session two hours after it starts, and
+   * settling the bill completes it too.
+   */
   .get('/', async (c) => {
-    const now = nowIso();
+    const dayStart = startOfZonedDay().toISOString();
 
     const upcomingRow = await c.env.DB.prepare(
       `SELECT ${SESSION_COLUMNS} ${SESSION_FROM}
-        WHERE s.status = 'scheduled' AND s.starts_at >= ?1
+        WHERE s.status <> 'cancelled' AND s.starts_at >= ?1
         ORDER BY s.starts_at ASC LIMIT 1`,
     )
-      .bind(now)
+      .bind(dayStart)
       .first<SessionWithVenueRow>();
 
     const { results: recent } = await c.env.DB.prepare(
       `SELECT ${SESSION_COLUMNS} ${SESSION_FROM}
-        WHERE s.starts_at < ?1 OR s.status <> 'scheduled'
+        WHERE s.starts_at < ?1 OR s.status = 'cancelled'
         ORDER BY s.starts_at DESC LIMIT 12`,
     )
-      .bind(now)
+      .bind(dayStart)
       .all<SessionWithVenueRow>();
 
     return c.json({
@@ -111,33 +120,36 @@ export const sessionRoutes = new Hono<AppContext>()
   })
 
   /**
-   * Fixtures that have already happened, newest first, a page at a time.
+   * Fixtures whose day is over, newest first, a page at a time.
    *
    * The home screen used to get twelve of these bundled into `/sessions` and
    * no way to ask for a thirteenth — the group's history simply stopped there.
    * Keyset on `(starts_at DESC, id ASC)`: two sessions can share a kickoff
    * time (a midweek game added twice, a fixture moved onto another), and
    * without the id in the tuple one of them would be unreachable.
+   *
+   * The window is the exact complement of the one above, so a fixture is in
+   * one list or the other and never in both.
    */
   .get('/past', async (c) => {
     const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 20) || 20, 1), 100);
     const cursor = decodeSessionCursor(c.req.query('cursor'));
-    const now = nowIso();
+    const dayStart = startOfZonedDay().toISOString();
 
     const statement = cursor
       ? c.env.DB.prepare(
           `SELECT ${SESSION_COLUMNS} ${SESSION_FROM}
-            WHERE (s.starts_at < ?1 OR s.status <> 'scheduled')
+            WHERE (s.starts_at < ?1 OR s.status = 'cancelled')
               AND (s.starts_at < ?2 OR (s.starts_at = ?2 AND s.id > ?3))
             ORDER BY s.starts_at DESC, s.id ASC
             LIMIT ?4`,
-        ).bind(now, cursor.startsAt, cursor.id, limit + 1)
+        ).bind(dayStart, cursor.startsAt, cursor.id, limit + 1)
       : c.env.DB.prepare(
           `SELECT ${SESSION_COLUMNS} ${SESSION_FROM}
-            WHERE s.starts_at < ?1 OR s.status <> 'scheduled'
+            WHERE s.starts_at < ?1 OR s.status = 'cancelled'
             ORDER BY s.starts_at DESC, s.id ASC
             LIMIT ?2`,
-        ).bind(now, limit + 1);
+        ).bind(dayStart, limit + 1);
 
     const { results } = await statement.all<SessionWithVenueRow>();
     const page = results.slice(0, limit);

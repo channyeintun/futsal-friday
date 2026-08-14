@@ -130,6 +130,22 @@ export function zonedDateKey(instant: Date | string | number): string {
 }
 
 /**
+ * Midnight ICT that opened the day containing `instant`, as a UTC instant.
+ *
+ * This is where home draws the line between the fixture it shows at the top and
+ * the "previously" list underneath — not at kickoff, and not at the moment the
+ * cron marks a game completed. Everything the group does about a game happens
+ * after it starts: the score goes in, the bill is split, the MVP is voted for,
+ * people pay. Filing tonight's game under history while everyone is still
+ * standing on the pitch means all of them go hunting for it. It stops being
+ * today's game when today ends, which is exactly what this returns.
+ */
+export function startOfZonedDay(instant: Date | string | number = new Date()): Date {
+  const p = toZonedParts(instant);
+  return fromZonedParts({ year: p.year, month: p.month, day: p.day });
+}
+
+/**
  * Weekday and month names per locale.
  *
  * Hardcoded rather than left to `Intl`: the Worker and the browser must produce
