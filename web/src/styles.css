@@ -1535,6 +1535,11 @@ md-outlined-text-field {
  */
 .mvp-crown {
   position: relative;
+  /* `overflow: hidden` — for the sheen below — zeroes this box's automatic
+     minimum size, so inside a capped card it would shrink and behead the
+     winner rather than letting the list underneath scroll. The award is the
+     one thing on the card that must never be the part that gives way. */
+  flex: none;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1618,6 +1623,30 @@ md-outlined-text-field {
   color: var(--ff-pending);
 }
 
+/*
+ * The one list card with a hero above its list.
+ *
+ * The shared cap was drawn for a card that is a heading and then rows. Here
+ * the trophy is half of it, and 420px leaves a single name showing underneath
+ * — a result list you cannot read. A taller collapsed cap gives the standing
+ * the four or five rows the other lists get, and the handle still opens it to
+ * the full screen. `:not()` so this loses to `.is-expanded` whatever the
+ * order of the two rules.
+ */
+.list-card.mvp-card:not(.is-expanded) {
+  max-height: min(560px, 66vh);
+  max-height: min(560px, 66dvh);
+}
+
+/*
+ * The standing scrolls inside the card, and the trophy above it stays put.
+ *
+ * `flex: 0 1 auto` with `min-height: 0`, the same pair the thread uses: it may
+ * give way so the card's cap can hold it, but it must not grow — a three-name
+ * list stretched to the full height would park "take my vote back" at the
+ * bottom of a mostly empty card. Only this list shrinks, so squeezing the card
+ * takes rows off the bottom rather than crushing the winner above them.
+ */
 .mvp-list {
   list-style: none;
   margin: 0;
@@ -1625,6 +1654,10 @@ md-outlined-text-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .mvp-choice {

@@ -1,10 +1,12 @@
 import type { Mvp } from '@futsal/shared';
 import { useState } from 'react';
 import { castMvpVote } from '../api/sessions.js';
+import { useExpandPin } from '../hooks/useExpandPin.js';
 import { useMvp } from '../hooks/queries.js';
 import { useApp } from '../state/app.js';
 import { useLocale } from '../state/locale.js';
 import { Avatar } from './Avatar.js';
+import { ExpandHandle } from './ExpandHandle.js';
 import { Button, ErrorBanner } from './ui.js';
 
 /**
@@ -37,6 +39,8 @@ export function MvpVote({ sessionId }: { sessionId: string }) {
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const cardRef = useExpandPin<HTMLDivElement>(expanded);
 
   const vote = async (nomineeId: string | null) => {
     if (busy) return;
@@ -62,8 +66,14 @@ export function MvpVote({ sessionId }: { sessionId: string }) {
   const canVote = candidates.some((candidate) => candidate.memberId === identity.memberId);
   const winners = tally.filter((entry) => leaders.includes(entry.memberId));
 
+  // The trophy takes most of a collapsed card, so the moment there is one the
+  // names underneath need somewhere to go. With no winner yet the list has the
+  // card to itself and only a long one runs over — the same five-row rule the
+  // roster and the thread use.
+  const canExpand = expanded || winners.length > 0 || tally.length > 5;
+
   return (
-    <div className="card">
+    <div ref={cardRef} className={`card list-card mvp-card${expanded ? ' is-expanded' : ''}`}>
       <div className="row between">
         <h2 className="card-title">{m.mvp.title}</h2>
         <span className="muted">{m.mvp.turnout(votesCast, voterCount)}</span>
@@ -166,6 +176,12 @@ export function MvpVote({ sessionId }: { sessionId: string }) {
         <Button variant="text" onClick={() => void vote(null)} disabled={busy}>
           {m.mvp.takeItBack}
         </Button>
+      ) : null}
+
+      {/* Last thing in the card, on its bottom edge, exactly where the roster
+          and the thread put theirs. */}
+      {canExpand ? (
+        <ExpandHandle expanded={expanded} onToggle={() => setExpanded((open) => !open)} />
       ) : null}
     </div>
   );
