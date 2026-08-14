@@ -24,18 +24,21 @@ export interface AnnounceOptions {
    */
   random?: () => number;
   /**
-   * The organizer's own first line, in place of one of the canned ones.
+   * The organizer's own jab, in place of one of the canned ones.
    *
-   * Only the opener is overridable, and deliberately so: it is the sentence
-   * that carries whatever is actually going on this week — a birthday, a new
-   * pitch, somebody flying in — and it is the only line the joke bank cannot
-   * know about. Everything under it is the kickoff, the venue and the price,
-   * which are facts and are not the writer's to change.
+   * Only the tease is overridable, and deliberately so: the opener is generic
+   * hype and a random one does that job perfectly, but the tease is where the
+   * week's actual needling lives — who went missing last time, who has been
+   * talking, whose turn it is to be reminded of something. That is the one
+   * line a joke bank cannot know, because it is about these people.
+   *
+   * Everything else is either flavour that does not matter or the kickoff, the
+   * venue and the price — facts, and not the writer's to change.
    *
    * Blank or whitespace falls back to the shuffle, so clearing the box is how
    * you get the jokes back rather than a separate control.
    */
-  opener?: string | null;
+  tease?: string | null;
   /**
    * The writer's clock. Defaults to 24h, which is what it always was.
    *
@@ -71,8 +74,7 @@ export function sessionAnnouncement(
     ].join('\n');
   }
 
-  const written = options.opener?.trim();
-  lines.push(written ? written : pick(m.announce.openers, random));
+  lines.push(pick(m.announce.openers, random));
   lines.push('');
 
   lines.push(`⚽ ${formatKickoff(session.startsAt, locale, hour12)}`);
@@ -99,7 +101,8 @@ export function sessionAnnouncement(
   lines.push(headcount(counts.in, session.maxPlayers, m));
 
   lines.push('');
-  lines.push(pick(m.announce.teases, random));
+  const written = options.tease?.trim();
+  lines.push(written ? written : pick(m.announce.teases, random));
 
   lines.push('');
   lines.push(pick(m.announce.callToAction, random));

@@ -31,30 +31,62 @@ export function AnnounceButton({ detail }: { detail: SessionDetail }) {
   const [writeIn, setWriteIn] = useState<Locale>(locale);
   const [text, setText] = useState<string | null>(null);
   const [failedCopy, setFailedCopy] = useState(false);
-  /** The organizer's own first line. Empty means "use the joke bank". */
-  const [opener, setOpener] = useState('');
+  /** The organizer's own jab. Empty means "use the joke bank". */
+  const [tease, setTease] = useState('');
+
+  /**
+   * Which roll of the dice the message is on.
+   *
+   * The jokes are re-picked on every rebuild, and the message is rebuilt on
+   * every keystroke in the jab field — so without this, typing made the opener
+   * and the sign-off flicker through the bank one character at a time. Holding
+   * the seed means only what you typed changes while you type, and the dice
+   * are rolled again only when you actually ask: the shuffle button, or
+   * switching the language.
+   */
+  const [roll, setRoll] = useState(() => Math.floor(Math.random() * 2 ** 31));
 
   const write = useCallback(
-    (previous: string | null, inLocale: Locale = writeIn, firstLine = opener) => {
-      const next = () =>
-        sessionAnnouncement(detail, {
-          locale: inLocale,
-          appUrl: platform.appUrl,
-          opener: firstLine,
-          // Their clock, not the message's language: see `AnnounceOptions`.
-          hour12,
-        });
-      // Shuffling and getting the same message back reads as a broken button,
-      // and with eight openers that happens often enough to notice. A few
-      // retries is plenty; give up rather than spin if the bank is tiny — and
-      // a written opener pins the first line, so the retries are only ever
-      // working on the tease and the sign-off.
-      let candidate = next();
-      for (let i = 0; i < 8 && candidate === previous; i++) candidate = next();
-      return candidate;
-    },
-    [detail, writeIn, opener, hour12],
+    (seed: number, inLocale: Locale = writeIn, ownJab = tease) =>
+      sessionAnnouncement(detail, {
+        locale: inLocale,
+        appUrl: platform.appUrl,
+        tease: ownJab,
+        // Their clock, not the message's language: see `AnnounceOptions`.
+        hour12,
+        // Small deterministic PRNG (mulberry32): a seed reproduces a message.
+        random: () => {
+          seed = (seed + 0x6d2b79f5) >>> 0;
+          let t = seed;
+          t = Math.imul(t ^ (t >>> 15), t | 1);
+          t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+          return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
+        },
+      }),
+    [detail, writeIn, tease, hour12],
   );
+
+  /**
+   * Roll again, and do not hand back the message already on screen.
+   *
+   * Shuffling and getting the same thing back reads as a broken button, and
+   * with eight of each line that happens often enough to notice. A few tries
+   * is plenty; give up rather than spin if the bank is tiny — and a written
+   * jab pins that line, so the tries are only ever working on the opener and
+   * the sign-off.
+   */
+  const reroll = (previous: string | null, inLocale: Locale = writeIn) => {
+    let candidate = previous;
+    for (let i = 0; i < 8; i++) {
+      const seed = Math.floor(Math.random() * 2 ** 31);
+      candidate = write(seed, inLocale);
+      if (candidate !== previous) {
+        setRoll(seed);
+        break;
+      }
+    }
+    return candidate;
+  };
 
   const copy = async () => {
     if (!text) return;
@@ -69,7 +101,7 @@ export function AnnounceButton({ detail }: { detail: SessionDetail }) {
 
   return (
     <>
-      <Button variant="text" onClick={() => { setFailedCopy(false); setText(write(null)); }}>
+      <Button variant="text" onClick={() => { setFailedCopy(false); setText(reroll(null)); }}>
         <Icon name="share" size={18} slot="icon" />
         {m.announce.open}
       </Button>
@@ -80,7 +112,7 @@ export function AnnounceButton({ detail }: { detail: SessionDetail }) {
         headline={m.announce.title}
         actions={
           <>
-            <Button variant="text" onClick={() => setText((current) => write(current))}>
+            <Button variant="text" onClick={() => setText((current) => reroll(current))}>
               {m.announce.shuffle}
             </Button>
             <Button onClick={copy}>{m.announce.copy}</Button>
@@ -97,21 +129,22 @@ export function AnnounceButton({ detail }: { detail: SessionDetail }) {
           label={m.announce.writeIn}
           onChange={(code) => {
             setWriteIn(code);
-            setText(write(null, code));
+            setText(reroll(null, code));
           }}
         />
 
-        {/* Your own first line, when the week has something the joke bank
-            cannot know about. Left empty it shuffles like it always did, so
-            this costs nothing to ignore. */}
+        {/* Your own jab, when the week has something the joke bank cannot
+            know about — who went missing, who has been talking. Left empty
+            it shuffles like it always did, so this costs nothing to ignore. */}
         <TextField
-          label={m.announce.openerLabel}
-          value={opener}
+          label={m.announce.teaseLabel}
+          value={tease}
           onChange={(value) => {
-            setOpener(value);
-            setText((current) => write(current, writeIn, value));
+            setTease(value);
+            // The same roll, so only the line being typed moves.
+            setText(write(roll, writeIn, value));
           }}
-          supportingText={m.announce.openerHint}
+          supportingText={m.announce.teaseHint}
         />
 
         {/* Tagged with the message's own language, so Burmese gets Burmese

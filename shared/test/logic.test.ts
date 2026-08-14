@@ -438,7 +438,12 @@ check('OUTCOMES: THE RUN AND THE TALLY CANNOT DISAGREE',
   }),
   [true, true, true]);
 
-// --- announcements: the writer's own opener ---------------------------------
+// --- announcements: the writer's own tease ----------------------------------
+//
+// The tease is the overridable line, not the opener. The opener is generic
+// hype and a random one does that job; the tease is the week's actual
+// needling, which is the part a joke bank cannot know because it is about
+// these people.
 const announceFixture = {
   session: {
     id: 'ses_x', startsAt: '2026-08-07T12:30:00.000Z', venueId: null, venue: null,
@@ -448,19 +453,26 @@ const announceFixture = {
   registrations: [], counts: { in: 0, waitlist: 0, guests: 0 },
   registrationOpen: true, me: null, teams: null,
 };
-const firstLineOf = (opener?: string | null) =>
-  sessionAnnouncement(announceFixture, { opener, random: () => 0 }).split('\n')[0];
+const linesOf = (tease?: string | null) =>
+  sessionAnnouncement(announceFixture, { tease, random: () => 0 }).split('\n');
 
-check('opener: a written line replaces the joke', firstLineOf('Aung is back from Yangon 🛬'),
-  'Aung is back from Yangon 🛬');
-check('opener: whitespace is not a line', firstLineOf('   '), en.announce.openers[0]);
-check('opener: empty falls back to the bank', firstLineOf(''), en.announce.openers[0]);
-check('opener: absent falls back to the bank', firstLineOf(undefined), en.announce.openers[0]);
-check('opener: it is trimmed', firstLineOf('  Bring bibs  '), 'Bring bibs');
-// The facts underneath are not the writer's to change.
-check('opener: the kickoff still follows it',
-  sessionAnnouncement(announceFixture, { opener: 'anything', random: () => 0 })
-    .includes(formatKickoff('2026-08-07T12:30:00.000Z', 'en')), true);
+check('tease: a written jab replaces the canned one',
+  linesOf('Kyaw has been talking all week 👀').includes('Kyaw has been talking all week 👀'), true);
+check('tease: and the canned one is gone',
+  linesOf('Kyaw has been talking all week 👀').includes(en.announce.teases[0]!), false);
+check('tease: whitespace is not a jab', linesOf('   ').includes(en.announce.teases[0]!), true);
+check('tease: empty falls back to the bank', linesOf('').includes(en.announce.teases[0]!), true);
+check('tease: absent falls back to the bank', linesOf(undefined).includes(en.announce.teases[0]!), true);
+check('tease: it is trimmed', linesOf('  Bring bibs  ').includes('Bring bibs'), true);
+
+// The opener is no longer the writer's to set, and the facts underneath never
+// were.
+check('tease: the opener is still shuffled', linesOf('anything')[0], en.announce.openers[0]!);
+check('tease: the kickoff is untouched',
+  linesOf('anything').some((line) => line.includes(formatKickoff('2026-08-07T12:30:00.000Z', 'en'))),
+  true);
+check('tease: the sign-off is still there',
+  linesOf('anything').includes(en.announce.callToAction[0]!), true);
 
 // --- the writer's clock reaches the text they paste ------------------------
 //

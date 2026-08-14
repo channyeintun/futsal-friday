@@ -563,8 +563,8 @@ export const en = {
     shuffle: 'Another one',
     copy: 'Copy announcement',
     writeIn: 'Write it in',
-    openerLabel: 'Your own first line',
-    openerHint: 'Leave it empty and the app picks one.',
+    teaseLabel: 'Your own dig',
+    teaseHint: 'Name names. Leave it empty and the app picks a joke.',
     openers: [
       'Legs itching yet? 🦵',
       'Futsal Friday is back ⚽',
