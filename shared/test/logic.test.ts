@@ -6,6 +6,7 @@ import {
 } from '../src/teams.ts';
 import { SESSION_RUNS_FOR_MS } from '../src/time.ts';
 import { sessionAnnouncement } from '../src/announce.ts';
+import { canVoteFor, mvpLeaders, sortTally } from '../src/mvp.ts';
 import { paymentsSummary, registrationSummary } from '../src/summary.ts';
 import { en } from '../src/i18n/en.ts';
 import { totalArrivedHeads } from '../src/attendance.ts';
@@ -437,6 +438,40 @@ check('OUTCOMES: THE RUN AND THE TALLY CANNOT DISAGREE',
     ].every(Boolean);
   }),
   [true, true, true]);
+
+// --- mvp: counting the vote -------------------------------------------------
+
+const nominee = (id: string, votes: number, name = id) => ({
+  memberId: id, memberName: name, memberAvatarUpdatedAt: null, votes,
+});
+
+check('mvp: the most votes leads', mvpLeaders([nominee('a', 3), nominee('b', 1)]), ['a']);
+check('MVP: A TIE IS A TIE, NOT A TIEBREAK',
+  mvpLeaders([nominee('a', 2), nominee('b', 2), nominee('c', 1)]), ['a', 'b']);
+check('mvp: three level at the top all lead',
+  mvpLeaders([nominee('a', 1), nominee('b', 1), nominee('c', 1)]), ['a', 'b', 'c']);
+// Everyone level on nothing is arithmetically a tie and meaningfully not one.
+check('MVP: NOBODY LEADS ON ZERO VOTES',
+  mvpLeaders([nominee('a', 0), nominee('b', 0)]), []);
+check('mvp: an empty ballot has no leader', mvpLeaders([]), []);
+
+check('mvp: sorted by votes, then by name',
+  sortTally([nominee('c', 1, 'Chit'), nominee('a', 3, 'Aung'), nominee('b', 3, 'Bo')])
+    .map((e) => e.memberName),
+  ['Aung', 'Bo', 'Chit']);
+check('mvp: sorting does not mutate its argument', (() => {
+  const original = [nominee('c', 1), nominee('a', 3)];
+  sortTally(original);
+  return original.map((e) => e.memberId);
+})(), ['c', 'a']);
+
+const ballot = [{ memberId: 'a' }, { memberId: 'b' }, { memberId: 'c' }];
+check('MVP: YOU CANNOT VOTE FOR YOURSELF',
+  canVoteFor('a', { memberId: 'a' }, ballot), false);
+check('mvp: but you can vote for anybody else who played',
+  canVoteFor('b', { memberId: 'a' }, ballot), true);
+check('mvp: and not for somebody who did not play',
+  canVoteFor('zzz', { memberId: 'a' }, ballot), false);
 
 // --- announcements: the writer's own tease ----------------------------------
 //

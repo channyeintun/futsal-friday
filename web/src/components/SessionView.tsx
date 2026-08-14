@@ -28,6 +28,7 @@ import { Icon } from './Icon.js';
 import { ExpandHandle } from './ExpandHandle.js';
 import { SessionEditor } from './SessionEditor.js';
 import { TeamBoards } from './TeamBoards.js';
+import { MvpVote } from './MvpVote.js';
 import { TrashTalk } from './TrashTalk.js';
 import { VirtualList } from './VirtualList.js';
 import { Button, Dialog, ErrorBanner } from './ui.js';
@@ -385,6 +386,10 @@ export function SessionView({
           onChanged={onChanged}
         />
       ) : null}
+
+      {/* Only once there is a game to judge. Asking who played best before
+          anybody has played is the same mistake as asking who turned up. */}
+      {showAttendance ? <MvpVote sessionId={session.id} /> : null}
 
       {/* Under the teams, because most of what gets said is about them. Open
           on any session that still exists — the winding up starts days before

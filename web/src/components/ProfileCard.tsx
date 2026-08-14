@@ -169,6 +169,15 @@ function StreakRow({ profile }: { profile: MemberProfile }) {
           <div className="streak-value">{profile.goals}</div>
           <div className="streak-label">{m.goals.total}</div>
         </div>
+        {/* Only once there is one. A row of five cells with a zero on the end
+            makes the award look like a stat nobody has rather than one nobody
+            has *yet*, and it costs the other four their width on a phone. */}
+        {profile.mvps > 0 ? (
+          <div className="streak-cell is-live">
+            <div className="streak-value">{profile.mvps}</div>
+            <div className="streak-label">{m.board.mvps}</div>
+          </div>
+        ) : null}
       </div>
       <p className="muted" style={{ margin: 0 }}>
         {current > 0 ? m.profile.keepItUp(current) : m.profile.noStreak}

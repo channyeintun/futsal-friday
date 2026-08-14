@@ -160,6 +160,21 @@ export const messageDeletedSchema = z.object({
   at: isoSchema,
 });
 
+/**
+ * The MVP vote moved.
+ *
+ * Carries nothing but the fact that it did — no nominee, no voter, no counts.
+ * Every other event in this catalogue is deliberately self-sufficient so a
+ * client can patch without refetching; this one deliberately is not, because
+ * what it would have to carry is exactly what the read refuses to hand
+ * somebody who has not voted yet. A viewer who has voted refetches and sees
+ * the new tally; one who has not sees the same nothing they saw before.
+ */
+export const mvpChangedSchema = z.object({
+  sessionId: idSchema,
+  at: isoSchema,
+});
+
 export const sessionUpdatedSchema = z.object({
   sessionId: idSchema,
   status: sessionStatusSchema,
@@ -193,6 +208,9 @@ export const realtimeSchema = {
     posted: messagePostedSchema,
     deleted: messageDeletedSchema,
   },
+  mvp: {
+    changed: mvpChangedSchema,
+  },
   session: {
     updated: sessionUpdatedSchema,
   },
@@ -212,6 +230,7 @@ export interface EventPayloadMap {
   'teams.changed': z.infer<typeof teamsChangedSchema>;
   'message.posted': z.infer<typeof messagePostedSchema>;
   'message.deleted': z.infer<typeof messageDeletedSchema>;
+  'mvp.changed': z.infer<typeof mvpChangedSchema>;
   'session.updated': z.infer<typeof sessionUpdatedSchema>;
 }
 
@@ -228,6 +247,7 @@ export const EVENT_NAMES = [
   'teams.changed',
   'message.posted',
   'message.deleted',
+  'mvp.changed',
   'session.updated',
 ] as const satisfies readonly EventName[];
 
@@ -266,6 +286,7 @@ export type EventCatalogueIsConsistent = Assert<
   Assert<
     Exact<EventPayloadMap['message.deleted'], z.infer<typeof realtimeSchema.message.deleted>>
   > &
+  Assert<Exact<EventPayloadMap['mvp.changed'], z.infer<typeof realtimeSchema.mvp.changed>>> &
   Assert<Exact<EventPayloadMap['session.updated'], z.infer<typeof realtimeSchema.session.updated>>>;
 
 /** Discriminated union of every event, handy for exhaustive `switch`es. */

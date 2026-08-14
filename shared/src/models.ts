@@ -59,6 +59,8 @@ export const memberProfileSchema = z.object({
   streak: streakSchema,
   /** Goals across every game they have played. */
   goals: z.number().int().min(0).default(0),
+  /** Games the group voted them the best in. */
+  mvps: z.number().int().min(0).default(0),
   /** Still owed across every session, so a profile shows the whole picture. */
   outstanding: z.number().int().min(0),
 });
@@ -372,6 +374,50 @@ export const recordMatchSchema = z.object({
 });
 export type RecordMatchInput = z.infer<typeof recordMatchSchema>;
 
+/* ------------------------------------------------------------------- mvp */
+
+/** One player's share of the vote. Never says who voted for them. */
+export const mvpTallyEntrySchema = z.object({
+  memberId: idSchema,
+  memberName: z.string(),
+  memberAvatarUpdatedAt: isoSchema.nullable().default(null),
+  votes: z.number().int().min(0),
+});
+export type MvpTallyEntry = z.infer<typeof mvpTallyEntrySchema>;
+
+/**
+ * The vote on one session.
+ *
+ * Two things are deliberately absent, and both absences are the feature:
+ *
+ *  * **Who voted for whom.** The table needs a voter id to make one vote one
+ *    vote; nothing that leaves the server carries it.
+ *  * **The tally, until you have voted.** `tally` is null while `myVote` is,
+ *    and the server withholds it rather than the screen hiding it — otherwise
+ *    the numbers are one devtools tab away, and in a group of twelve a visible
+ *    early lead is very hard to vote against.
+ */
+export const mvpSchema = z.object({
+  /** Members who played and may be voted for. Guests have no name to award. */
+  candidates: z.array(mvpTallyEntrySchema.omit({ votes: true })),
+  /** The caller's own choice, and only theirs. Null until they vote. */
+  myVote: idSchema.nullable(),
+  /** Withheld until the caller has voted. Highest first, then name. */
+  tally: z.array(mvpTallyEntrySchema).nullable(),
+  /** How many have voted, out of how many could. Safe to show beforehand. */
+  votesCast: z.number().int().min(0),
+  voterCount: z.number().int().min(0),
+  /** Everybody level at the top. Empty until somebody votes; may be several. */
+  leaders: z.array(idSchema),
+});
+export type Mvp = z.infer<typeof mvpSchema>;
+
+export const castVoteSchema = z.object({
+  /** Null takes your vote back without putting it anywhere else. */
+  nomineeId: idSchema.nullable(),
+});
+export type CastVoteInput = z.infer<typeof castVoteSchema>;
+
 /* ------------------------------------------------------------ trash talk */
 
 /** A jab across the pitch, not a post — see the migration for why it is short. */
@@ -423,11 +469,13 @@ export const leaderboardEntrySchema = z.object({
   member: memberSchema,
   streak: streakSchema,
   goals: z.number().int().min(0),
+  /** Games this player was voted the best in. */
+  mvps: z.number().int().min(0).default(0),
 });
 export type LeaderboardEntry = z.infer<typeof leaderboardEntrySchema>;
 
 /** Which column the board is ranked by. */
-export const leaderboardBoardSchema = z.enum(['streak', 'goals']);
+export const leaderboardBoardSchema = z.enum(['streak', 'goals', 'mvp']);
 export type LeaderboardBoard = z.infer<typeof leaderboardBoardSchema>;
 
 /* ----------------------------------------------------------------- payment */

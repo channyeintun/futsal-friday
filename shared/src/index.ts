@@ -2,6 +2,7 @@ export * from './models.js';
 export * from './events.js';
 export * from './time.js';
 export * from './money.js';
+export * from './mvp.js';
 export * from './announce.js';
 export * from './attendance.js';
 export * from './banks.js';

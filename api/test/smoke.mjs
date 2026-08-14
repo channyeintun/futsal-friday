@@ -1280,6 +1280,105 @@ const run = async () => {
   const noBoard = await call('POST', `/sessions/${ts}/teams/latecomers`, { token: alice.token });
   check('with no draw there is nothing to add to', noBoard.status === 409, noBoard.status);
 
+  section('best player');
+  const mvpSession = await call('POST', '/sessions', {
+    token: organizer,
+    body: { startsAt: new Date(Date.now() + 12 * 86_400_000).toISOString() },
+  });
+  const ms = mvpSession.body.session.id;
+  for (const who of [alice, bob, carol]) {
+    await call('POST', `/sessions/${ms}/register`, { token: who.token });
+  }
+
+  const beforeVoting = await call('GET', `/sessions/${ms}/mvp`, { token: alice.token });
+  check('everyone who played is a candidate', beforeVoting.body.mvp.candidates.length === 3,
+    beforeVoting.body.mvp.candidates.length);
+  check('THE TALLY IS WITHHELD UNTIL YOU HAVE VOTED', beforeVoting.body.mvp.tally === null,
+    beforeVoting.body.mvp.tally);
+  check('and so is who is winning', JSON.stringify(beforeVoting.body.mvp.leaders) === '[]',
+    beforeVoting.body.mvp.leaders);
+  check('turnout is safe to show beforehand',
+    beforeVoting.body.mvp.votesCast === 0 && beforeVoting.body.mvp.voterCount === 3,
+    beforeVoting.body.mvp);
+
+  const selfVote = await call('POST', `/sessions/${ms}/mvp`, {
+    token: alice.token, body: { nomineeId: alice.id },
+  });
+  check('NOBODY CAN VOTE FOR THEMSELVES', selfVote.status === 400, selfVote.body);
+
+  const cast = await call('POST', `/sessions/${ms}/mvp`, {
+    token: alice.token, body: { nomineeId: bob.id },
+  });
+  check('a vote is accepted', cast.status === 200, cast.body);
+  check('and the tally opens up once you have voted', cast.body.mvp.tally !== null,
+    cast.body.mvp.tally);
+  check('your own choice comes back', cast.body.mvp.myVote === bob.id, cast.body.mvp.myVote);
+
+  // The whole promise of the feature. Note that a voter's id *does* appear —
+  // as a candidate, because they played and are on everybody's ballot. What
+  // must never appear is anything mapping a voter to a nominee.
+  const shape = cast.body.mvp;
+  // `voterCount` is how many *could* vote, which names nobody. Anything else
+  // shaped like a voter is the leak this feature exists to not have.
+  const keysOf = (value, found = new Set()) => {
+    if (Array.isArray(value)) value.forEach((v) => keysOf(v, found));
+    else if (value && typeof value === 'object') {
+      for (const [k, v] of Object.entries(value)) { found.add(k); keysOf(v, found); }
+    }
+    return found;
+  };
+  const suspicious = [...keysOf(shape)].filter((k) => /voter/i.test(k) && k !== 'voterCount');
+  check('NO PAYLOAD FIELD NAMES A VOTER', suspicious.length === 0, suspicious);
+  check('a tally row is a count and nothing else',
+    JSON.stringify(Object.keys(shape.tally[0]).sort()) ===
+      JSON.stringify(['memberAvatarUpdatedAt', 'memberId', 'memberName', 'votes']),
+    Object.keys(shape.tally[0]));
+  check('and a candidate carries no vote at all',
+    !('votes' in shape.candidates[0]), Object.keys(shape.candidates[0]));
+
+  await call('POST', `/sessions/${ms}/mvp`, { token: carol.token, body: { nomineeId: bob.id } });
+  const twoIn = await call('GET', `/sessions/${ms}/mvp`, { token: carol.token });
+  const bobRow = twoIn.body.mvp.tally.find((e) => e.memberId === bob.id);
+  check('votes accumulate', bobRow.votes === 2, twoIn.body.mvp.tally);
+  check('and the leader is the most voted',
+    JSON.stringify(twoIn.body.mvp.leaders) === JSON.stringify([bob.id]), twoIn.body.mvp.leaders);
+
+  // Bob has not voted, so Bob still sees nothing — even while winning.
+  const winnerSees = await call('GET', `/sessions/${ms}/mvp`, { token: bob.token });
+  check('EVEN THE LEADER SEES NOTHING UNTIL THEY VOTE', winnerSees.body.mvp.tally === null,
+    winnerSees.body.mvp.tally);
+
+  // Changing your mind moves the vote rather than adding one.
+  await call('POST', `/sessions/${ms}/mvp`, { token: alice.token, body: { nomineeId: carol.id } });
+  const moved = await call('GET', `/sessions/${ms}/mvp`, { token: alice.token });
+  check('changing your mind moves your vote, not adds one',
+    moved.body.mvp.votesCast === 2, moved.body.mvp.votesCast);
+  check('and it lands on the new nominee',
+    moved.body.mvp.tally.find((e) => e.memberId === carol.id).votes === 1, moved.body.mvp.tally);
+
+  const withdrawn = await call('POST', `/sessions/${ms}/mvp`, {
+    token: alice.token, body: { nomineeId: null },
+  });
+  check('a vote can be taken back', withdrawn.body.mvp.myVote === null, withdrawn.body.mvp.myVote);
+  check('and the tally closes again with it', withdrawn.body.mvp.tally === null,
+    withdrawn.body.mvp.tally);
+
+  // Somebody who did not play has no say.
+  const outsider = await call('POST', `/sessions/${ms}/mvp`, {
+    token: dave?.token ?? organizer, body: { nomineeId: bob.id },
+  });
+  check('somebody who did not play cannot vote', outsider.status === 403, outsider.status);
+
+  // The career count is wins, not votes received.
+  const bobProfile = await call('GET', `/members/${bob.id}/profile`, { token: bob.token });
+  check('winning a session counts once on the profile', bobProfile.body.profile.mvps === 1,
+    bobProfile.body.profile.mvps);
+  const mvpBoard = await call('GET', '/members/leaderboard?board=mvp', { token: alice.token });
+  check('and the board ranks by it', mvpBoard.body.board === 'mvp', mvpBoard.body.board);
+  check('with the winner on it',
+    mvpBoard.body.entries.some((e) => e.member.id === bob.id && e.mvps === 1),
+    mvpBoard.body.entries.map((e) => [e.member.name, e.mvps]));
+
   section('trash talk');
   const talkSession = await call('POST', '/sessions', {
     token: organizer,

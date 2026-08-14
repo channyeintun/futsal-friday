@@ -3,6 +3,7 @@ import type {
   Registration,
   Session,
   SessionDetail,
+  Mvp,
   SessionMessage,
   TeamDraw,
   UpdateSessionInput,
@@ -114,6 +115,16 @@ export const recordMatch = (
 
 export const clearSessionTeams = (id: string) =>
   del<{ draw: null }>(`/sessions/${id}/teams`);
+
+/* ------------------------------------------------------------------- mvp */
+
+/** The vote as you are allowed to see it: no voters, and no tally until you vote. */
+export const getMvp = (id: string, signal?: AbortSignal) =>
+  get<{ mvp: Mvp }>(`/sessions/${id}/mvp`, signal).then((r) => r.mvp);
+
+/** Your one vote. `null` takes it back. */
+export const castMvpVote = (id: string, nomineeId: string | null) =>
+  post<{ mvp: Mvp }>(`/sessions/${id}/mvp`, { nomineeId }).then((r) => r.mvp);
 
 /* ----------------------------------------------------------- trash talk */
 

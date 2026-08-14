@@ -4,10 +4,13 @@ import {
   arrivedSlots,
   assignLatecomers,
   canDeleteMessage,
+  canVoteFor,
   canRedrawTeams,
   canSplitInto,
+  castVoteSchema,
   createSessionSchema,
   drawTeams,
+  didAttend,
   drawTeamsSchema,
   markAttendanceSchema,
   maxTeamsFor,
@@ -33,6 +36,7 @@ import {
   isRegistrationOpen,
   listRegistrations,
   listSessionMessages,
+  loadMvp,
   loadSessionDetail,
   decodeSessionCursor,
   encodeSessionCursor,
@@ -836,6 +840,80 @@ export const sessionRoutes = new Hono<AppContext>()
     if ((updated.meta?.changes ?? 0) === 0) throw notFound('No such match in this session');
 
     return c.json({ draw: await announceBoard(c, sessionId, timestamp) });
+  })
+
+  /* ---------------------------------------------------------------- mvp */
+
+  /**
+   * The vote, as this caller is allowed to see it.
+   *
+   * `loadMvp` withholds the tally until they have voted, and never returns who
+   * voted for whom — see the note there and in the migration.
+   */
+  .get('/:id/mvp', async (c) =>
+    c.json({ mvp: await loadMvp(c.env.DB, c.req.param('id'), c.get('identity').memberId) }),
+  )
+
+  /**
+   * "Best player today was…"
+   *
+   * One vote each, changeable: sending a different nominee moves it rather than
+   * adding a second, and sending null takes it back. Changing your mind is the
+   * ordinary case — people vote early and then somebody scores a hat-trick.
+   *
+   * Voting is offered from kickoff and never closes, like attendance and goals:
+   * the screen decides when to ask, and a correction days later still works.
+   */
+  .post('/:id/mvp', async (c) => {
+    const sessionId = c.req.param('id');
+    const identity = c.get('identity');
+    const { nomineeId } = await parseBody(c.req.raw, castVoteSchema);
+
+    const session = await getSessionRow(c.env.DB, sessionId);
+    if (!session) throw notFound('No such session');
+    if (session.status === 'cancelled') throw conflict('That session was cancelled');
+
+    const registrations = await listRegistrations(c.env.DB, sessionId);
+    const candidates = registrations
+      .filter((registration) => didAttend(registration))
+      .map((registration) => ({ memberId: registration.memberId }));
+
+    // Only somebody who was there gets a say. Not a permission so much as the
+    // question itself: you cannot know who played best in a game you missed.
+    if (!candidates.some((candidate) => candidate.memberId === identity.memberId)) {
+      throw forbidden('Only somebody who played can vote');
+    }
+
+    if (nomineeId === null) {
+      await c.env.DB.prepare(`DELETE FROM mvp_votes WHERE session_id = ?1 AND voter_id = ?2`)
+        .bind(sessionId, identity.memberId)
+        .run();
+    } else {
+      if (!canVoteFor(nomineeId, identity, candidates)) {
+        // The two refusals are deliberately one message. Telling somebody
+        // "you cannot vote for yourself" and "they did not play" apart is of
+        // no use to anyone and the screen never offers either.
+        throw badRequest('You can only vote for somebody else who played');
+      }
+      await c.env.DB.prepare(
+        `INSERT INTO mvp_votes (session_id, voter_id, nominee_id, created_at)
+         VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT (session_id, voter_id) DO UPDATE
+           SET nominee_id = excluded.nominee_id, created_at = excluded.created_at`,
+      )
+        .bind(sessionId, identity.memberId, nomineeId, nowIso())
+        .run();
+    }
+
+    // Everyone else is told only that the count moved. The payload carries no
+    // nominee and no voter: a viewer who has not voted must not learn who is
+    // ahead from an event, having been refused it by the read.
+    await c.get('pubsub').emit(sessionChannel(sessionId), 'mvp.changed', {
+      sessionId,
+      at: nowIso(),
+    });
+
+    return c.json({ mvp: await loadMvp(c.env.DB, sessionId, identity.memberId) });
   })
 
   /* --------------------------------------------------------- trash talk */

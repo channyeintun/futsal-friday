@@ -138,22 +138,32 @@ export const memberRoutes = new Hono<AppContext>()
    * reorder anybody.
    */
   .get('/leaderboard', async (c) => {
-    const board = c.req.query('board') === 'goals' ? 'goals' : 'streak';
+    const asked = c.req.query('board');
+    const board: 'streak' | 'goals' | 'mvp' =
+      asked === 'goals' ? 'goals' : asked === 'mvp' ? 'mvp' : 'streak';
     const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 25) || 25, 1), 100);
     const cursor = c.req.query('cursor');
 
     const all = await loadLeaderboard(c.env.DB);
     // Nobody with nothing to show: a board of forty people on zero is not a
     // ranking, it is a roster.
-    const ranked = all
-      .filter((row) => (board === 'goals' ? row.goals > 0 : row.streak.best > 0))
-      .sort((a, b) =>
-        board === 'goals'
-          ? b.goals - a.goals || a.member.name.localeCompare(b.member.name)
-          : b.streak.current - a.streak.current ||
-            b.streak.best - a.streak.best ||
-            a.member.name.localeCompare(b.member.name),
+    const has = (row: (typeof all)[number]) =>
+      board === 'goals' ? row.goals > 0 : board === 'mvp' ? row.mvps > 0 : row.streak.best > 0;
+    const rank = (a: (typeof all)[number], b: (typeof all)[number]) => {
+      if (board === 'goals') return b.goals - a.goals || a.member.name.localeCompare(b.member.name);
+      // Level on awards falls back to goals, which is the nearest thing to
+      // "and who else was doing something" — then to the name, so the order
+      // is stable rather than whatever the roster query happened to return.
+      if (board === 'mvp') {
+        return b.mvps - a.mvps || b.goals - a.goals || a.member.name.localeCompare(b.member.name);
+      }
+      return (
+        b.streak.current - a.streak.current ||
+        b.streak.best - a.streak.best ||
+        a.member.name.localeCompare(b.member.name)
       );
+    };
+    const ranked = all.filter(has).sort(rank);
 
     const from = cursor ? ranked.findIndex((row) => row.member.id === cursor) + 1 : 0;
     const page = ranked.slice(from, from + limit);

@@ -208,6 +208,16 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
             return;
           }
 
+          case 'mvp.changed': {
+            // The only event here that cannot be patched from its payload:
+            // what it would have to carry is what the read refuses anybody who
+            // has not voted. So this refetches, and the server decides again
+            // what this viewer may see.
+            if (event.data.sessionId !== sessionId) return;
+            void queryClient.invalidateQueries({ queryKey: queryKeys.mvp(sessionId) });
+            return;
+          }
+
           case 'session.updated':
             // Time, venue, cap or status changed — too structural to patch.
             reload();

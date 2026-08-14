@@ -1,4 +1,4 @@
-import type { SessionDetail } from '@futsal/shared';
+import type { LeaderboardBoard, SessionDetail } from '@futsal/shared';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import {
   listBalances,
@@ -17,6 +17,7 @@ import { pushStatus } from '../api/push.js';
 import {
   getSession,
   listPastSessions,
+  getMvp,
   listSessionMessages,
   listSessions,
 } from '../api/sessions.js';
@@ -62,6 +63,7 @@ export const queryKeys = {
   pushStatus: ['push-status'] as const,
   paymentDetails: ['payment-details'] as const,
   sessionMessages: (sessionId: string) => ['session', sessionId, 'messages'] as const,
+  mvp: (sessionId: string) => ['session', sessionId, 'mvp'] as const,
 };
 
 /** Kept for the call sites that still spell it out. */
@@ -114,6 +116,23 @@ export function useSessionMessages(sessionId: string, enabled = true) {
     queryFn: ({ signal }) => listSessionMessages(sessionId, signal),
     enabled,
     staleTime: 60_000,
+  });
+}
+
+/**
+ * The MVP vote on a session.
+ *
+ * Its own read, like the thread: the roster paints first and this is below it.
+ * The server withholds the tally until the caller has voted, so this cache
+ * entry simply does not contain the numbers yet — there is nothing for a
+ * curious client to find in it.
+ */
+export function useMvp(sessionId: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.mvp(sessionId),
+    queryFn: ({ signal }) => getMvp(sessionId, signal),
+    enabled,
+    staleTime: 30_000,
   });
 }
 
@@ -259,7 +278,7 @@ export function useRecentForm(enabled = true) {
   });
 }
 
-export function useLeaderboard(board: 'streak' | 'goals', pageSize = 25) {
+export function useLeaderboard(board: LeaderboardBoard, pageSize = 25) {
   return useInfiniteQuery({
     queryKey: ['leaderboard', board, pageSize] as const,
     queryFn: ({ pageParam, signal }) =>

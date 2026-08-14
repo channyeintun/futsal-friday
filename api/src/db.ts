@@ -1,10 +1,18 @@
-import { computeStreak, normalizeLocale, teamOutcomes } from '@futsal/shared';
+import {
+  computeStreak,
+  didAttend,
+  mvpLeaders,
+  normalizeLocale,
+  sortTally,
+  teamOutcomes,
+} from '@futsal/shared';
 import type {
   Attendance,
   Member,
   MemberBalance,
   MemberHistoryEntry,
   MemberProfile,
+  Mvp,
   StreakEntry,
   Payment,
   PaymentSummary,
@@ -440,6 +448,118 @@ export async function listSessionMessages(
   }));
 }
 
+/**
+ * The MVP vote on one session, as one caller is allowed to see it.
+ *
+ * Two withholdings, both deliberate and both done here rather than on the
+ * screen:
+ *
+ *  * **No voter identity leaves this function.** `voter_id` is read only to
+ *    find the caller's own choice and to count how many have voted.
+ *  * **No tally until the caller has voted.** Hiding it in the UI would leave
+ *    it one devtools tab away, and the whole point is that an early lead
+ *    cannot pull the rest of the votes after it.
+ */
+export async function loadMvp(
+  db: D1Database,
+  sessionId: string,
+  viewerMemberId: string,
+): Promise<Mvp> {
+  const registrations = await listRegistrations(db, sessionId);
+  // Whoever played, members only. A guest has no account to award, and no
+  // profile for it to accumulate on.
+  const candidates = registrations
+    .filter((registration) => didAttend(registration))
+    .map((registration) => ({
+      memberId: registration.memberId,
+      memberName: registration.memberName,
+      memberAvatarUpdatedAt: registration.memberAvatarUpdatedAt,
+    }));
+
+  const { results: votes } = await db
+    .prepare(`SELECT voter_id, nominee_id FROM mvp_votes WHERE session_id = ?1`)
+    .bind(sessionId)
+    .all<{ voter_id: string; nominee_id: string }>();
+
+  const counts = new Map<string, number>();
+  let myVote: string | null = null;
+  for (const vote of votes) {
+    counts.set(vote.nominee_id, (counts.get(vote.nominee_id) ?? 0) + 1);
+    if (vote.voter_id === viewerMemberId) myVote = vote.nominee_id;
+  }
+
+  // Everyone who has a vote counted, even somebody since marked absent — their
+  // votes were cast and are not the app's to quietly discard.
+  const named = new Map(candidates.map((candidate) => [candidate.memberId, candidate]));
+  for (const [nomineeId] of counts) {
+    if (named.has(nomineeId)) continue;
+    const known = registrations.find((registration) => registration.memberId === nomineeId);
+    named.set(nomineeId, {
+      memberId: nomineeId,
+      memberName: known?.memberName ?? '',
+      memberAvatarUpdatedAt: known?.memberAvatarUpdatedAt ?? null,
+    });
+  }
+
+  const tally = sortTally(
+    [...named.values()].map((entry) => ({ ...entry, votes: counts.get(entry.memberId) ?? 0 })),
+  );
+
+  return {
+    candidates,
+    myVote,
+    // Withheld, not hidden — and `leaders` goes with it. Sending who is
+    // winning to somebody who has not voted would hand back exactly what
+    // withholding the tally was for.
+    tally: myVote === null ? null : tally,
+    leaders: myVote === null ? [] : mvpLeaders(tally),
+    // Safe either way: how many have voted says nothing about who for.
+    votesCast: votes.length,
+    voterCount: candidates.length,
+  };
+}
+
+/**
+ * Sessions this member was voted the best in.
+ *
+ * Wins, not votes received. Twenty votes spread over five games somebody else
+ * won is not five MVPs, and a career count that says otherwise is the kind of
+ * number people notice is wrong.
+ *
+ * A shared win counts for everyone tied, which is the same answer the session
+ * screen gives — see `mvpLeaders`. Inventing a tiebreak here so the totals
+ * look tidier would make the profile disagree with the trophy.
+ */
+const MVP_WINS = `
+  WITH tallies AS (
+    SELECT session_id, nominee_id, COUNT(*) AS votes
+      FROM mvp_votes GROUP BY session_id, nominee_id
+  ),
+  tops AS (
+    SELECT session_id, MAX(votes) AS best FROM tallies GROUP BY session_id
+  )
+  SELECT t.nominee_id AS member_id, COUNT(*) AS wins
+    FROM tallies t
+    JOIN tops ON tops.session_id = t.session_id
+   WHERE t.votes = tops.best AND tops.best > 0
+`;
+
+export async function countMvpWins(db: D1Database, memberId: string): Promise<number> {
+  const row = await db
+    .prepare(`${MVP_WINS} AND t.nominee_id = ?1 GROUP BY t.nominee_id`)
+    .bind(memberId)
+    .first<{ wins: number }>();
+  return row?.wins ?? 0;
+}
+
+/** The same count for everybody at once, for the leaderboard. */
+export async function mvpWinsByMember(db: D1Database): Promise<Map<string, number>> {
+  const { results } = await db
+    .prepare(`${MVP_WINS} GROUP BY t.nominee_id`)
+    .all<{ member_id: string; wins: number }>();
+  return new Map(results.map((row) => [row.member_id, row.wins]));
+}
+
 /* -------------------------------------------------------- composite reads */
 
 /**
@@ -765,6 +885,7 @@ export async function loadMemberProfile(
     member: toMember(row),
     streak: computeStreak(entries),
     goals: scored?.n ?? 0,
+    mvps: await countMvpWins(db, memberId),
     outstanding: Math.max(0, owed?.due ?? 0),
   };
 }
@@ -1014,7 +1135,9 @@ const HISTORY_LIMIT = 120;
 
 export async function loadLeaderboard(
   db: D1Database,
-): Promise<{ member: Member; streak: ReturnType<typeof computeStreak>; goals: number }[]> {
+): Promise<
+  { member: Member; streak: ReturnType<typeof computeStreak>; goals: number; mvps: number }[]
+> {
   const { results: sessions } = await db
     .prepare(
       `SELECT id, starts_at FROM sessions
@@ -1051,6 +1174,7 @@ export async function loadLeaderboard(
     )
     .all<{ member_id: string; n: number }>();
   const goalsBy = new Map(scored.map((row) => [row.member_id, row.n]));
+  const mvpsBy = await mvpWinsByMember(db);
 
   const lookup = new Map<string, { status: string; attended: number | null }>();
   for (const row of regs) lookup.set(`${row.session_id}|${row.member_id}`, row);
@@ -1070,6 +1194,7 @@ export async function loadLeaderboard(
       member: toMember(row),
       streak: computeStreak(entries),
       goals: goalsBy.get(row.id) ?? 0,
+      mvps: mvpsBy.get(row.id) ?? 0,
     };
   });
 }

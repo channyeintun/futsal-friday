@@ -8,7 +8,7 @@ import { navigate } from '../router.js';
 import { useApp } from '../state/app.js';
 import { useMessages } from '../state/locale.js';
 
-type Board = 'streak' | 'goals';
+type Board = 'streak' | 'goals' | 'mvp';
 
 /**
  * Two rankings: who keeps turning up, and who keeps scoring.
@@ -39,19 +39,27 @@ export function LeaderboardPage() {
       <h2 className="card-title">{m.board.title}</h2>
 
       <div className="board-switch">
-        {(['streak', 'goals'] as const).map((choice) => (
+        {(['streak', 'goals', 'mvp'] as const).map((choice) => (
           <Button
             key={choice}
             variant={choice === board ? 'filled' : 'outlined'}
             onClick={() => setBoard(choice)}
           >
-            {choice === 'streak' ? m.board.streaks : m.board.goals}
+            {choice === 'streak'
+              ? m.board.streaks
+              : choice === 'goals'
+                ? m.board.goals
+                : m.board.mvps}
           </Button>
         ))}
       </div>
 
       <p className="card-sub">
-        {board === 'streak' ? m.board.streakBody : m.board.goalsBody}
+        {board === 'streak'
+          ? m.board.streakBody
+          : board === 'goals'
+            ? m.board.goalsBody
+            : m.board.mvpBody}
       </p>
 
       {query.error ? <ErrorBanner>{query.error.message}</ErrorBanner> : null}
@@ -64,7 +72,11 @@ export function LeaderboardPage() {
         itemKey={(row) => row.member.id}
         empty={
           <p className="empty">
-            {board === 'streak' ? m.board.nobodyYet : m.board.noGoalsYet}
+            {board === 'streak'
+              ? m.board.nobodyYet
+              : board === 'goals'
+                ? m.board.noGoalsYet
+                : m.board.noMvpsYet}
           </p>
         }
         renderItem={(row: LeaderboardRow) => (
@@ -97,8 +109,12 @@ export function LeaderboardPage() {
                 </span>
                 <span className="board-value">{row.streak.current}</span>
               </>
-            ) : (
+            ) : board === 'goals' ? (
               <span className="board-value">{row.goals}</span>
+            ) : (
+              /* The trophy beside the count, so the board reads as awards
+                 rather than as another column of numbers. */
+              <span className="board-value">🏆 {row.mvps}</span>
             )}
           </div>
         )}

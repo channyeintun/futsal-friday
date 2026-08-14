@@ -1521,6 +1521,169 @@ md-outlined-text-field {
   line-height: 1.6;
 }
 
+/* --------------------------------------------------------------- the mvp */
+
+/*
+ * The award, and the one place this app raises its voice.
+ *
+ * Everything else here is near-black with a single green accent used sparingly
+ * — see the note at the top. This breaks that on purpose and only once: a
+ * trophy announced in a table row is not a trophy, and the whole feature is
+ * the moment somebody's name comes up. It earns the exception by being rare
+ * (one card, only after a game, only once you have voted) and by being the
+ * thing the screen is for at that moment.
+ */
+.mvp-crown {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 14px 16px;
+  border-radius: var(--ff-radius-card);
+  background:
+    radial-gradient(120% 100% at 50% 0%, var(--ff-pending-container) 0%, transparent 70%),
+    var(--md-sys-color-surface-container-highest);
+  text-align: center;
+}
+
+/*
+ * A slow sweep of light across the card.
+ *
+ * Long and low-contrast rather than a flash: it should read as a trophy
+ * catching the light on a shelf, not as a notification demanding a tap. It
+ * runs three times and stops — an animation that never ends is a distraction
+ * on a screen people keep open all evening.
+ */
+.mvp-crown::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 35%,
+    color-mix(in srgb, var(--ff-pending) 22%, transparent) 50%,
+    transparent 65%
+  );
+  transform: translateX(-100%);
+  animation: ff-mvp-sheen 2.6s ease-in-out 3;
+  pointer-events: none;
+}
+
+@keyframes ff-mvp-sheen {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.mvp-trophy {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.mvp-winners {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+}
+
+.mvp-winner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 8rem;
+}
+
+.mvp-winner-name {
+  max-width: 100%;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--md-sys-color-on-surface);
+}
+
+/* Two winners is two normal names, not two shouted ones. */
+.mvp-crown.is-shared .mvp-winner-name {
+  font-size: 1rem;
+}
+
+.mvp-crown-note {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ff-pending);
+}
+
+.mvp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mvp-choice {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* A comfortable target: this is a row of them on a phone. */
+  min-height: 48px;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--ff-radius-row);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Your pick, outlined rather than filled: the ballot is a list of people, and
+   filling one in the accent would make it look like the winner. */
+.mvp-choice.is-mine {
+  border-color: var(--md-sys-color-primary);
+}
+
+.mvp-choice:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.mvp-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.mvp-count {
+  flex: none;
+  min-width: 1.6rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* Said once, under the ballot, while the numbers are still withheld. */
+.mvp-sealed {
+  margin: 0;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mvp-crown::after {
+    animation: none;
+  }
+}
+
 /* -------------------------------------------------------------- the thread */
 
 /*

@@ -5,6 +5,7 @@ import type {
   MemberHistoryEntry,
   MemberProfile,
   UpdateMemberInput,
+  LeaderboardBoard,
 } from '@futsal/shared';
 import { platform } from '../platform/index.js';
 import { del, get, getBlob, patch, post, request } from './client.js';
@@ -60,11 +61,13 @@ export interface LeaderboardRow {
   member: Member;
   streak: { current: number; best: number; played: number; total: number };
   goals: number;
+  /** Sessions the group voted them the best in; a shared win counts for each. */
+  mvps: number;
   rank: number;
 }
 
 export const listLeaderboard = (
-  opts: { board: 'streak' | 'goals'; cursor?: string | null; limit?: number },
+  opts: { board: LeaderboardBoard; cursor?: string | null; limit?: number },
   signal?: AbortSignal,
 ) => {
   const query = new URLSearchParams({ board: opts.board });

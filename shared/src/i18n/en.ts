@@ -115,6 +115,9 @@ export const en = {
     inARow: (count: number) => (count === 1 ? '1 in a row' : `${count} in a row`),
     bestEver: (count: number) => `best ${count}`,
     goalCount: (count: number) => (count === 1 ? '1 goal' : `${count} goals`),
+    mvps: 'MVPs',
+    mvpBody: 'Games the group voted you the best in. A shared win counts for everyone tied.',
+    noMvpsYet: 'Nobody has been voted best player yet.',
     nobodyYet: 'Nothing to rank yet. Play a game.',
     noGoalsYet: 'No goals recorded yet. Say what you scored after the match.',
     loading: 'Working out the table…',
@@ -266,6 +269,23 @@ export const en = {
     thatDidNotWork: 'That did not work',
     noSuchSession: 'That session no longer exists.',
     loading: 'Loading session…',
+  },
+
+  /* --------------------------------------------------------------- mvp */
+
+  mvp: {
+    title: 'Best player',
+    body: 'Who was the best today? Votes are hidden until you pick.',
+    changeBody: 'Changed your mind? Tap somebody else.',
+    hidden: 'The count appears once you have voted.',
+    yours: 'your vote',
+    takeItBack: 'Take my vote back',
+    playersOnly: 'Only people who played can vote.',
+    turnout: (cast: number, of: number) => `${cast} of ${of} voted`,
+    votes: (count: number) => (count === 1 ? '1 vote' : `${count} votes`),
+    leadingWith: (count: number) => (count === 1 ? 'with 1 vote' : `with ${count} votes`),
+    shared: (count: number) => (count === 1 ? 'tied on 1 vote' : `tied on ${count} votes`),
+    failed: 'Could not save your vote',
   },
 
   /* -------------------------------------------------------- trash talk */
