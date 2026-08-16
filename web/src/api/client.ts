@@ -86,7 +86,14 @@ export async function request<T>(
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;
-    throw new ApiError(0, 'offline', 'No connection — check your network');
+    // `fetch` rejects with a deliberately opaque TypeError: a dropped
+    // connection, a refused CORS preflight and a DNS failure are all the same
+    // to script. Blaming the user's network for every one of them sends people
+    // to check their wifi over a bug on our side, so only say that when the
+    // browser itself reports being offline.
+    throw navigator.onLine
+      ? new ApiError(0, 'unreachable', 'Could not reach the server — please try again')
+      : new ApiError(0, 'offline', 'No connection — check your network');
   }
 
   if (response.status === 204) return undefined as T;

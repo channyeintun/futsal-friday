@@ -22,7 +22,17 @@ export function corsMiddleware(): MiddlewareHandler<AppContext> {
         if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return origin;
         return undefined;
       },
-      allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+      // Every method the API actually serves has to be listed: a browser
+      // refuses the *real* request when the preflight omits its method, and the
+      // resulting failure reaches the app as an indistinguishable network
+      // error. `PUT` is what profile pictures and payment details use.
+      //
+      // `QUERY` (RFC 10008) is here ahead of any route that serves it — a safe,
+      // idempotent, cacheable read that carries a body, for the filters too
+      // long or too structured to sit in a query string. Advertising it costs
+      // nothing while no route answers it, and spares the next person this
+      // same debugging.
+      allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'QUERY', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Authorization', 'X-Invite-Code'],
       credentials: true,
       maxAge: 86_400,
