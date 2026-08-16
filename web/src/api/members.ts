@@ -155,6 +155,16 @@ export const removeMyAvatar = () =>
  *
  * Callers cache the Blob (see `useAvatar`) and mint the object URL locally, so
  * the same picture is fetched once no matter how many rows show it.
+ *
+ * `updatedAt` rides along in the query string for one reason: to version the
+ * URL. The response is cached for a day, and a day-old picture is exactly what
+ * the browser hands back when a new upload asks for the same address again — a
+ * fresh React Query key starts a refetch, but refetching an unchanged URL is
+ * precisely what an HTTP cache exists to answer. Each version needs its own
+ * address, or the old face survives the upload that replaced it.
  */
-export const memberAvatar = (memberId: string, signal?: AbortSignal) =>
-  getBlob(`/members/${memberId}/avatar`, signal);
+export const memberAvatar = (memberId: string, updatedAt: string | null, signal?: AbortSignal) =>
+  getBlob(
+    `/members/${memberId}/avatar${updatedAt ? `?v=${encodeURIComponent(updatedAt)}` : ''}`,
+    signal,
+  );

@@ -329,7 +329,7 @@ export function usePaymentDetails() {
 export function useAvatar(memberId: string, updatedAt: string | null) {
   return useQuery({
     queryKey: queryKeys.avatar(memberId, updatedAt),
-    queryFn: ({ signal }) => memberAvatar(memberId, signal),
+    queryFn: ({ signal }) => memberAvatar(memberId, updatedAt, signal),
     // No picture, nothing to fetch — the initials stand in.
     enabled: updatedAt !== null,
     // A picture at a given `updatedAt` is immutable, so it never goes stale

@@ -334,8 +334,11 @@ export const memberRoutes = new Hono<AppContext>()
     return new Response(object.body, {
       headers: {
         'Content-Type': object.httpMetadata?.contentType ?? 'image/jpeg',
-        // Private: it is behind auth, and a shared cache must not hold it. The
-        // client busts this with `avatarUpdatedAt` when the picture changes.
+        // Private: it is behind auth, and a shared cache must not hold it.
+        // A day is only safe because the client versions the URL with
+        // `?v=<avatarUpdatedAt>` (see `memberAvatar`). Drop that query
+        // parameter and a new picture stays invisible until the entry expires,
+        // however hard the app refetches — the address would not have changed.
         'Cache-Control': 'private, max-age=86400',
       },
     });

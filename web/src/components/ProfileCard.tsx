@@ -3,7 +3,6 @@ import { formatVnd } from '@futsal/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { removeMyAvatar, uploadMyAvatar } from '../api/members.js';
-import { profileKey } from '../hooks/queries.js';
 import { platform } from '../platform/index.js';
 import { useApp } from '../state/app.js';
 import { useLocale } from '../state/locale.js';
@@ -28,11 +27,23 @@ export function ProfileCard({ profile }: { profile: MemberProfile }) {
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
 
-  // Both paths end the same way: the row moved, so the profile query is stale.
-  // The picture itself is keyed on `avatarUpdatedAt`, so a new one is a new
-  // cache entry and needs no explicit image invalidation.
+  // Both paths end the same way: the row moved, so anything holding it is
+  // stale. Wider than it looks like it needs to be, deliberately — every screen
+  // that draws a face carries its own copy of `avatarUpdatedAt` in its own
+  // payload, and the picture's cache key is built from that timestamp. Refresh
+  // this card alone and the roster, the leaderboard, the debt list, tonight's
+  // teams and the chat stay keyed to the old one, holding the old face; on
+  // History that is the row immediately below this card. Somebody changes their
+  // picture about once a season, so the extra refetches cost nothing anyone
+  // will ever feel.
+  //
+  // The pictures themselves are exempt: their key already carries the
+  // timestamp, which makes every entry immutable, so re-requesting one could
+  // only ever return the bytes it already has.
   const settle = async () => {
-    await queryClient.invalidateQueries({ queryKey: profileKey(profile.member.id) });
+    await queryClient.invalidateQueries({
+      predicate: (query) => query.queryKey[0] !== 'avatar',
+    });
     await refresh();
   };
 
