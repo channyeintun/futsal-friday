@@ -1,0 +1,62 @@
+[package]
+name = "futsal-api"
+version = "1.0.0"
+edition = "2021"
+publish = false
+description = "Futsal Friday REST API — Cloudflare Workers, D1 + R2 + Upstash."
+
+[lib]
+crate-type = ["cdylib"]
+
+[workspace]
+# `core/` is a package inside this one's directory; naming it a member is what
+# stops cargo treating it as a stray manifest, and keeps the two on one lockfile.
+members = ["core"]
+
+[dependencies]
+futsal-core = { path = "core" }
+worker = { version = "0.6", features = ["d1", "http"] }
+worker-macros = "0.6"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+js-sys = "0.3"
+# Pinned to the CLI `worker-build@^0.1` fetches. `worker 0.6` is what this port
+# was written against; the current `worker-build` refuses anything below
+# `worker 0.8`, so the builder is pinned instead — and a pinned builder brings
+# its own `wasm-bindgen`, which has to be the version the crate generates for.
+wasm-bindgen = "=0.2.105"
+wasm-bindgen-futures = "0.4"
+# The SSE stream and the Upstash REST client reach past `worker` to the raw
+# platform: a `TransformStream` whose writer the streaming loop owns, and a
+# `fetch` that carries an `AbortSignal`. Every feature named here is one this
+# crate calls itself — `worker` happens to enable most of them too, and feature
+# unification would hide their absence until the day it stopped.
+web-sys = { version = "0.3", features = [
+    "AbortController",
+    "AbortSignal",
+    "Headers",
+    "ReadableStream",
+    "ReadableStreamDefaultReader",
+    "RequestInit",
+    "Response",
+    "TransformStream",
+    "WorkerGlobalScope",
+    "WritableStreamDefaultWriter",
+] }
+getrandom = { version = "0.2", features = ["js"] }
+
+# Web Push (RFC 8291 / 8188 / 8292). Pure Rust rather than the host's
+# SubtleCrypto so the RFC 8291 Appendix A vector runs under `cargo test` on the
+# host as well as inside the Worker; all five compile to wasm32-unknown-unknown.
+p256 = { version = "0.13", features = ["ecdh", "ecdsa"] }
+aes-gcm = "0.10"
+hmac = "0.12"
+sha2 = "0.10"
+rand_core = { version = "0.6", features = ["getrandom"] }
+
+[profile.release]
+# Wasm size matters on the free tier; the Worker is cold-started per colo.
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

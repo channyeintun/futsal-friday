@@ -1,7 +1,18 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "futsal-friday-api",
-  "main": "src/index.ts",
+
+  // Rust, compiled to Wasm. `worker-build` writes the shim wrangler uploads
+  // alongside the module; `build/` is ignored, because it is output.
+  "main": "build/worker/shim.mjs",
+  // `worker-build` is pinned: the current release refuses any `worker` crate
+  // below 0.8, and this Worker is written against 0.6. The pin also fixes the
+  // `wasm-bindgen` the builder brings, which is why `Cargo.toml` pins the same
+  // version — the two have to agree or `wasm-bindgen` refuses the module.
+  "build": {
+    "command": "cargo install -q 'worker-build@^0.1' && worker-build --release"
+  },
+
   "compatibility_date": "2025-09-01",
   "compatibility_flags": ["nodejs_compat"],
 

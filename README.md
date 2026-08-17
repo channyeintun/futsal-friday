@@ -85,7 +85,7 @@ See [Who can get in](#who-can-get-in).
 
 ```
 futsal-friday/
-├── shared/      types, zod schemas, and pure helpers used by both sides
+├── shared/      types, zod schemas, and pure helpers the web app is built on
 │   ├── models.ts     domain models + request validation
 │   ├── events.ts     the six realtime events, defined once
 │   ├── i18n/         message catalogues; English is the source of truth
@@ -94,12 +94,13 @@ futsal-friday/
 │   ├── attendance.ts who actually played, and what that costs
 │   ├── vietqr.ts     EMVCo/NAPAS transfer payloads
 │   └── summary.ts    the chat-pasteable text
-├── api/         Hono on Cloudflare Workers
+├── api/         Rust on Cloudflare Workers
+│   ├── core/         the pure crate: money, attendance, events, time
 │   ├── migrations/   versioned D1 SQL
-│   ├── identity/     the swappable auth seam
-│   ├── realtime/     the swappable pub/sub seam
-│   ├── push/         VAPID + RFC 8291 Web Push, on WebCrypto
-│   └── routes/
+│   ├── src/identity/ the swappable auth seam
+│   ├── src/realtime/ the swappable pub/sub seam
+│   ├── src/push/     VAPID + RFC 8291 Web Push, on WebCrypto
+│   └── src/routes/
 └── web/         React + Vite + Material Design 3, on Cloudflare Pages
     ├── api/          every fetch call in the app
     ├── platform/     every browser-only API in the app
@@ -107,6 +108,13 @@ futsal-friday/
     ├── components/
     └── pages/
 ```
+
+The Worker is Rust; the web app is TypeScript. Rust cannot import a TypeScript
+module, so the pure logic the two sides share — the money split, who counts as
+having played, the event names, the Ho Chi Minh clock — is written twice:
+`shared/` for the browser, `api/core/` for the Worker. They are kept in step by
+the same test cases run on both sides, so a rule that changes has to change in
+two places and prove itself twice.
 
 `web/platform/` is where every browser-only API lives — storage, clipboard,
 navigation, the Push API, image capture. Components never touch `window` or
@@ -117,9 +125,17 @@ clipboard in webviews, canvas compression) in one reviewable file.
 
 ## Local development
 
-Prerequisites: Node 20+ (developed on 24) and a Cloudflare account for
-deployment. Local development needs no cloud resources at all — `wrangler dev`
-runs D1 and R2 on your machine.
+Prerequisites: Node 20+ (developed on 24), a Rust toolchain with the
+`wasm32-unknown-unknown` target, and a Cloudflare account for deployment. Local
+development needs no cloud resources at all — `wrangler dev` runs D1 and R2 on
+your machine.
+
+```bash
+rustup target add wasm32-unknown-unknown
+```
+
+`worker-build` is fetched by `wrangler dev` and `wrangler deploy` on the first
+run; nothing else is needed to compile the Worker.
 
 ```bash
 npm install
@@ -167,8 +183,9 @@ develop. To exercise the realtime path, see [Testing](#testing).
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | API + frontend together |
-| `npm run typecheck` | All three workspaces |
-| `npm test` | Pure-logic tests (no servers needed) |
+| `npm run typecheck` | `shared/` and `web/` |
+| `npm run check` | The above, then `cargo check` the Worker for wasm32 |
+| `npm test` | Pure-logic tests both sides, TypeScript and Rust (no servers needed) |
 | `npm run db:migrate:local` | Apply migrations locally |
 | `npm run db:migrate:remote` | Apply migrations to the deployed D1 |
 

@@ -3,31 +3,20 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Futsal Friday REST API — Hono on Cloudflare Workers, D1 + R2 + Upstash.",
+  "description": "Futsal Friday REST API — Rust on Cloudflare Workers, D1 + R2 + Upstash.",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "typecheck": "tsc --noEmit",
+    "check": "cargo check --target wasm32-unknown-unknown && cargo test -p futsal-core",
     "db:migrate:local": "wrangler d1 migrations apply futsal-friday --local",
     "db:migrate:remote": "wrangler d1 migrations apply futsal-friday --remote",
     "db:seed:local": "wrangler d1 execute futsal-friday --local --file=./seed.sql",
-    "cf-typegen": "wrangler types",
-    "test": "node test/smoke.mjs",
-    "test:push": "esbuild test/push-vectors.test.mjs --bundle --platform=node --format=esm --outfile=.push-vectors.mjs --log-level=error && node .push-vectors.mjs",
+    "test": "cargo test -p futsal-core",
+    "test:push": "cargo test -p futsal-api push",
     "push:keys": "node scripts/generate-vapid.mjs",
-    "test:push:flow": "node test/push-flow.mjs",
     "claim:bootstrap": "node scripts/bootstrap-link.mjs"
   },
-  "dependencies": {
-    "@futsal/shared": "*",
-    "@upstash/realtime": "^0.2.7",
-    "@upstash/redis": "^1.35.6",
-    "hono": "^4.10.3",
-    "zod": "^4.1.5"
-  },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250906.0",
-    "typescript": "^5.9.2",
     "wrangler": "^4.40.0"
   }
 }
