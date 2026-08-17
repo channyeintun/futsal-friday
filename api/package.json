@@ -7,11 +7,11 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "check": "cargo check --target wasm32-unknown-unknown && cargo test -p futsal-core",
+    "check": "cargo check --target wasm32-unknown-unknown && npm test",
     "db:migrate:local": "wrangler d1 migrations apply futsal-friday --local",
     "db:migrate:remote": "wrangler d1 migrations apply futsal-friday --remote",
     "db:seed:local": "wrangler d1 execute futsal-friday --local --file=./seed.sql",
-    "test": "cargo test -p futsal-core",
+    "test": "cargo test -p futsal-core && cargo test -p futsal-api",
     "test:push": "cargo test -p futsal-api push",
     "push:keys": "node scripts/generate-vapid.mjs",
     "claim:bootstrap": "node scripts/bootstrap-link.mjs"
