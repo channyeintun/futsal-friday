@@ -421,6 +421,11 @@ async fn proof(env: &Env, identity: &Identity, payment_id: &str) -> ApiResult<Re
     )?;
     // Private, because the object is one person's bank screenshot; an hour,
     // because the same thumbnail is opened repeatedly while a list is reviewed.
+    // An hour is only safe because the client versions the URL with
+    // `?v=<updatedAt>` (see `loadProofUrl`). A rejected payment can be claimed
+    // again with a different screenshot and keeps its id, so without that query
+    // parameter the replacement stays invisible for the rest of the hour — the
+    // address would not have changed.
     headers.set("Cache-Control", "private, max-age=3600")?;
     headers.set("Content-Disposition", "inline")?;
 

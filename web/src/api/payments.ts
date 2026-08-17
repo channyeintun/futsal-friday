@@ -48,8 +48,20 @@ export async function uploadProof(sessionId: string, file: Blob): Promise<string
 /**
  * Load a proof image for display. The caller owns the returned URL and must
  * pass it to `platform.objectUrl.revoke` when the view goes away.
+ *
+ * `version` is in the query string to give each screenshot its own address. A
+ * rejected payment can be claimed again with a different picture and keeps its
+ * id when it is, so without it the address outlives what it points at, and a
+ * reply cacheable for an hour is what the browser produces instead of the new
+ * screenshot. `updatedAt` moves whenever the payment does, which is more often
+ * than the screenshot changes and never less.
  */
-export async function loadProofUrl(paymentId: string, signal?: AbortSignal): Promise<string> {
-  const blob = await getBlob(`/payments/${paymentId}/proof`, signal);
+export async function loadProofUrl(
+  paymentId: string,
+  version: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const asked = version ? `?v=${encodeURIComponent(version)}` : '';
+  const blob = await getBlob(`/payments/${paymentId}/proof${asked}`, signal);
   return platform.objectUrl.create(blob);
 }

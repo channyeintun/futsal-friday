@@ -13,10 +13,14 @@ import { Button, Dialog, ErrorBanner, Spinner } from './ui.js';
  */
 export function ProofViewer({
   paymentId,
+  version,
   memberName,
   onClose,
 }: {
   paymentId: string;
+  /** The payment's `updatedAt`; versions the URL so a replaced screenshot is
+   * not answered out of the browser's cache. See `loadProofUrl`. */
+  version: string;
   memberName: string;
   onClose(): void;
 }) {
@@ -28,7 +32,7 @@ export function ProofViewer({
     const controller = new AbortController();
     let created: string | null = null;
 
-    loadProofUrl(paymentId, controller.signal)
+    loadProofUrl(paymentId, version, controller.signal)
       .then((objectUrl) => {
         created = objectUrl;
         setUrl(objectUrl);
@@ -42,7 +46,7 @@ export function ProofViewer({
       controller.abort();
       if (created) platform.objectUrl.revoke(created);
     };
-  }, [paymentId]);
+  }, [paymentId, version]);
 
   return (
     <Dialog

@@ -572,6 +572,7 @@ function PaymentRow({
       {showProof ? (
         <ProofViewer
           paymentId={payment.id}
+          version={payment.updatedAt}
           memberName={payment.memberName}
           onClose={() => setShowProof(false)}
         />
