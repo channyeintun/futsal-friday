@@ -1,21 +1,20 @@
 /**
- * The field itself: turf, mown bands and the markings.
+ * The field, drawn in perspective.
  *
- * Inline SVG in TSX for the same reason `Icon` is — an external file cannot
- * read `--md-sys-color-*` and would need one copy per theme. No `var()` in any
- * presentation attribute either: WebKit is unreliable there, and WebKit is most
- * of this group. Every colour arrives from a rule in `styles.css` matched on
- * these class names.
+ * A trapezoid rather than a rectangle put through `rotateX`, and that is a
+ * decision rather than a shortcut. A CSS 3D rotation tilts everything inside it
+ * — cards included — and a card in a perspective is projected whether or not it
+ * has been counter-rotated upright, which is what made the first attempt look
+ * skewed. Worse, the tilted box and the flat rows stop agreeing about how tall
+ * they are, so the rows spill out of the pitch.
  *
- * `preserveAspectRatio="none"` because the box is whatever height the line
- * count produced, and the markings should frame it exactly rather than letterbox
- * inside it. The squash that permits is why the bands are horizontal — they are
- * the one element that would look wrong stretched the other way — and why every
- * stroked shape carries `vectorEffect="non-scaling-stroke"` individually, which
- * does not inherit from a wrapping group.
+ * Drawing the recession into the geometry instead keeps every card square to
+ * the screen and keeps one number — the box height — describing both layers.
  *
- * It is a futsal pitch, not a football one. The 6m D struck from the posts,
- * rather than a rectangular box, is the single shape doing that work.
+ * Inline SVG for the same reason as `Icon`: an external file cannot read
+ * `--md-sys-color-*`, and no `var()` appears in a presentation attribute here
+ * because WebKit is unreliable with those. Every colour arrives from a rule in
+ * `styles.css` matched on these class names.
  */
 export function PitchTurf() {
   return (
@@ -26,77 +25,52 @@ export function PitchTurf() {
       aria-hidden="true"
       focusable="false"
     >
-      <rect className="pitch-grass" width="300" height="400" />
+      {/* The far edge is narrower than the near one; every marking below is
+          drawn to that same taper so the field reads as one plane. */}
+      <path className="pitch-grass" d="M68 8 H232 L292 392 H8 Z" />
 
-      {/* The way a groundsman walks it. */}
-      <rect className="pitch-mow" y="50" width="300" height="50" />
-      <rect className="pitch-mow" y="150" width="300" height="50" />
-      <rect className="pitch-mow" y="250" width="300" height="50" />
-      <rect className="pitch-mow" y="350" width="300" height="50" />
+      {/* Mown bands, each one a slice of the same trapezoid. */}
+      <path className="pitch-mow" d="M79.5 82 H220.5 L232 158 H68 Z" />
+      <path className="pitch-mow" d="M91 234 H209 L220.5 310 H79.5 Z" />
 
-      <rect
+      <path className="pitch-line" d="M68 8 H232 L292 392 H8 Z" vectorEffect="non-scaling-stroke" />
+
+      {/* Halfway, and the centre circle as an ellipse — a circle on a receding
+          plane is not a circle on the screen. */}
+      <path className="pitch-line" d="M38 200 H262" vectorEffect="non-scaling-stroke" />
+      <ellipse
         className="pitch-line"
-        x="7"
-        y="7"
-        width="286"
-        height="386"
-        rx="3"
+        cx="150"
+        cy="200"
+        rx="52"
+        ry="26"
         vectorEffect="non-scaling-stroke"
       />
-      <path className="pitch-line" d="M7 200 H293" vectorEffect="non-scaling-stroke" />
-      <circle className="pitch-line" cx="150" cy="200" r="42" vectorEffect="non-scaling-stroke" />
+      <circle className="pitch-mark" cx="150" cy="200" r="2.5" />
 
-      {/* Two quarter-circles struck from the posts, joined by a straight run. */}
+      {/* Futsal's 6m D at each end, flattened by the same amount as the circle.
+          This single shape is what stops the drawing reading as soccer. */}
       <path
         className="pitch-line"
-        d="M46 7 A82 82 0 0 0 128 89 H172 A82 82 0 0 0 254 7"
+        d="M104 8 A46 30 0 0 0 196 8"
         vectorEffect="non-scaling-stroke"
       />
       <path
         className="pitch-line"
-        d="M46 393 A82 82 0 0 1 128 311 H172 A82 82 0 0 1 254 393"
+        d="M92 392 A58 34 0 0 1 208 392"
         vectorEffect="non-scaling-stroke"
       />
+      <circle className="pitch-mark" cx="150" cy="52" r="2" />
+      <circle className="pitch-mark" cx="150" cy="342" r="2" />
 
-      {/* Really 25cm, which disappears at this size, so drawn the way a
-          broadcast camera flatters them. */}
-      <path className="pitch-line" d="M7 16 A9 9 0 0 0 16 7" vectorEffect="non-scaling-stroke" />
-      <path className="pitch-line" d="M284 7 A9 9 0 0 0 293 16" vectorEffect="non-scaling-stroke" />
-      <path
-        className="pitch-line"
-        d="M293 384 A9 9 0 0 0 284 393"
-        vectorEffect="non-scaling-stroke"
-      />
-      <path className="pitch-line" d="M16 393 A9 9 0 0 0 7 384" vectorEffect="non-scaling-stroke" />
-
-      {/* Outside the goal line, where they are actually painted. */}
-      <rect
-        className="pitch-goal"
-        x="129"
-        y="1"
-        width="42"
-        height="6"
-        rx="1"
-        vectorEffect="non-scaling-stroke"
-      />
-      <rect
-        className="pitch-goal"
-        x="129"
-        y="393"
-        width="42"
-        height="6"
-        rx="1"
-        vectorEffect="non-scaling-stroke"
-      />
+      {/* Goals, on the goal lines, narrowing with the field. */}
+      <path className="pitch-goal" d="M132 8 H168" vectorEffect="non-scaling-stroke" />
+      <path className="pitch-goal" d="M122 392 H178" vectorEffect="non-scaling-stroke" />
       <path
         className="pitch-net"
-        d="M136 1 V7 M143 1 V7 M150 1 V7 M157 1 V7 M164 1 V7
-           M136 393 V399 M143 393 V399 M150 393 V399 M157 393 V399 M164 393 V399"
+        d="M138 8 V2 M144 8 V2 M150 8 V2 M156 8 V2 M162 8 V2
+           M132 392 V399 M141 392 V399 M150 392 V399 M159 392 V399 M168 392 V399"
       />
-
-      <circle className="pitch-mark" cx="150" cy="200" r="2.5" />
-      <circle className="pitch-mark" cx="150" cy="89" r="2.5" />
-      <circle className="pitch-mark" cx="150" cy="311" r="2.5" />
     </svg>
   );
 }

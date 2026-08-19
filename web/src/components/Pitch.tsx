@@ -273,29 +273,6 @@ export function Pitch({
         ? m.pitch.fullBody
         : null;
 
-  /*
-   * How tall the tilted field actually looks.
-   *
-   * Not the flat height times the cosine — that is the answer for an
-   * orthographic rotation, and this one has perspective, which foreshortens
-   * the far end further. Getting it wrong leaves a band of empty card above
-   * the pitch, because the box is reserving room the drawing never uses.
-   *
-   *   projected = h · cos θ · P / (P + h · sin θ)
-   *
-   * The three constants are the ones `.pitch` declares; they have to move
-   * together, which is why the arithmetic is here rather than guessed at in CSS.
-   */
-  const fieldHeight =
-    Math.round(lines.length * spotSize * PITCH_CARD_RATIO) +
-    Math.max(0, lines.length - 1) * PITCH_LINE_GAP +
-    24;
-  const tilt = (PITCH_TILT_DEG * Math.PI) / 180;
-  const projectedHeight = Math.round(
-    (fieldHeight * Math.cos(tilt) * PITCH_PERSPECTIVE) /
-      (PITCH_PERSPECTIVE + fieldHeight * Math.sin(tilt)),
-  );
-
   const firstOpen = spots.findIndex((spot) => spot.kind === 'open');
 
   return (
@@ -313,8 +290,6 @@ export function Pitch({
             '--ff-spot-h': `${Math.round(spotSize * PITCH_CARD_RATIO)}px`,
             '--ff-spot-gap': `${pitchSpotGap(lines)}px`,
             '--ff-line-gap': `${PITCH_LINE_GAP}px`,
-            '--ff-field-h': `${fieldHeight}px`,
-            '--ff-pitch-h': `${projectedHeight}px`,
           } as CSSProperties
         }
         onFocusCapture={() => setFocusWithin(true)}
@@ -333,8 +308,27 @@ export function Pitch({
           <div className={`pitch-rows${dealing ? ' is-dealing' : ''}`}>
             {lines.map((width, line) => {
               const from = lines.slice(0, line).reduce((a, b) => a + b, 0);
+              /*
+                 Depth, faked in two dimensions on purpose.
+       
+                 Only the grass is rotated. A card inside a 3D subtree is still
+                 being projected even after it is counter-rotated upright, and
+                 the projection skews it — which is exactly what made these look
+                 tilted. Scaling a flat row instead gives the same convergence
+                 with cards that stay square to the screen.
+              */
+              const depth = lines.length > 1 ? line / (lines.length - 1) : 1;
               return (
-                <div className="pitch-line-row" key={line}>
+                <div
+                  className="pitch-line-row"
+                  key={line}
+                  style={
+                    {
+                      '--ff-row-depth': depth.toFixed(3),
+                      '--ff-row-scale': (0.76 + 0.24 * depth).toFixed(3),
+                    } as CSSProperties
+                  }
+                >
                   {spots.slice(from, from + width).map((spot, offset) => {
                     const index = from + offset;
                     return renderSpot({
@@ -418,10 +412,6 @@ export function Pitch({
 /** Long enough to look at your own face and mean it, short enough to lapse. */
 const ARM_MS = 4000;
 
-/** Must match `--ff-tilt` and `perspective` on `.pitch`. */
-const PITCH_TILT_DEG = 44;
-const PITCH_PERSPECTIVE = 900;
-
 type Spot =
   | { kind: 'taken'; key: string; slot: TeamSlot }
   | { kind: 'open'; key: string };
@@ -492,7 +482,7 @@ function renderSpot({
    * is the convention the team board already uses for the same reason.
    */
   const inside = (
-    <>
+    <span className="pitch-card">
       <span className="pitch-card-face">
         {!open && !isGuest ? (
           <Avatar
@@ -517,7 +507,7 @@ function renderSpot({
       <span className="pitch-card-name truncate" aria-hidden="true">
         {open || isGuest ? '' : spot.slot.memberName}
       </span>
-    </>
+    </span>
   );
 
   if (open && canJoin) {

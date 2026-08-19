@@ -154,6 +154,9 @@
   --ff-pitch-ring: rgb(17 17 19 / 0.45);
   --ff-pitch-on: #111113;
   --ff-pitch-ghost: rgb(17 17 19 / 0.09);
+  --ff-item-hi: #f2f4f8;
+  --ff-item-lo: #c9ced8;
+  --ff-item-on: #111113;
 
   /* The shared shape language: big soft rectangles, fully round pills. */
   /*
@@ -264,6 +267,9 @@
     --ff-pitch-ring: rgb(255 255 255 / 0.72);
     --ff-pitch-on: #ffffff;
     --ff-pitch-ghost: rgb(255 255 255 / 0.07);
+    --ff-item-hi: #47506a;
+    --ff-item-lo: #232a3c;
+    --ff-item-on: #f4f4f8;
     --ff-pitch-warn: #ffb4ab;
 
     color-scheme: dark;
@@ -1549,27 +1555,20 @@ md-outlined-text-field {
  * because a rotation about X foreshortens by its cosine. The 0.72 is cos(44deg)
  * with a little slack, and it has to track `--ff-tilt` if that ever moves.
  */
+/*
+ * The recession is drawn, not transformed.
+ *
+ * No `perspective` and no `rotateX` anywhere: the field is a trapezoid in the
+ * SVG, the rows are ordinary flow, and one height describes both. The version
+ * that tilted the box in 3D skewed the cards inside it and then disagreed with
+ * the flat rows about how tall it was, which spilled them out of the pitch.
+ */
 .pitch {
-  --ff-tilt: 44deg;
   position: relative;
-  /* Handed down from `Pitch`, which does the perspective arithmetic — a plain
-     cosine over-reserves and leaves a band of empty card above the field. */
-  height: var(--ff-pitch-h, 240px);
-  perspective: 900px;
-  perspective-origin: 50% 92%;
 }
 
 .pitch-field {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: var(--ff-field-h, 340px);
-  transform: rotateX(var(--ff-tilt));
-  transform-origin: 50% 100%;
-  transform-style: preserve-3d;
-  border-radius: var(--ff-radius-row);
-  background: var(--ff-pitch);
+  position: relative;
 }
 
 .pitch-turf {
@@ -1612,16 +1611,16 @@ md-outlined-text-field {
 /* Above the turf, and the reason the turf is absolutely placed: the rows are
    what own the height, so the drawing stretches to whatever the formation
    came out as. */
+/* In flow, so the rows are what give the pitch its height and the grass behind
+   them is sized from the same box. */
 .pitch-rows {
-  position: absolute;
-  inset: 0;
-  transform-style: preserve-3d;
+  position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: space-evenly;
+  justify-content: space-between;
   align-items: center;
   gap: var(--ff-line-gap, 8px);
-  padding: 12px 6px;
+  padding: 10px 6px 14px;
 }
 
 /*
@@ -1632,11 +1631,31 @@ md-outlined-text-field {
  * the sweep in `burmese.mjs`, where a silently-wrapped line producing a 30px
  * target is caught by nobody.
  */
+/*
+ * Spread across the field, and smaller the further back it sits.
+ *
+ * Centring with a fixed gap put three cards in a huddle in the middle of a
+ * 334px pitch with a hundred and eighty pixels doing nothing either side. A
+ * team spreads out; `space-around` over most of the width is what that looks
+ * like, and it degrades correctly to "centred" when a line holds one card.
+ */
+/*
+ * Spread across the field, and narrower the further back it sits.
+ *
+ * The width follows the trapezoid so a line of cards sits *on* the grass rather
+ * than across it, and the scale shrinks the cards with distance. Between them
+ * that is the whole of the perspective, with nothing 3D involved.
+ *
+ * `space-around` rather than a fixed gap: three cards centred with 6px between
+ * them left a huddle in the middle of a 334px pitch. A team spreads out.
+ */
 .pitch-line-row {
   display: flex;
   flex-wrap: nowrap;
-  justify-content: center;
-  gap: var(--ff-spot-gap, 6px);
+  justify-content: space-around;
+  align-items: center;
+  width: calc(52% + 36% * var(--ff-row-depth, 1));
+  transform: scale(var(--ff-row-scale, 1));
 }
 
 /*
@@ -1657,12 +1676,36 @@ md-outlined-text-field {
   border: 0;
   background: none;
   color: var(--ff-pitch-on);
-  transform: rotateX(calc(-1 * var(--ff-tilt)));
-  transform-origin: 50% 100%;
 }
 
 /* The face fills the card's width and is exactly the avatar's own size, so the
    picture needs no override to sit right. */
+/*
+ * The card itself, inside the spot.
+ *
+ * A layer of its own so the mask has something to cut that is not the whole
+ * button: the corner brackets live on the spot and would be sliced off at the
+ * silhouette otherwise, losing exactly the two bottom corners that make them
+ * read as brackets.
+ *
+ * Filled cards get a fill; an empty one stays a plain dashed placeholder, which
+ * is what the empty squad screen uses — the item shape is for items.
+ */
+.pitch-card {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pitch-spot:not(.is-open) .pitch-card {
+  mask: var(--ff-item-shape) center / 100% 100% no-repeat;
+  background:
+    radial-gradient(62% 44% at 50% 30%, rgb(255 255 255 / 0.16), transparent 72%),
+    linear-gradient(158deg, var(--ff-item-hi) 0%, var(--ff-item-lo) 100%);
+}
+
 .pitch-card-face {
   width: 100%;
   height: var(--ff-spot, 44px);
@@ -1691,9 +1734,10 @@ md-outlined-text-field {
   font-size: clamp(7px, calc(var(--ff-spot, 44px) * 0.2), 10px);
   font-weight: 700;
   line-height: 1;
-  color: var(--ff-pitch-on);
-  background: rgb(0 0 0 / 0.34);
-  border-radius: 0 0 5px 5px;
+  color: var(--ff-item-on);
+  background: rgb(0 0 0 / 0.26);
+  /* Room for the point the mask cuts, so the name is not sitting in it. */
+  padding-bottom: 12%;
 }
 
 .pitch-spot.is-guest .pitch-card-name {
@@ -1961,6 +2005,21 @@ button.pitch-spot::before {
   font-size: 0.85rem;
 }
 
+/*
+ * The player-item silhouette.
+ *
+ * Rounded shoulders, straight sides, and a shallow point at the foot — not the
+ * hard V a plain `clip-path: polygon()` gives, which was the first attempt and
+ * read as a banner rather than as a card. A mask carries both the radius and
+ * the point in one shape, which `clip-path` and `border-radius` cannot do
+ * together: a clip ignores the radius and squares the corners off.
+ *
+ * `preserveAspectRatio="none"` so one path serves a 44px card and a 108px one.
+ */
+:root {
+  --ff-item-shape: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 130' preserveAspectRatio='none'%3E%3Cpath d='M10 0 H90 Q100 0 100 10 V104 Q100 110 94 113 L56 128 Q50 130 44 128 L6 113 Q0 110 0 104 V10 Q0 0 10 0 Z' fill='%23000'/%3E%3C/svg%3E");
+}
+
 /* --------------------------------------------------------- top players */
 
 /*
@@ -2010,7 +2069,7 @@ button.pitch-spot::before {
   border: 0;
   cursor: pointer;
   color: #2a1e05;
-  clip-path: polygon(0 0, 100% 0, 100% 86%, 50% 100%, 0 86%);
+  mask: var(--ff-item-shape) center / 100% 100% no-repeat;
   background:
     radial-gradient(60% 42% at 50% 34%, rgb(255 255 255 / 0.42), transparent 70%),
     linear-gradient(160deg, var(--ff-tier-hi) 0%, var(--ff-tier-lo) 100%);
