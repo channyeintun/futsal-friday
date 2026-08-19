@@ -387,6 +387,27 @@ body {
  * match history is the one place a whole date lands in one, so it wraps to two
  * lines instead — the same trade already made for player names.
  */
+/*
+ * Myanmar never wants tracking, and six places were adding it.
+ *
+ * Positive `letter-spacing` prises apart a script whose marks stack on and
+ * around their base character, and none of these had an override — a defect
+ * that predates the restyle and that the overflow sweep cannot catch, because
+ * letters pushed apart still fit the box.
+ *
+ * Enumerated rather than a blanket `:lang(my) *`, following the rest of this
+ * section. The cost is that a seventh site added later will miss it; the file
+ * has no way to enforce that beyond this note.
+ */
+:lang(my) .team-name,
+:lang(my) .team-record,
+:lang(my) .mvp-crown-note,
+:lang(my) .team-result-name,
+:lang(my) .score-label,
+:lang(my) .pay-account {
+  letter-spacing: normal;
+}
+
 :lang(my) .grow.truncate {
   white-space: normal;
   overflow-wrap: anywhere;
