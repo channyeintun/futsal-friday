@@ -1539,9 +1539,35 @@ md-outlined-text-field {
  * same font-size, and a pitch that fits in one language and not the other is
  * the bug this avoids by construction.
  */
+/*
+ * The field lies flat and is tilted back, the way the squad and match-preview
+ * screens show it. The cards stand up again inside it, so the ground recedes
+ * and the people on it do not — which is the whole trick, and the reason this
+ * is a real 3D rotation rather than a trapezoid drawn by hand.
+ *
+ * `--ff-field-h` is what the flat field measures; the visible box is shorter,
+ * because a rotation about X foreshortens by its cosine. The 0.72 is cos(44deg)
+ * with a little slack, and it has to track `--ff-tilt` if that ever moves.
+ */
 .pitch {
+  --ff-tilt: 44deg;
   position: relative;
-  overflow: hidden;
+  /* Handed down from `Pitch`, which does the perspective arithmetic — a plain
+     cosine over-reserves and leaves a band of empty card above the field. */
+  height: var(--ff-pitch-h, 240px);
+  perspective: 900px;
+  perspective-origin: 50% 92%;
+}
+
+.pitch-field {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--ff-field-h, 340px);
+  transform: rotateX(var(--ff-tilt));
+  transform-origin: 50% 100%;
+  transform-style: preserve-3d;
   border-radius: var(--ff-radius-row);
   background: var(--ff-pitch);
 }
@@ -1587,14 +1613,14 @@ md-outlined-text-field {
    what own the height, so the drawing stretches to whatever the formation
    came out as. */
 .pitch-rows {
-  position: relative;
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
   display: flex;
   flex-direction: column;
   justify-content: space-evenly;
   align-items: center;
   gap: var(--ff-line-gap, 8px);
-  /* A one-player pitch is still a pitch and not a strip. */
-  min-height: 200px;
   padding: 12px 6px;
 }
 
@@ -1613,18 +1639,70 @@ md-outlined-text-field {
   gap: var(--ff-spot-gap, 6px);
 }
 
+/*
+ * Standing up again inside the tilt.
+ *
+ * The counter-rotation is what makes a card read as a card on a receding field
+ * rather than as something lying on the grass. Origin at the bottom edge so it
+ * pivots on its own footprint and appears planted.
+ */
 .pitch-spot {
   position: relative;
   flex: 0 0 var(--ff-spot, 44px);
   width: var(--ff-spot, 44px);
-  height: var(--ff-spot, 44px);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  height: var(--ff-spot-h, 59px);
+  display: flex;
+  flex-direction: column;
   padding: 0;
   border: 0;
   background: none;
   color: var(--ff-pitch-on);
+  transform: rotateX(calc(-1 * var(--ff-tilt)));
+  transform-origin: 50% 100%;
+}
+
+/* The face fills the card's width and is exactly the avatar's own size, so the
+   picture needs no override to sit right. */
+.pitch-card-face {
+  width: 100%;
+  height: var(--ff-spot, 44px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pitch-card-face .avatar {
+  border-radius: 5px;
+}
+
+/*
+ * The name bar, which is what turns a row of faces into a team sheet.
+ *
+ * Sized off the card rather than in `rem`, for the reason the pitch is sized in
+ * px at all: this is a graphic, and it has to be the same size in Burmese.
+ */
+.pitch-card-name {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 2px;
+  font-size: clamp(7px, calc(var(--ff-spot, 44px) * 0.2), 10px);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ff-pitch-on);
+  background: rgb(0 0 0 / 0.34);
+  border-radius: 0 0 5px 5px;
+}
+
+.pitch-spot.is-guest .pitch-card-name {
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+.pitch-spot.is-open .pitch-card-name {
+  background: none;
 }
 
 button.pitch-spot {
@@ -1728,36 +1806,6 @@ button.pitch-spot::before {
   --ff-cyan: var(--ff-pitch-warn);
 }
 
-/*
- * The formation, ghosted across the grass.
- *
- * Bottom-left and enormous, the way the squad screen writes "4-4-2" behind the
- * players. Low enough to be texture rather than text — it is not information,
- * the pitch above it already is.
- */
-.pitch-formation {
-  position: absolute;
-  /*
-   * Bounded on both sides and clipping its own overflow, so a long formation —
-   * sixty heads gives 1-8-7-7-7-7-7-7-8-1 — cannot widen the pitch. An element
-   * that clips does not contribute to an ancestor's scrollable overflow, which
-   * is the difference between this and the hero watermark that tripped the
-   * Burmese sweep.
-   */
-  left: 10px;
-  right: 10px;
-  overflow: hidden;
-  white-space: nowrap;
-  bottom: 2px;
-  z-index: 0;
-  pointer-events: none;
-  font-size: 2.6rem;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.02em;
-  color: var(--ff-pitch-ghost);
-  font-variant-numeric: tabular-nums;
-}
 
 .pitch-spot.is-armed .avatar {
   border-color: var(--ff-pitch-warn);
@@ -1797,14 +1845,15 @@ button.pitch-spot::before {
  * `.is-dealing` is on the rows for the length of the deal and then gone, so this
  * is the arrival at the screen and nothing after it.
  */
+/* `scale`, the independent property — `transform` is spoken for by the tilt. */
 @keyframes ff-pitch-in {
   from {
     opacity: 0;
-    transform: scale(0.8);
+    scale: 0.8;
   }
   to {
     opacity: 1;
-    transform: none;
+    scale: 1;
   }
 }
 

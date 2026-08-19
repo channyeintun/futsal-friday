@@ -127,8 +127,21 @@ export function partyFits(
 const MAX_PER_LINE = 5;
 /** More lines than this and it is a crowd photo whatever you do to it. */
 const MAX_OUTFIELD_LINES = 8;
-/** The tallest the drawing may ever be, in px. Spots shrink to hold it. */
-export const PITCH_MAX_HEIGHT = 400;
+/**
+ * The tallest the layout box may be, in px, before the tilt.
+ *
+ * Taller than it looks: the field is laid out flat and then rotated back, and a
+ * rotation about X compresses what you see to roughly two thirds. 520 here is
+ * about 360 on screen.
+ */
+export const PITCH_MAX_HEIGHT = 520;
+
+/**
+ * A player card is taller than it is wide, like the item it is copying — a
+ * face above a name. The width is what the line arithmetic solves for; this
+ * turns that into the height it costs.
+ */
+export const PITCH_CARD_RATIO = 1.34;
 /** Between one line and the next. Shared with the stylesheet. */
 export const PITCH_LINE_GAP = 8;
 const PITCH_PAD = 24;
@@ -234,8 +247,11 @@ export function pitchSlotSize(lines: readonly number[]): number {
   const widest = Math.max(...lines);
   const gap = pitchSpotGap(lines);
   const byWidth = (NARROW_WIDTH - (widest - 1) * gap) / widest;
+  // A card costs its own height, not its width, so the vertical budget is
+  // divided by the ratio before it is compared with the horizontal one.
   const byHeight =
-    (PITCH_MAX_HEIGHT - (lines.length - 1) * PITCH_LINE_GAP - PITCH_PAD) / lines.length;
+    (PITCH_MAX_HEIGHT - (lines.length - 1) * PITCH_LINE_GAP - PITCH_PAD) /
+    (lines.length * PITCH_CARD_RATIO);
   return Math.max(SPOT_MIN, Math.min(SPOT_MAX, Math.floor(Math.min(byWidth, byHeight))));
 }
 

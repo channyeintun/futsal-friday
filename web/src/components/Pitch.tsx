@@ -1,4 +1,5 @@
 import {
+  PITCH_CARD_RATIO,
   PITCH_LINE_GAP,
   type SessionDetail,
   type TeamSlot,
@@ -272,6 +273,29 @@ export function Pitch({
         ? m.pitch.fullBody
         : null;
 
+  /*
+   * How tall the tilted field actually looks.
+   *
+   * Not the flat height times the cosine — that is the answer for an
+   * orthographic rotation, and this one has perspective, which foreshortens
+   * the far end further. Getting it wrong leaves a band of empty card above
+   * the pitch, because the box is reserving room the drawing never uses.
+   *
+   *   projected = h · cos θ · P / (P + h · sin θ)
+   *
+   * The three constants are the ones `.pitch` declares; they have to move
+   * together, which is why the arithmetic is here rather than guessed at in CSS.
+   */
+  const fieldHeight =
+    Math.round(lines.length * spotSize * PITCH_CARD_RATIO) +
+    Math.max(0, lines.length - 1) * PITCH_LINE_GAP +
+    24;
+  const tilt = (PITCH_TILT_DEG * Math.PI) / 180;
+  const projectedHeight = Math.round(
+    (fieldHeight * Math.cos(tilt) * PITCH_PERSPECTIVE) /
+      (PITCH_PERSPECTIVE + fieldHeight * Math.sin(tilt)),
+  );
+
   const firstOpen = spots.findIndex((spot) => spot.kind === 'open');
 
   return (
@@ -286,8 +310,11 @@ export function Pitch({
         style={
           {
             '--ff-spot': `${spotSize}px`,
+            '--ff-spot-h': `${Math.round(spotSize * PITCH_CARD_RATIO)}px`,
             '--ff-spot-gap': `${pitchSpotGap(lines)}px`,
             '--ff-line-gap': `${PITCH_LINE_GAP}px`,
+            '--ff-field-h': `${fieldHeight}px`,
+            '--ff-pitch-h': `${projectedHeight}px`,
           } as CSSProperties
         }
         onFocusCapture={() => setFocusWithin(true)}
@@ -296,26 +323,21 @@ export function Pitch({
           if (event.key === 'Escape' && phase === 'armed') setPhase('idle');
         }}
       >
-        <PitchTurf />
         {/*
-          The formation, written across the grass.
-       
-          Straight off the squad screen, where "4-4-2" sits in enormous ghosted
-          type behind the players. It costs nothing here because the shape is
-          already computed — `pitchLines` *is* the formation — and it is the one
-          piece of FC's vocabulary this app can speak natively.
+          The field is laid out flat and then tilted back, the way the squad and
+          match-preview screens show it. The cards stand up again inside it —
+          see `.pitch-spot` — so the ground recedes and the players do not.
         */}
-        <span className="pitch-formation" aria-hidden="true">
-          {lines.join('-')}
-        </span>
-        <div className={`pitch-rows${dealing ? ' is-dealing' : ''}`}>
-          {lines.map((width, line) => {
-            const from = lines.slice(0, line).reduce((a, b) => a + b, 0);
-            return (
-              <div className="pitch-line-row" key={line}>
-                {spots.slice(from, from + width).map((spot, offset) => {
-                  const index = from + offset;
-                  return renderSpot({
+        <div className="pitch-field">
+          <PitchTurf />
+          <div className={`pitch-rows${dealing ? ' is-dealing' : ''}`}>
+            {lines.map((width, line) => {
+              const from = lines.slice(0, line).reduce((a, b) => a + b, 0);
+              return (
+                <div className="pitch-line-row" key={line}>
+                  {spots.slice(from, from + width).map((spot, offset) => {
+                    const index = from + offset;
+                    return renderSpot({
                     spot,
                     index,
                     isFirstOpen: index === firstOpen,
@@ -333,9 +355,10 @@ export function Pitch({
                     onLeave: leave,
                   });
                 })}
-              </div>
-            );
-          })}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -394,6 +417,10 @@ export function Pitch({
 
 /** Long enough to look at your own face and mean it, short enough to lapse. */
 const ARM_MS = 4000;
+
+/** Must match `--ff-tilt` and `perspective` on `.pitch`. */
+const PITCH_TILT_DEG = 44;
+const PITCH_PERSPECTIVE = 900;
 
 type Spot =
   | { kind: 'taken'; key: string; slot: TeamSlot }
@@ -456,23 +483,42 @@ function renderSpot({
   // position, so a reconnect reconciles in place and nothing re-deals.
   const style = { '--deal': index } as CSSProperties;
 
-  const inside =
-    !open && !isGuest ? (
-      <Avatar
-        memberId={spot.slot.memberId}
-        name={spot.slot.memberName}
-        avatarUpdatedAt={spot.slot.memberAvatarUpdatedAt}
-        size={spotSize - 6}
-      />
-    ) : (
-      <span className="pitch-disc">
-        {open ? (
-          <Icon name="add" size={Math.round(spotSize * 0.45)} />
+  /*
+   * A player item, not a counter.
+   *
+   * The squad screen is a grid of cards — a face above a name — and that shape
+   * is most of what makes a pitch full of people read as a team sheet rather
+   * than as dots. A guest takes their bringer's name at a lighter weight, which
+   * is the convention the team board already uses for the same reason.
+   */
+  const inside = (
+    <>
+      <span className="pitch-card-face">
+        {!open && !isGuest ? (
+          <Avatar
+            memberId={spot.slot.memberId}
+            name={spot.slot.memberName}
+            avatarUpdatedAt={spot.slot.memberAvatarUpdatedAt}
+            size={spotSize}
+          />
         ) : (
-          <Icon name="person" size={Math.round(spotSize * 0.42)} />
+          <span className="pitch-disc">
+            {open ? (
+              <Icon name="add" size={Math.round(spotSize * 0.42)} />
+            ) : (
+              <Icon name="person" size={Math.round(spotSize * 0.4)} />
+            )}
+          </span>
         )}
       </span>
-    );
+      {/* A guest has no name of their own, and repeating the bringer's on three
+          cards in a row reads as a duplicate rather than as a party. The dashed
+          card and the label a screen reader gets already say whose they are. */}
+      <span className="pitch-card-name truncate" aria-hidden="true">
+        {open || isGuest ? '' : spot.slot.memberName}
+      </span>
+    </>
+  );
 
   if (open && canJoin) {
     return (

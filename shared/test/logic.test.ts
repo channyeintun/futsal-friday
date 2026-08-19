@@ -11,7 +11,7 @@ import { paymentsSummary, registrationSummary } from '../src/summary.ts';
 import { en } from '../src/i18n/en.ts';
 import { totalArrivedHeads } from '../src/attendance.ts';
 import {
-  PITCH_LINE_GAP, PITCH_MAX_HEIGHT, partyFits, pitchLines, pitchSlotCount, pitchSlotSize,
+  PITCH_CARD_RATIO, PITCH_LINE_GAP, PITCH_MAX_HEIGHT, partyFits, pitchLines, pitchSlotCount, pitchSlotSize,
   pitchSpotGap, placeOnPitch, registeredSlots, waitingSlots,
 } from '../src/pitch.ts';
 import type { TeamMatch, TeamSlot } from '../src/models.ts';
@@ -650,12 +650,14 @@ check('and never overflow the narrowest phone',
     return widest * pitchSlotSize(lines) + (widest - 1) * pitchSpotGap(lines) > 252;
   }), []);
 
+// A card costs its *height*, which is its width times the ratio — measuring
+// this against the width would pass while the field overflowed its box.
 check('the pitch never grows past its box',
   everyCount.filter((n) => {
     const lines = pitchLines(n);
     if (lines.length === 0) return false;
-    return lines.length * pitchSlotSize(lines) + (lines.length - 1) * PITCH_LINE_GAP + 24
-      > PITCH_MAX_HEIGHT;
+    return lines.length * pitchSlotSize(lines) * PITCH_CARD_RATIO
+      + (lines.length - 1) * PITCH_LINE_GAP + 24 > PITCH_MAX_HEIGHT;
   }), []);
 
 // A spot is never drawn smaller than this. It can go under 44 on a big roster
@@ -664,7 +666,7 @@ check('the pitch never grows past its box',
 // control. Worth pinning so a change to the sizing has to face the question.
 check('a spot never gets too small to see',
   everyCount.filter((n) => pitchLines(n).length > 0 && pitchSlotSize(pitchLines(n)) < 24), []);
-check('a roster this big does shrink the discs', pitchSlotSize(pitchLines(38)), 30);
+check('a roster this big does shrink the cards', pitchSlotSize(pitchLines(38)), 31);
 check('and a normal Friday does not', pitchSlotSize(pitchLines(12)), 44);
 
 
