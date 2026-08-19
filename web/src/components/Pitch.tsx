@@ -275,6 +275,20 @@ export function Pitch({
 
   const firstOpen = spots.findIndex((spot) => spot.kind === 'open');
 
+  /*
+   * The number on the card.
+   *
+   * A player item wears a rating. This app has none, and inventing one would be
+   * a figure that means nothing — but it does have the order people said yes
+   * in, which is real, already runs down the side of the roster, and reads as a
+   * squad number: first to sign up wears 1.
+   */
+  const shirtNumbers = new Map<string, number>();
+  placement.forEach((slot) => {
+    if (slot) shirtNumbers.set(slotKey(slot), shirtNumbers.size + 1);
+  });
+  const shirtOf = (spot: Spot) => (spot.kind === 'taken' ? shirtNumbers.get(spot.key) : undefined);
+
   return (
     <div className="card pitch-card">
       <h2 className="card-title">{m.pitch.heading}</h2>
@@ -334,6 +348,7 @@ export function Pitch({
                     return renderSpot({
                     spot,
                     index,
+                    shirt: shirtOf(spot),
                     isFirstOpen: index === firstOpen,
                     viewerId: identity.memberId,
                     canJoin,
@@ -367,6 +382,7 @@ export function Pitch({
             renderSpot({
               spot,
               index,
+              shirt: undefined,
               isFirstOpen: spot.kind === 'open',
               viewerId: identity.memberId,
               canJoin: canWait,
@@ -419,6 +435,7 @@ type Spot =
 function renderSpot({
   spot,
   index,
+  shirt,
   isFirstOpen,
   viewerId,
   canJoin,
@@ -435,6 +452,8 @@ function renderSpot({
 }: {
   spot: Spot;
   index: number;
+  /** Their place in the signup order, worn like a squad number. */
+  shirt: number | undefined;
   isFirstOpen: boolean;
   viewerId: string;
   canJoin: boolean;
@@ -483,13 +502,14 @@ function renderSpot({
    */
   const inside = (
     <span className="pitch-card">
+      {shirt !== undefined ? <span className="pitch-card-shirt">{shirt}</span> : null}
       <span className="pitch-card-face">
         {!open && !isGuest ? (
           <Avatar
             memberId={spot.slot.memberId}
             name={spot.slot.memberName}
             avatarUpdatedAt={spot.slot.memberAvatarUpdatedAt}
-            size={spotSize}
+            size={Math.round(spotSize * 0.6)}
           />
         ) : (
           <span className="pitch-disc">

@@ -130,11 +130,10 @@ const MAX_OUTFIELD_LINES = 8;
 /**
  * The tallest the layout box may be, in px, before the tilt.
  *
- * Taller than it looks: the field is laid out flat and then rotated back, and a
- * rotation about X compresses what you see to roughly two thirds. 520 here is
- * about 360 on screen.
+ * The far rows are drawn smaller than the box they were budgeted, so the field
+ * comes out shorter than this — the number is the ceiling, not the answer.
  */
-export const PITCH_MAX_HEIGHT = 520;
+export const PITCH_MAX_HEIGHT = 470;
 
 /**
  * A player card is taller than it is wide, like the item it is copying — a

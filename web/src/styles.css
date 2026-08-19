@@ -1619,8 +1619,8 @@ md-outlined-text-field {
   flex-direction: column;
   justify-content: space-between;
   align-items: center;
-  gap: var(--ff-line-gap, 8px);
-  padding: 10px 6px 14px;
+  gap: 4px;
+  padding: 6px 6px 10px;
 }
 
 /*
@@ -1655,7 +1655,18 @@ md-outlined-text-field {
   justify-content: space-around;
   align-items: center;
   width: calc(52% + 36% * var(--ff-row-depth, 1));
+  /*
+   * The row reserves what it actually draws.
+   *
+   * `scale` is a paint-time transform: a far row was still holding a full-height
+   * box in the layout while rendering at three quarters of it, and the leftover
+   * showed up as air between the lines. Setting the height to the scaled figure
+   * closes that gap without touching the arithmetic in /shared, which stays
+   * conservative and budgets for the unscaled card.
+   */
+  height: calc(var(--ff-spot-h, 59px) * var(--ff-row-scale, 1));
   transform: scale(var(--ff-row-scale, 1));
+  transform-origin: center;
 }
 
 /*
@@ -1683,71 +1694,107 @@ md-outlined-text-field {
 /*
  * The card itself, inside the spot.
  *
- * A layer of its own so the mask has something to cut that is not the whole
- * button: the corner brackets live on the spot and would be sliced off at the
- * silhouette otherwise, losing exactly the two bottom corners that make them
- * read as brackets.
+ * A layer of its own so the silhouette mask has something to cut that is not
+ * the whole button: the corner brackets live on the spot and would be sliced
+ * off at the point otherwise, losing the two bottom corners that make them read
+ * as brackets.
  *
- * Filled cards get a fill; an empty one stays a plain dashed placeholder, which
- * is what the empty squad screen uses — the item shape is for items.
+ * The fill has to be *visible*, which is the thing the first attempt got wrong.
+ * A portrait filling the card edge to edge hides the item entirely and leaves a
+ * square photo with a caption under it. The picture is smaller than the card on
+ * purpose; the gold around it is what you are actually looking at.
  */
 .pitch-card {
+  position: relative;
   width: 100%;
   height: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
 }
 
 .pitch-spot:not(.is-open) .pitch-card {
   mask: var(--ff-item-shape) center / 100% 100% no-repeat;
+  color: #2a1e05;
   background:
-    radial-gradient(62% 44% at 50% 30%, rgb(255 255 255 / 0.16), transparent 72%),
-    linear-gradient(158deg, var(--ff-item-hi) 0%, var(--ff-item-lo) 100%);
-}
-
-.pitch-card-face {
-  width: 100%;
-  height: var(--ff-spot, 44px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.pitch-card-face .avatar {
-  border-radius: 5px;
+    radial-gradient(66% 46% at 52% 26%, rgb(255 255 255 / 0.55), transparent 72%),
+    linear-gradient(158deg, #f4dc96 0%, #c69d38 56%, #a87e21 100%);
 }
 
 /*
- * The name bar, which is what turns a row of faces into a team sheet.
+ * A guest is a silver item.
  *
- * Sized off the card rather than in `rem`, for the reason the pitch is sized in
- * px at all: this is a graphic, and it has to be the same size in Burmese.
+ * Same silhouette, quieter metal — which is the distinction the game already
+ * makes between a common card and a better one, and it costs no explaining.
+ * The dashed ring the guest disc wore elsewhere is dropped here: on a filled
+ * card it read as damage rather than as "no account behind this one".
+ */
+.pitch-spot.is-guest .pitch-card {
+  background:
+    radial-gradient(66% 46% at 52% 26%, rgb(255 255 255 / 0.5), transparent 72%),
+    linear-gradient(158deg, #eef0f4 0%, #b6bcc8 56%, #949bab 100%);
+}
+
+.pitch-spot.is-guest .pitch-disc {
+  border: 0;
+  background: none;
+  color: #2a1e05;
+  opacity: 0.7;
+}
+
+/*
+ * The number, where the rating sits on a real item.
+ *
+ * Signup order rather than an invented rating — see `shirtOf`. Sized off the
+ * card so it holds its proportion when a big roster shrinks everything.
+ */
+.pitch-card-shirt {
+  position: absolute;
+  top: 3%;
+  left: 9%;
+  font-size: calc(var(--ff-spot, 44px) * 0.3);
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Nudged right and down, out from under the number, the way a portrait sits. */
+.pitch-card-face {
+  position: absolute;
+  top: 17%;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  padding-left: 20%;
+}
+
+.pitch-card-face .avatar {
+  border-radius: 50%;
+  border: 1px solid rgb(255 255 255 / 0.45);
+}
+
+/*
+ * The name, on a rule rather than in a box.
+ *
+ * An item separates the name from the portrait with a hairline, not a filled
+ * bar — and sits it clear of the point the mask cuts, or the descenders end up
+ * inside the notch.
  */
 .pitch-card-name {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 2px;
-  font-size: clamp(7px, calc(var(--ff-spot, 44px) * 0.2), 10px);
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  bottom: 15%;
+  padding-top: 2px;
+  border-top: 1px solid rgb(42 30 5 / 0.34);
+  text-align: center;
+  font-size: clamp(6px, calc(var(--ff-spot, 44px) * 0.185), 10px);
   font-weight: 700;
-  line-height: 1;
-  color: var(--ff-item-on);
-  background: rgb(0 0 0 / 0.26);
-  /* Room for the point the mask cuts, so the name is not sitting in it. */
-  padding-bottom: 12%;
+  line-height: 1.1;
 }
 
 .pitch-spot.is-guest .pitch-card-name {
   font-weight: 400;
-  opacity: 0.75;
 }
 
-.pitch-spot.is-open .pitch-card-name {
-  background: none;
-}
 
 button.pitch-spot {
   cursor: pointer;
