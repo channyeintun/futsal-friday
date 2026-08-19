@@ -106,6 +106,21 @@ export function Pitch({
    * a screen reader may still be reading the label out.
    */
   const [focusWithin, setFocusWithin] = useState(false);
+  /*
+   * The deal is for arriving at the screen, not for using it.
+   *
+   * An uncapped session has exactly as many spots as it has people plus one, so
+   * every join and every withdrawal reshapes the whole formation — and a spot
+   * that lands in a different row than it was in is a different React node,
+   * mounted fresh. Left unguarded that re-ran the stagger on five or six spots
+   * every time somebody tapped, which is a wave washing across the pitch as an
+   * answer to a single press.
+   *
+   * So the stagger belongs to the first sight of the field and nothing else.
+   * After that a spot appearing is marked the way every other live change in the
+   * app is marked — the flash — and the field itself stays still.
+   */
+  const [dealing, setDealing] = useState(true);
 
   const busy = phase === 'joining' || phase === 'leaving';
 
@@ -167,6 +182,13 @@ export function Pitch({
     me?.status === 'waitlist' &&
     openCount > 0 &&
     !partyFits(headsIn, session.maxPlayers, me.guests);
+
+  // Comfortably past the longest stagger plus the animation itself, so nothing
+  // is cut off mid-deal.
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDealing(false), 900);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   // The arm lapses on its own, so a pocket press cannot leave a live confirm
   // sitting there — but not while the keyboard is still on it.
@@ -275,7 +297,7 @@ export function Pitch({
         }}
       >
         <PitchTurf />
-        <div className="pitch-rows">
+        <div className={`pitch-rows${dealing ? ' is-dealing' : ''}`}>
           {lines.map((width, line) => {
             const from = lines.slice(0, line).reduce((a, b) => a + b, 0);
             return (

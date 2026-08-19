@@ -1481,11 +1481,16 @@ button.pitch-spot::before {
 }
 
 /*
- * Dealt out, ordered across the field.
+ * Dealt out, ordered across the field, and only the first time.
  *
- * Keyed on `memberId:guestIndex` rather than on position, so this runs on mount
- * and only on mount — the thirty-second poll and every reconnect reconcile in
- * place, and nobody watches the pitch re-deal itself every half minute.
+ * Stable keys keep the poll and every reconnect from re-dealing, but they cannot
+ * help when the *formation* changes: an uncapped session grows and shrinks by a
+ * spot on every join and withdrawal, spots move between rows, and a spot in a
+ * new row is a new node. Measured, a single withdrawal re-ran this on five of
+ * them — a wave crossing the pitch in answer to one press.
+ *
+ * `.is-dealing` is on the rows for the length of the deal and then gone, so this
+ * is the arrival at the screen and nothing after it.
  */
 @keyframes ff-pitch-in {
   from {
@@ -1498,7 +1503,7 @@ button.pitch-spot::before {
   }
 }
 
-.pitch-spot {
+.pitch-rows.is-dealing .pitch-spot {
   animation: ff-pitch-in 220ms cubic-bezier(0.2, 0, 0, 1) both;
   animation-delay: min(calc(var(--deal, 0) * 24ms), 560ms);
 }
@@ -1527,7 +1532,7 @@ button.pitch-spot::before {
  * either way.
  */
 @media (prefers-reduced-motion: reduce) {
-  .pitch-spot,
+  .pitch-rows.is-dealing .pitch-spot,
   .pitch-spot.is-pending {
     animation: none;
   }
