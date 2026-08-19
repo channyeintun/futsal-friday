@@ -329,18 +329,21 @@ let audioRefused = false;
 /**
  * How loud a button is, against the clips as they are stored.
  *
- * They are mastered close to full scale, which is right for a file and much too
- * much for a noise that fires on every press: a UI blip should sit under the
- * conversation the phone is already having, not on top of it. About ten
- * decibels down puts the press at roughly -11 dBFS, which is audible on a phone
- * speaker at arm's length and does not make the app the loudest thing in a
- * room.
+ * They are mastered close to full scale, which is right for a file and far too
+ * much for a noise that fires on every press. This is about twenty-eight
+ * decibels down — a tick you notice rather than a sound you hear, and something
+ * like a seventh of the loudness the first attempt at this shipped at.
  *
- * Applied here rather than baked into the files so that the two clips keep the
- * half-decibel match they were encoded with, and so changing it is one number
- * rather than a re-encode.
+ * A press confirms a tap that the screen has already answered: the disc has
+ * shrunk under the finger before the clip starts. It does not have to carry the
+ * news on its own, so it can afford to sit under whatever else the phone is
+ * doing rather than on top of it.
+ *
+ * Applied in the graph rather than baked into the files, so that the two clips
+ * keep the half-decibel match they were encoded with, and so moving it is one
+ * number rather than a re-encode.
  */
-const CLIP_GAIN = 0.3;
+const CLIP_GAIN = 0.04;
 
 function audioCtor(): typeof AudioContext | undefined {
   return (
