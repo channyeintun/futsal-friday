@@ -10,7 +10,7 @@ import {
 } from '@futsal/shared';
 import { useState } from 'react';
 import type { ConnectionState } from '../api/realtime.js';
-import { cancelSession, registerForSession, withdrawFromSession } from '../api/sessions.js';
+import { cancelSession } from '../api/sessions.js';
 import { platform } from '../platform/index.js';
 import { navigate } from '../router.js';
 import { useApp } from '../state/app.js';
@@ -22,9 +22,9 @@ import { AttendanceToggle } from './AttendanceToggle.js';
 import { FormSquares } from './FormSquares.js';
 import { GoalsButton } from './GoalsButton.js';
 import { Avatar } from './Avatar.js';
-import { GuestPicker } from './GuestPicker.js';
 import { CopyButton } from './CopyButton.js';
 import { Icon } from './Icon.js';
+import { Pitch } from './Pitch.js';
 import { ExpandHandle } from './ExpandHandle.js';
 import { SessionEditor } from './SessionEditor.js';
 import { TeamBoards } from './TeamBoards.js';
@@ -49,7 +49,7 @@ export function SessionView({
 }) {
   const { identity, toast } = useApp();
   const { m, locale, hour12 } = useLocale();
-  const { session, registrations, counts, registrationOpen, me } = detail;
+  const { session, registrations, counts, registrationOpen } = detail;
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,32 +93,6 @@ export function SessionView({
   const showTeams = session.status !== 'cancelled' && (teamsLive || detail.teams !== null);
   const arrived = totalArrivedHeads(registrations);
   const checked = attendanceChecked(registrations);
-
-  const toggleRegistration = async () => {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      if (me) {
-        const result = await withdrawFromSession(session.id);
-        toast(
-          result.promoted
-            ? m.toast.youreOutPromoted(result.promoted.memberName)
-            : m.toast.youreOut,
-        );
-      } else {
-        const result = await registerForSession(session.id);
-        toast(
-          result.registration?.status === 'waitlist' ? m.toast.youreOnWaitlist : m.toast.youreIn,
-        );
-      }
-      onChanged();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : m.session.thatDidNotWork);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const doCancel = async () => {
     setBusy(true);
@@ -177,35 +151,13 @@ export function SessionView({
       {session.status === 'cancelled' ? (
         <div className="error-banner">{m.session.wasCancelled}</div>
       ) : registrationOpen ? (
-        <>
-          <Button
-            variant={me ? 'outlined' : 'filled'}
-            onClick={toggleRegistration}
-            disabled={busy}
-            // One control, two directions, and only this component knows which
-            // way round it currently is — a listener at the document sees the
-            // same element either way. See `platform.sound`.
-            sound={me ? 'tap-out' : undefined}
-          >
-            {busy
-              ? m.app.working
-              : me
-                ? me.status === 'waitlist'
-                  ? m.session.leaveWaitlist
-                  : m.session.cantMakeIt
-                : m.session.imIn}
-          </Button>
-          {/* Only once you are in. Bringing friends to a session you are not
-              playing in is not a thing, and the cap check needs a spot to
-              measure against. */}
-          {me ? (
-            <GuestPicker
-              sessionId={session.id}
-              guests={me.guests}
-              onChanged={onChanged}
-            />
-          ) : null}
-        </>
+        /* The pitch replaces the button and, above the roster, answers "who is
+           coming?" faster than the list can — you count the gaps. It is only
+           here while there is something to sign up to: the server refuses both
+           joining and leaving once the whistle has gone, so after kickoff the
+           list below is the screen, which is also when it grows attendance
+           toggles and goal counts and has work to do. */
+        <Pitch detail={detail} recentlyChanged={recentlyChanged} onChanged={onChanged} />
       ) : (
         <div className="muted" style={{ textAlign: 'center' }}>
           {m.session.registrationClosed}

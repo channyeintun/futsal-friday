@@ -100,6 +100,29 @@
   --ff-team-5: #b5432c;
   --ff-team-6: #3f4f9c;
 
+  /*
+   * The pitch.
+   *
+   * A depiction rather than a surface — the same licence the team colours take
+   * and for the same reason: this one graphic has to read as a football pitch
+   * from arm's length, which a card fill cannot do.
+   *
+   * The accent is not spent on the turf, and an open spot is a white dashed
+   * ring rather than a green one, because green on green is the one thing that
+   * cannot work. Markings and control rings are separate tokens on purpose and
+   * must not be merged: a marking may be faint, because it is decoration, while
+   * a ring bounds something you can press and has to clear 3:1.
+   */
+  --ff-pitch: #23624a;
+  --ff-pitch-mow: #27694f;
+  --ff-pitch-line: rgb(255 255 255 / 0.55);
+  --ff-pitch-ring: rgb(255 255 255 / 0.9);
+  --ff-pitch-on: #ffffff;
+  /* Armed. `--md-sys-color-error` is 1.1:1 on turf and unusable here — which is
+     why the armed state also changes the label and the caption. Colour is never
+     the only thing carrying it. */
+  --ff-pitch-warn: #ffb4ab;
+
   /* The shared shape language: big soft rectangles, fully round pills. */
   --ff-radius-card: 20px;
   --ff-radius-row: 16px;
@@ -169,6 +192,16 @@
     --ff-team-4: #f0a6e8;
     --ff-team-5: #ff8f6b;
     --ff-team-6: #9fb0ff;
+
+    /* A night pitch: lifted clear of black like the team set above, and kept
+       well away from #4ade80 — a turf that matched the accent would erase the
+       difference between the field and the thing you press on it. */
+    --ff-pitch: #13351f;
+    --ff-pitch-mow: #163b23;
+    --ff-pitch-line: rgb(255 255 255 / 0.34);
+    --ff-pitch-ring: rgb(255 255 255 / 0.7);
+    --ff-pitch-on: #ffffff;
+    --ff-pitch-warn: #ffb4ab;
 
     color-scheme: dark;
   }
@@ -1219,6 +1252,307 @@ md-outlined-text-field {
   background: var(--md-sys-color-primary);
   border-color: var(--md-sys-color-primary);
   color: var(--md-sys-color-on-primary);
+}
+
+/* ------------------------------------------------------------- the pitch */
+
+/*
+ * Signing up as a place to stand.
+ *
+ * The whole thing is a fixed-size graphic: every dimension is px or a viewBox
+ * unit, handed down from `pitchSlotSize` in /shared, which sizes for a 320px
+ * phone rather than measuring one. Nothing here is `em`, and there is no text
+ * inside the field at all — Burmese sets about a third taller than Latin at the
+ * same font-size, and a pitch that fits in one language and not the other is
+ * the bug this avoids by construction.
+ */
+.pitch {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--ff-radius-row);
+  background: var(--ff-pitch);
+}
+
+.pitch-turf {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.pitch-grass {
+  fill: var(--ff-pitch);
+}
+
+.pitch-mow {
+  fill: var(--ff-pitch-mow);
+}
+
+.pitch-line {
+  fill: none;
+  stroke: var(--ff-pitch-line);
+  stroke-width: 1.5;
+}
+
+.pitch-goal {
+  fill: none;
+  stroke: var(--ff-pitch-line);
+  stroke-width: 1.5;
+}
+
+.pitch-net {
+  fill: none;
+  stroke: var(--ff-pitch-line);
+  stroke-width: 0.75;
+}
+
+.pitch-mark {
+  fill: var(--ff-pitch-line);
+}
+
+/* Above the turf, and the reason the turf is absolutely placed: the rows are
+   what own the height, so the drawing stretches to whatever the formation
+   came out as. */
+.pitch-rows {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  align-items: center;
+  gap: var(--ff-line-gap, 8px);
+  /* A one-player pitch is still a pitch and not a strip. */
+  min-height: 200px;
+  padding: 12px 6px;
+}
+
+/*
+ * `nowrap` deliberately.
+ *
+ * A line is sized to fit the narrowest phone by arithmetic, so it should never
+ * need to wrap — and if that arithmetic is ever wrong, an overflow is caught by
+ * the sweep in `burmese.mjs`, where a silently-wrapped line producing a 30px
+ * target is caught by nobody.
+ */
+.pitch-line-row {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: var(--ff-spot-gap, 6px);
+}
+
+.pitch-spot {
+  position: relative;
+  flex: 0 0 var(--ff-spot, 44px);
+  width: var(--ff-spot, 44px);
+  height: var(--ff-spot, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ff-pitch-on);
+}
+
+button.pitch-spot {
+  cursor: pointer;
+}
+
+/*
+ * The 44px target, free to overhang its own cell.
+ *
+ * A big roster shrinks the discs below 44 — thirty-eight heads draws them at
+ * thirty — and normally that would be the end of the argument. It is fine here
+ * because at most one spot on the entire pitch is ever pressable, so there is
+ * nothing beside it for an oversized target to steal a press from.
+ */
+button.pitch-spot::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+
+.pitch-disc {
+  width: 100%;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--ff-pitch-on);
+}
+
+/* A dashed ring is already this app's vocabulary for "nobody here" — the same
+   shape `.team-guest` uses on the board. */
+.pitch-spot.is-open .pitch-disc {
+  border: 2px dashed var(--ff-pitch-ring);
+}
+
+.pitch-spot.is-guest .pitch-disc {
+  border: 1px dashed var(--ff-pitch-ring);
+  background: rgb(0 0 0 / 0.18);
+}
+
+/* `Avatar` tints itself `hsl(h 45% 38%)`, which is mid-dark and sinks straight
+   into the turf. One ring fixes every tint and every photograph at once. */
+.pitch-spot .avatar {
+  border: 2px solid var(--ff-pitch-ring);
+}
+
+.pitch-spot.is-me .avatar {
+  border-width: 3px;
+}
+
+.pitch-spot.is-armed .avatar {
+  border-color: var(--ff-pitch-warn);
+}
+
+.pitch-spot.is-pending {
+  opacity: 0.55;
+}
+
+/*
+ * The press is answered by the eye before the ear.
+ *
+ * The clip fires on `click`, which is on the way back up — see the note in
+ * `platform/web.ts` about why it cannot be `pointerdown` in an app whose list
+ * rows are buttons. This is what covers the ninety milliseconds in between, and
+ * it costs no JavaScript at all.
+ */
+.pitch-spot:active .avatar,
+.pitch-spot:active .pitch-disc {
+  transform: scale(0.92);
+}
+
+.pitch-spot .avatar,
+.pitch-spot .pitch-disc {
+  transition: transform 90ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+/*
+ * Dealt out, ordered across the field.
+ *
+ * Keyed on `memberId:guestIndex` rather than on position, so this runs on mount
+ * and only on mount — the thirty-second poll and every reconnect reconcile in
+ * place, and nobody watches the pitch re-deal itself every half minute.
+ */
+@keyframes ff-pitch-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.pitch-spot {
+  animation: ff-pitch-in 220ms cubic-bezier(0.2, 0, 0, 1) both;
+  animation-delay: min(calc(var(--deal, 0) * 24ms), 560ms);
+}
+
+/* The ring breathing while the request is in flight. */
+@keyframes ff-pitch-wait {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.pitch-spot.is-pending {
+  animation: ff-pitch-wait 900ms ease-in-out infinite;
+}
+
+/* Round, unlike every other `.flash` in the app. */
+.pitch-spot.flash {
+  border-radius: 50%;
+}
+
+/*
+ * Nothing on the pitch is announced by motion alone.
+ *
+ * The stagger and the pulse go; the dimming stays, the armed ring was never
+ * animated, and the caption under the field says "Taking your spot…" in words
+ * either way.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .pitch-spot,
+  .pitch-spot.is-pending {
+    animation: none;
+  }
+
+  .pitch-spot .avatar,
+  .pitch-spot .pitch-disc {
+    transition: none;
+  }
+
+  .pitch-spot:active .avatar,
+  .pitch-spot:active .pitch-disc {
+    transform: none;
+  }
+
+  .pitch-spot:active .pitch-disc {
+    background: var(--ff-pitch-ring);
+    color: var(--ff-pitch);
+  }
+}
+
+/*
+ * The touchline.
+ *
+ * Only drawn when it has something to say — somebody is waiting, or the field
+ * is full and this is the only way in. It is deliberately outside the turf and
+ * smaller than what stands on it: a bench is not the game.
+ */
+.pitch-bench {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--ff-spot-gap, 6px);
+  padding: 8px 10px;
+  border-radius: var(--ff-radius-pill);
+  background: var(--md-sys-color-surface-container-highest);
+}
+
+/* Off the turf, so the ring that lifts a face off green would only add noise. */
+.pitch-bench .avatar {
+  border-color: var(--md-sys-color-outline-variant);
+}
+
+.pitch-spot.is-bench {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.pitch-spot.is-bench.is-open .pitch-disc {
+  border-color: var(--md-sys-color-outline);
+}
+
+.pitch-spot.is-bench.is-guest .pitch-disc {
+  border-color: var(--md-sys-color-outline-variant);
+  background: none;
+}
+
+/*
+ * The caption.
+ *
+ * `role="status"` in the JSX, which makes this the only thing on the screen
+ * that tells somebody not looking at it that the roster just changed.
+ */
+.pitch-status {
+  margin: 0;
+  text-align: center;
+  font-weight: 600;
+}
+
+.pitch-why {
+  margin: 0;
+  text-align: center;
+  font-size: 0.85rem;
 }
 
 /* ----------------------------------------------------------- team boards */

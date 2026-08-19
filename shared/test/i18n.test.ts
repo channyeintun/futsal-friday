@@ -60,7 +60,6 @@ console.log('\ntranslations are actually translated');
 const SHARED_BY_DESIGN = new Set([
   'connection.pollingShort',
   'editor.feeHint',
-  'payments.enterAmount',
   'admin.priceNoteHint',
 ]);
 
@@ -106,6 +105,11 @@ check('matchBodyAtVenue()',
   my.push.matchBodyAtVenue(3, 'Tao Dan').includes('Tao Dan'),
   my.push.matchBodyAtVenue(3, 'Tao Dan'));
 check('shareBody()', my.payments.shareBody('Aung').includes('Aung'), my.payments.shareBody('Aung'));
+check('pitch.spotsLeft()', my.pitch.spotsLeft(3).includes('3'), my.pitch.spotsLeft(3));
+check('pitch.partyTooBig() carries both numbers',
+  my.pitch.partyTooBig(3, 2).includes('3') && my.pitch.partyTooBig(3, 2).includes('2'),
+  my.pitch.partyTooBig(3, 2));
+check('pitch.playerSpot()', my.pitch.playerSpot('Kyaw').includes('Kyaw'), my.pitch.playerSpot('Kyaw'));
 
 console.log('\ndates and durations');
 // 2026-08-07T12:30:00Z is Friday 19:30 in Ho Chi Minh City.

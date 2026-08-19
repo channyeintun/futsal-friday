@@ -27,6 +27,10 @@ export function ExpandHandle({
     <button
       type="button"
       className="list-handle"
+      // Silent, unlike every other button. This changes how much of a list you
+      // can see, not what it says — and it gets pressed repeatedly while
+      // somebody reads. See `platform.sound`.
+      data-sound="none"
       aria-expanded={expanded}
       aria-label={label}
       title={label}

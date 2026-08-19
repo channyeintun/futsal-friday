@@ -414,8 +414,23 @@ async function clipBuffer(name: SoundName): Promise<AudioBuffer | null> {
   }
 }
 
+/**
+ * Two of the same clip inside this window is a double-fire rather than a second
+ * press — a listener installed twice by a hot reload, or a component reaching
+ * for `play()` on a click the document was always going to hear. Past it, clips
+ * overlap rather than cutting each other off, which is the whole reason these
+ * are buffer sources and not an `<audio>` element.
+ */
+const RETRIGGER_FLOOR_MS = 45;
+const lastPlayedAt = new Map<SoundName, number>();
+
 function playSound(name: SoundName): void {
   if (!soundEnabled()) return;
+
+  const now = performance.now();
+  if (now - (lastPlayedAt.get(name) ?? -Infinity) < RETRIGGER_FLOOR_MS) return;
+  lastPlayedAt.set(name, now);
+
   const context = wakeAudio();
   if (!context) return;
 
@@ -449,7 +464,9 @@ function startClip(context: AudioContext, buffer: AudioBuffer): void {
  *
  * Text fields, selects and the dialog itself are deliberately absent. Tapping
  * into a field is not pressing a button, and the one native `<select>` in the
- * app opens a menu the page does not own.
+ * app opens a menu the page does not own. `md-switch` is absent for a related
+ * reason: a switch is a state rather than a press, and one of the four sits
+ * inside a virtualized list where a mis-tap during a scroll is routine.
  */
 const PRESSABLE = [
   'button',
@@ -461,18 +478,32 @@ const PRESSABLE = [
   'md-icon-button',
   'md-assist-chip',
   'md-select-option',
-  'md-switch',
 ].join(',');
 
 function isDisabled(element: Element): boolean {
   return element.hasAttribute('disabled') || element.getAttribute('aria-disabled') === 'true';
 }
 
-/** Which clip a control asked for, walking up from whatever was actually hit. */
-function clipFor(target: Element): SoundName | null {
-  const marked = target.closest('[data-sound]')?.getAttribute('data-sound');
-  if (marked === 'none') return null;
-  return marked === 'tap-out' ? 'tapOut' : 'press';
+/**
+ * Which clip a control asked for, walking up from whatever was actually hit.
+ *
+ * Bounded at the control on purpose. `data-sound` is a property of a button and
+ * not of the region it sits in, so an unbounded walk would let one marked
+ * container re-voice every button inside it — a bug nobody would ever find by
+ * ear. The walk still has to *start* at the target, because a tap on a slotted
+ * `<Icon>` inside a Material button lands on the `<svg>`.
+ */
+function clipFor(target: Element, control: Element): SoundName | null {
+  let node: Element | null = target;
+  while (node) {
+    const marked = node.getAttribute('data-sound');
+    if (marked === 'none') return null;
+    if (marked === 'tap-out') return 'tapOut';
+    if (marked !== null) return 'press';
+    if (node === control) break;
+    node = node.parentElement;
+  }
+  return 'press';
 }
 
 function installPressFeedback(): () => void {
@@ -509,7 +540,7 @@ function installPressFeedback(): () => void {
     if (!(target instanceof Element)) return;
     const control = target.closest(PRESSABLE);
     if (!control || isDisabled(control)) return;
-    const clip = clipFor(target);
+    const clip = clipFor(target, control);
     if (clip) playSound(clip);
   };
 

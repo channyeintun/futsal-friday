@@ -153,15 +153,23 @@ async function run() {
   // this one may well have left them in. Assert it rather than assuming —
   // starting from the wrong state makes every check below pass vacuously while
   // measuring nothing.
-  const withdraw = `(() => {
-    const b = [...document.querySelectorAll('md-outlined-button, md-filled-button')]
-      .find(x => x.textContent.includes("Can't make it") || x.textContent.includes('Leave the waitlist'));
-    if (b) { b.click(); return true; }
-    return false;
+  //
+  // Both directions go through the pitch: there is no register button any more.
+  // Leaving is two presses, because an unlabelled circle with your own face on
+  // it asks again before giving up a place.
+  const press = (sel) => `(() => {
+    const s = document.querySelector(${JSON.stringify(sel)});
+    if (!s) return false; s.click(); return true;
   })()`;
-  const canJoin = `[...document.querySelectorAll('md-filled-button')].some(x => x.textContent.includes("I'm in"))`;
+  const pressMine = press('button.pitch-spot.is-me');
+  const pressOpen = press('button.pitch-spot.is-open');
+  const canJoin = `!!document.querySelector('button.pitch-spot.is-open')`;
 
-  if (await a.js(withdraw)) await sleep(2000);
+  if (await a.js(pressMine)) {
+    await sleep(400);
+    await a.js(pressMine);
+    await sleep(2000);
+  }
   check('A starts out not registered', await a.waitFor(canJoin, 'A can register'));
 
   // And B has to have caught up with that before it becomes the baseline.
@@ -169,8 +177,7 @@ async function run() {
   const beforeB = await playing(bb);
   console.log(`\nB sees ${beforeB} playing; A registers now`);
 
-  await a.js(`(() => { const b=[...document.querySelectorAll('md-filled-button')]
-    .find(x=>x.textContent.includes("I'm in")); if(b) b.click(); })()`);
+  await a.js(pressOpen);
 
   // Poll every 250ms for up to 6s. The polling fallback is 30s, so anything
   // arriving in this window came through the realtime stream.
@@ -192,12 +199,19 @@ async function run() {
     await bb.js(`[...document.querySelectorAll('.player-row')].some(r => r.textContent.includes('Organizer'))`),
     await bb.js(`[...document.querySelectorAll('.player-row')].map(r => r.textContent.trim()).join('|')`));
 
+  check("and B's pitch drew the arriving spot",
+    await bb.js(`[...document.querySelectorAll('.pitch-spot')]
+      .some(s => (s.getAttribute('aria-label') || '').includes('Organizer'))`),
+    await bb.js(`[...document.querySelectorAll('.pitch-spot')]
+      .map(s => s.getAttribute('aria-label')).filter(Boolean).join('|')`));
+
   await bb.shoot('20-live-updated');
 
   console.log('\nA withdraws');
   const beforeLeave = await playing(bb);
-  await a.js(`(() => { const b=[...document.querySelectorAll('md-outlined-button')]
-    .find(x=>x.textContent.includes("Can't make it")); if(b) b.click(); })()`);
+  await a.js(pressMine);
+  await sleep(400);
+  await a.js(pressMine);
 
   let afterLeave = beforeLeave;
   const t2 = Date.now();

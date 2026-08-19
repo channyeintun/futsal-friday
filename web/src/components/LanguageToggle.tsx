@@ -34,6 +34,10 @@ export function LanguageToggle({
           // tagged per option, because the two labels are in two scripts.
           lang={code}
           className={`lang-option${code === value ? ' is-on' : ''}`}
+          // Silent: this is one control with two states rather than two things
+          // to press, and it sits directly under the field an organizer is
+          // typing a jab into. See `platform.sound`.
+          data-sound="none"
           aria-pressed={code === value}
           onClick={() => onChange(code)}
         >

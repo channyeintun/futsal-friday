@@ -129,12 +129,26 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
                     ? { ...r, status: 'in' as const }
                     : r,
                 );
-              return {
-                ...current,
-                registrations,
-                counts,
-                me: memberId === viewerId ? null : current.me,
-              };
+              /*
+               * Being promoted has to reach `me`, not just the list.
+               *
+               * The map above flips the promoted registration to `in`, but
+               * `me` is a separate copy of the viewer's own row — so somebody
+               * who came off the waitlist because a player dropped out was
+               * left holding `status: 'waitlist'` for as long as the screen
+               * stayed open, while the list beside it said they were playing.
+               * The button went on offering to leave a waitlist they were no
+               * longer on, and a spot on the pitch would have had nothing
+               * behind it.
+               */
+              const me =
+                memberId === viewerId
+                  ? null
+                  : promoted && current.me && promoted.memberId === viewerId
+                    ? { ...current.me, status: 'in' as const }
+                    : current.me;
+
+              return { ...current, registrations, counts, me };
             });
             return;
           }

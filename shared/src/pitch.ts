@@ -38,10 +38,29 @@ export interface PitchCandidate {
  * it would be the screen contradicting the button.
  */
 export function registeredSlots(candidates: readonly PitchCandidate[]): TeamSlot[] {
+  return slotsWithStatus(candidates, 'in');
+}
+
+/**
+ * Everybody waiting, one spot each.
+ *
+ * The same bodies-not-rows expansion, for the touchline. This exists because
+ * the pitch is now the only way in or out: with no button beside it, somebody
+ * on the waitlist would have nothing to press to leave, and somebody arriving
+ * at a full pitch would have nothing to press at all.
+ */
+export function waitingSlots(candidates: readonly PitchCandidate[]): TeamSlot[] {
+  return slotsWithStatus(candidates, 'waitlist');
+}
+
+function slotsWithStatus(
+  candidates: readonly PitchCandidate[],
+  status: RegistrationStatus,
+): TeamSlot[] {
   const slots: TeamSlot[] = [];
 
   for (const candidate of candidates) {
-    if (candidate.status !== 'in') continue;
+    if (candidate.status !== status) continue;
     const base = {
       memberId: candidate.memberId,
       memberName: candidate.memberName,
@@ -100,4 +119,122 @@ export function partyFits(
 ): boolean {
   if (maxPlayers == null) return true;
   return headsIn + 1 + Math.max(0, guests) <= maxPlayers;
+}
+
+/* ----------------------------------------------------------- the formation */
+
+/** Five 44px discs and four gaps is 244px; the narrowest card tested has 252. */
+const MAX_PER_LINE = 5;
+/** More lines than this and it is a crowd photo whatever you do to it. */
+const MAX_OUTFIELD_LINES = 8;
+/** The tallest the drawing may ever be, in px. Spots shrink to hold it. */
+export const PITCH_MAX_HEIGHT = 400;
+/** Between one line and the next. Shared with the stylesheet. */
+export const PITCH_LINE_GAP = 8;
+const PITCH_PAD = 24;
+const SPOT_MAX = 44;
+const SPOT_MIN = 24;
+/**
+ * What a line has to fit into on the narrowest phone anybody drives this on:
+ * 320 − 24 (`.content`) − 32 (`.card`) − 12 (`.pitch`) = 252.
+ *
+ * Sized from the worst case rather than from a measurement, deliberately. A
+ * `ResizeObserver` would buy a rounding error's worth of accuracy for a layout
+ * pass per frame, and on a wider screen the extra room simply becomes slack
+ * around a centred line — which is where it should go.
+ */
+const NARROW_WIDTH = 252;
+
+/**
+ * How the spots are dealt into lines, goal to goal.
+ *
+ * Symmetric about halfway with a keeper at each end, because that is the shape
+ * that makes a screenful of circles read as a game rather than a queue. Ten
+ * comes out 1-3-2-3-1 — a back three each way and two meeting on the centre
+ * spot — which is the count this group actually plays, and so the one that has
+ * to look right.
+ *
+ * Worth saying plainly: this is a drawing, not a line-up. Both sides are on
+ * this pitch and nobody has been picked yet, so standing in the front line
+ * means nothing at all. The one thing that *is* deliberate is that the empty
+ * spots sort last and therefore land near the bottom, which is where a thumb
+ * already is.
+ */
+export function pitchLines(count: number): number[] {
+  const n = Math.max(0, Math.floor(count));
+  if (n === 0) return [];
+  // Too few to have a shape. One in the middle, two facing each other, three
+  // in a line — each of those is a picture on its own.
+  if (n <= 3) return new Array<number>(n).fill(1);
+  if (n === 4) return [1, 2, 1];
+  // Five is one team, so there is no second keeper to draw: 2-2 is the
+  // standard futsal shape and it fills the field on its own.
+  if (n === 5) return [1, 2, 2];
+
+  const outfield = n - 2;
+  /*
+   * Roughly the square root, tilted by the field being taller than it is wide,
+   * so lines and bodies-per-line stay in the same proportion as the box. Then
+   * floored by however many lines the width forces, and capped — past eight the
+   * discs shrink instead, which is the honest thing to do about a session of
+   * sixty being a crowd rather than a formation.
+   */
+  const lines = Math.min(
+    MAX_OUTFIELD_LINES,
+    Math.max(2, Math.round(Math.sqrt(outfield * 1.25)), Math.ceil(outfield / MAX_PER_LINE)),
+  );
+  return [1, ...spread(outfield, lines), 1];
+}
+
+/** As even as it goes, and mirrored — the remainder goes out towards the ends. */
+function spread(total: number, parts: number): number[] {
+  const base = Math.floor(total / parts);
+  const sizes = new Array<number>(parts).fill(base);
+  let rest = total - base * parts;
+
+  for (let i = 0; rest >= 2 && i < Math.floor(parts / 2); i++) {
+    sizes[i]! += 1;
+    sizes[parts - 1 - i]! += 1;
+    rest -= 2;
+  }
+  if (rest === 1) {
+    sizes[Math.floor((parts - 1) / 2)]! += 1;
+    rest -= 1;
+  }
+  for (let i = 0; rest > 0; i = (i + 1) % parts) {
+    sizes[i]! += 1;
+    rest -= 1;
+  }
+  return sizes;
+}
+
+/** Between one spot and the next along a line. Tightens once a line is long. */
+export function pitchSpotGap(lines: readonly number[]): number {
+  return lines.length > 0 && Math.max(...lines) >= 6 ? 4 : 6;
+}
+
+/**
+ * How big one spot is drawn, in px.
+ *
+ * Both constraints at once: the widest line has to fit across the narrowest
+ * phone, and the whole field has to stay under `PITCH_MAX_HEIGHT` so that a
+ * session of sixty is a pitch rather than a scroll.
+ *
+ * Px and not `em`, for the reason `.form-squares` already gives — this is a
+ * graphic, and it has to be the same size in Burmese, which sets taller at the
+ * same font-size.
+ *
+ * A big roster does push the discs under 44px, and that is fine here rather
+ * than a compromise: only one spot on the whole pitch is ever pressable, and it
+ * carries its own 44px target as a pseudo-element that may overhang its cell
+ * freely, because nothing beside it can be pressed.
+ */
+export function pitchSlotSize(lines: readonly number[]): number {
+  if (lines.length === 0) return SPOT_MAX;
+  const widest = Math.max(...lines);
+  const gap = pitchSpotGap(lines);
+  const byWidth = (NARROW_WIDTH - (widest - 1) * gap) / widest;
+  const byHeight =
+    (PITCH_MAX_HEIGHT - (lines.length - 1) * PITCH_LINE_GAP - PITCH_PAD) / lines.length;
+  return Math.max(SPOT_MIN, Math.min(SPOT_MAX, Math.floor(Math.min(byWidth, byHeight))));
 }

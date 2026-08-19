@@ -75,7 +75,7 @@ check('taller line-height applied for Burmese',
   await js(`getComputedStyle(document.body).lineHeight`));
 const overflowing = await js(`(() => {
   const bad = [];
-  for (const el of document.querySelectorAll('.card, .hero, .player-row, .bottom-nav button, .badge')) {
+  for (const el of document.querySelectorAll('.card, .hero, .player-row, .pitch, .pitch-line-row, .pitch-spot, .pitch-status, .bottom-nav button, .badge')) {
     if (el.scrollWidth > el.clientWidth + 2) bad.push(el.className + ':' + el.scrollWidth + '>' + el.clientWidth);
   }
   return JSON.stringify(bad.slice(0,5));

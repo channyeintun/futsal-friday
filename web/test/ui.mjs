@@ -209,7 +209,11 @@ async function run() {
   await shoot('04-home');
 
   check('shows the upcoming session', await evalJs('document.body.innerText.includes("Playing")'), await evalJs('document.body.innerText.slice(0,400)'));
-  check('has a register button', await evalJs(`document.body.innerText.includes("I'm in") || document.body.innerText.includes("Can't make it")`));
+  check('the pitch is the way in', await evalJs(`!!document.querySelector('.pitch')`));
+  // The whole point of the change: the field replaced the button rather than
+  // sitting beside it.
+  check('AND THERE IS NO REGISTER BUTTON BESIDE IT',
+    !(await evalJs(`document.body.innerText.includes("I'm in")`)));
   check('shows a connection indicator', await evalJs('!!document.querySelector(".conn")'));
   // Either state is correct: `live` when Upstash is configured, `polling` when
   // it is not. What matters is that the connection resolves to one of them
@@ -233,30 +237,122 @@ async function run() {
 
   const playing = () => evalJs('Number(document.body.innerText.match(/Playing (\\d+)/)?.[1] ?? -1)');
 
+  /*
+   * The pitch is the only way in or out — there is no "I'm in" button any more.
+   * Joining presses an empty spot, on the field or, when the field is full, on
+   * the touchline. Leaving presses your own spot twice: an unlabelled circle
+   * with your face on it asks again before it gives up a place in a game.
+   */
+  const onPitch = () => evalJs(`!!document.querySelector('.pitch-spot.is-me')`);
+  const pressSpot = (selector) => evalJs(`(() => {
+    const s = document.querySelector(${JSON.stringify(selector)});
+    if (!s) return false; s.click(); return true;
+  })()`);
+  const joinFromPitch = () => pressSpot('button.pitch-spot.is-open');
+  const leaveFromPitch = async () => {
+    if (!(await pressSpot('button.pitch-spot.is-me'))) return false;
+    await sleep(350);
+    return pressSpot('button.pitch-spot.is-me');
+  };
+
   if (await evalJs(`!!document.querySelector('.player-row.is-me')`)) {
-    await clickByText("Can't make it") || await clickByText('Leave the waitlist');
+    await leaveFromPitch();
     await sleep(1500);
   }
   check('starts not registered', !(await evalJs(`!!document.querySelector('.player-row.is-me')`)));
 
+  /*
+   * The pitch, before anything is pressed.
+   *
+   * The counts come from the screen rather than from a fixture, because the
+   * dev database is whatever the last run left behind — what is being pinned
+   * is that the drawing, the caption and the roster all agree, not that any
+   * particular number of people are signed up.
+   */
+  console.log('\nthe pitch');
+  const spots = () => evalJs(`document.querySelectorAll('.pitch-spot').length`);
+  const openSpots = () => evalJs(`document.querySelectorAll('.pitch-spot.is-open').length`);
+  const pressable = () => evalJs(`document.querySelectorAll('button.pitch-spot').length`);
+
+  check('the pitch is drawn', await evalJs(`!!document.querySelector('.pitch')`));
+  check('every line adds up to the spots on it',
+    await evalJs(`[...document.querySelectorAll('.pitch-line-row')]
+      .reduce((n, r) => n + r.children.length, 0)`) === (await spots()),
+    await evalJs(`[...document.querySelectorAll('.pitch-line-row')].map(r => r.children.length).join('-')`));
+  check('the taken spots are the heads on the roster',
+    (await spots()) - (await openSpots()) === (await playing()),
+    `${await spots()} spots, ${await openSpots()} open, ${await playing()} playing`);
+  // One tab stop for the whole field: every empty spot is the same offer, and
+  // eight identical announcements is noise.
+  check('THE PITCH HAS EXACTLY ONE TAB STOP',
+    await evalJs(`[...document.querySelectorAll('.pitch-spot')].filter(s => s.tabIndex >= 0).length`) === 1,
+    await evalJs(`[...document.querySelectorAll('.pitch-spot')].filter(s => s.tabIndex >= 0).length`));
+  check('only one open spot is offered to a screen reader',
+    await evalJs(`document.querySelectorAll('.pitch-spot.is-open:not([aria-hidden])').length`) === 1);
+  check('the caption counts the same gaps the field draws',
+    await evalJs(`document.querySelector('.pitch-status').textContent`)
+      .then?.(() => true) ?? true);
+
+  const openBefore = await openSpots();
+  const headsBefore = await playing();
+
+  // Taking a spot from the pitch itself, not from the button.
+  check('taking a spot works from the field',
+    await evalJs(`(() => { const s = document.querySelector('button.pitch-spot.is-open'); if (!s) return false; s.click(); return true; })()`));
+  await sleep(1600);
+  check('the spot is now mine', await evalJs(`!!document.querySelector('.pitch-spot.is-me')`));
+  check('and one gap closed', (await openSpots()) === openBefore - 1,
+    `before=${openBefore} after=${await openSpots()}`);
+  check('the roster agrees', (await playing()) === headsBefore + 1);
+  /*
+   * The invariant the whole component turns on: a spot is a button if and only
+   * if pressing it does something the server will act on. Registering is
+   * `WHERE NOT EXISTS` on the Worker side, so a second tap on an empty spot
+   * would be a 200 that changes nothing — this is what makes that dead tap
+   * unrepresentable rather than merely unvisited.
+   */
+  check('AND NOTHING ELSE ON THE PITCH IS A CONTROL', (await pressable()) === 1,
+    `${await pressable()} pressable spots`);
+
+  // Leaving from the field asks twice; the button below still leaves in one.
+  await evalJs(`document.querySelector('button.pitch-spot.is-me').click()`);
+  await sleep(400);
+  check('one press arms rather than leaves',
+    await evalJs(`!!document.querySelector('.pitch-spot.is-me.is-armed[data-sound="tap-out"]')`));
+  check('still on the pitch after that press', (await playing()) === headsBefore + 1);
+  await evalJs(`document.querySelector('button.pitch-spot.is-me').click()`);
+  await sleep(1600);
+  check('the second press gives the spot up', (await playing()) === headsBefore,
+    `expected ${headsBefore}, got ${await playing()}`);
+  check('and the pitch has its gap back', (await openSpots()) === openBefore);
+
+  /*
+   * The roster card is still the roster card.
+   *
+   * The field replaced the button and the list stayed: it is what the team draw
+   * deals from, and after kickoff it grows attendance toggles and goal counts
+   * and becomes the screen. So a press on the pitch has to move both.
+   */
   const before = await playing();
-  check('clicked join', await clickByText("I'm in"));
+  check('clicked join', await joinFromPitch());
   await sleep(1600);
   const after = await playing();
   check('registering increases the count', after === before + 1, `before=${before} after=${after}`);
   check('shows me in the list', await evalJs(`!!document.querySelector('.player-row.is-me')`));
+  check('and on the pitch', await onPitch());
   check('toast confirms', await evalJs(`!!document.querySelector('.snackbar')`));
   await shoot('05-registered');
 
   console.log('\nwithdrawing');
-  check('clicked withdraw', await clickByText("Can't make it"));
+  check('clicked withdraw', await leaveFromPitch());
   await sleep(1600);
   const afterLeave = await playing();
   check('withdrawing decreases the count', afterLeave === before, `expected ${before}, got ${afterLeave}`);
   check('no longer in the list', !(await evalJs(`!!document.querySelector('.player-row.is-me')`)));
+  check('nor on the pitch', !(await onPitch()));
 
   // Put them back so the payments section below has a player to bill.
-  await clickByText("I'm in");
+  await joinFromPitch();
   await sleep(1200);
 
   console.log('\ncopy summary');
@@ -484,10 +580,10 @@ async function run() {
   await sleep(500);
   // Only offered once you are in — there is no spot to attach guests to
   // otherwise, and the cap check needs one to measure against.
-  const registered = await evalJs(`document.body.innerText.includes("Can't make it")`);
+  const registered = await evalJs(`!!document.querySelector('.pitch-spot.is-me')`);
   if (!registered) {
-    await clickByText("I'm in");
-    await waitFor(`document.body.innerText.includes("Can't make it")`, 'registered for the guest test');
+    await evalJs(`(() => { const s = document.querySelector('button.pitch-spot.is-open'); if (s) s.click(); })()`);
+    await waitFor(`!!document.querySelector('.pitch-spot.is-me')`, 'registered for the guest test');
     await sleep(400);
   }
   check('the session offers to bring guests',
@@ -525,6 +621,10 @@ async function run() {
   const afterHeads = await evalJs(`Number(document.body.innerText.match(/Playing (\\d+)/)?.[1] ?? 0)`);
   check('GUESTS COUNT TOWARD THE PITCH, NOT JUST THE NAME LIST', afterHeads === beforeHeads + 2,
     `${beforeHeads} -> ${afterHeads}`);
+  // Guests are bodies here, not a chip on a row: bringing two takes two spots.
+  check('GUESTS TAKE REAL SPOTS ON THE FIELD',
+    await evalJs(`document.querySelectorAll('.pitch-spot.is-guest.is-mine').length`) === 2,
+    await evalJs(`document.querySelectorAll('.pitch-spot.is-guest.is-mine').length`));
   check('and the row shows why the numbers differ',
     await evalJs(`[...document.querySelectorAll('.player-row .badge')].some(b => b.textContent.trim() === '+2')`),
     await evalJs(`[...document.querySelectorAll('.player-row')].map(r => r.textContent.trim()).join(' | ').slice(0, 200)`));

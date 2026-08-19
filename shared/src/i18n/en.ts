@@ -271,6 +271,33 @@ export const en = {
     loading: 'Loading session…',
   },
 
+  /* ------------------------------------------------------------- pitch */
+
+  pitch: {
+    heading: 'The pitch',
+    label: 'The pitch — press an empty spot to take it',
+    takeSpot: 'Take this spot',
+    spotsLeft: (left: number) => (left === 1 ? '1 spot left' : `${left} spots left`),
+    full: 'The pitch is full',
+    fullBody: 'Tap in anyway — you go on the waitlist, and people always drop out.',
+    noCap: 'No limit on this one',
+    noCapBody: 'Everyone who signs up plays.',
+    yourSpot: 'Your spot. Press to give it up.',
+    leaveArmed: 'Press again to give up your spot',
+    playerSpot: (name: string) => `${name} is in`,
+    guestSpot: (name: string) => `${name}'s guest`,
+    yourGuest: 'Your guest',
+    joining: 'Taking your spot…',
+    leaving: 'Giving up your spot…',
+    partyTooBig: (party: number, room: number) =>
+      `A party of ${party} needs ${party} spots. There are ${room}.`,
+    benchLabel: 'The waitlist',
+    joinWaitlist: 'Join the waitlist',
+    yourWaitlistSpot: 'You are waiting. Press to leave.',
+    leaveWaitlistArmed: 'Press again to leave the waitlist',
+    waitingSpot: (name: string) => `${name} is waiting`,
+  },
+
   /* --------------------------------------------------------------- mvp */
 
   mvp: {

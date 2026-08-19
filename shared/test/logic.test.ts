@@ -10,7 +10,10 @@ import { canVoteFor, mvpLeaders, sortTally } from '../src/mvp.ts';
 import { paymentsSummary, registrationSummary } from '../src/summary.ts';
 import { en } from '../src/i18n/en.ts';
 import { totalArrivedHeads } from '../src/attendance.ts';
-import { partyFits, pitchSlotCount, registeredSlots } from '../src/pitch.ts';
+import {
+  PITCH_LINE_GAP, PITCH_MAX_HEIGHT, partyFits, pitchLines, pitchSlotCount, pitchSlotSize,
+  pitchSpotGap, registeredSlots, waitingSlots,
+} from '../src/pitch.ts';
 import type { TeamMatch, TeamSlot } from '../src/models.ts';
 
 let failures = 0;
@@ -580,6 +583,8 @@ check('a guest takes a spot of their own',
   ['m1:0', 'm2:0', 'm2:1', 'm2:2', 'm4:0']);
 
 // The whole meaning of the waitlist is having no spot on the field.
+check('the waitlist stands on the touchline instead',
+  waitingSlots(roster).map((s) => `${s.memberId}:${s.guestIndex}`), ['m3:0', 'm3:1']);
 check('the waitlist is not on the pitch',
   registeredSlots(roster).some((s) => s.memberId === 'm3'), false);
 
@@ -607,6 +612,60 @@ check('a solo fits the last spot', partyFits(11, 12, 0), true);
 check('a party of three does not fit two spots', partyFits(10, 12, 2), false);
 check('and the party that does not fit leaves the spots empty', partyFits(11, 12, 1), false);
 check('without a cap everybody fits', partyFits(99, null, 5), true);
+
+
+// --- the pitch: the formation ---------------------------------------------
+
+// Symmetric about halfway, a keeper at each end. Ten is the count this group
+// actually plays, so it is the one that has to look like a game.
+check('ten is the shape people draw', pitchLines(10), [1, 3, 2, 3, 1]);
+check('a five-a-side is a keeper and two lines', pitchLines(5), [1, 2, 2]);
+check('eight is three lines of two between the keepers', pitchLines(8), [1, 2, 2, 2, 1]);
+check('twelve pinches at the centre circle', pitchLines(12), [1, 3, 2, 2, 3, 1]);
+check('fourteen is four even lines', pitchLines(14), [1, 3, 3, 3, 3, 1]);
+check('twenty stays symmetric', pitchLines(20), [1, 4, 3, 4, 3, 4, 1]);
+check('sixty is a crowd and says so', pitchLines(60), [1, 8, 7, 7, 7, 7, 7, 7, 8, 1]);
+check('one player stands on the centre spot', pitchLines(1), [1]);
+check('an empty pitch has no lines at all', pitchLines(0), []);
+check('the same count always draws the same pitch',
+  JSON.stringify(pitchLines(14)) === JSON.stringify(pitchLines(14)), true);
+
+// Everything below sweeps the whole legal range rather than sampling it: the
+// cap is 1..60 and a formation that overflows at 37 is a formation that ships.
+const everyCount = Array.from({ length: 61 }, (_, n) => n);
+
+check('the lines always add up, 0..60',
+  everyCount.filter((n) => pitchLines(n).reduce((a, b) => a + b, 0) !== n), []);
+
+check('no line is ever empty',
+  everyCount.filter((n) => pitchLines(n).some((width) => width < 1)), []);
+
+// 252px is the interior of a card on a 320px phone — narrower than anything
+// the browser suite drives, so holding here holds everywhere.
+check('and never overflow the narrowest phone',
+  everyCount.filter((n) => {
+    const lines = pitchLines(n);
+    if (lines.length === 0) return false;
+    const widest = Math.max(...lines);
+    return widest * pitchSlotSize(lines) + (widest - 1) * pitchSpotGap(lines) > 252;
+  }), []);
+
+check('the pitch never grows past its box',
+  everyCount.filter((n) => {
+    const lines = pitchLines(n);
+    if (lines.length === 0) return false;
+    return lines.length * pitchSlotSize(lines) + (lines.length - 1) * PITCH_LINE_GAP + 24
+      > PITCH_MAX_HEIGHT;
+  }), []);
+
+// A spot is never drawn smaller than this. It can go under 44 on a big roster
+// — 38 heads gives 30px — and that is what the pressable spot's own 44px
+// pseudo-element is for; it may overhang, because nothing beside it is a
+// control. Worth pinning so a change to the sizing has to face the question.
+check('a spot never gets too small to see',
+  everyCount.filter((n) => pitchLines(n).length > 0 && pitchSlotSize(pitchLines(n)) < 24), []);
+check('a roster this big does shrink the discs', pitchSlotSize(pitchLines(38)), 30);
+check('and a normal Friday does not', pitchSlotSize(pitchLines(12)), 44);
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

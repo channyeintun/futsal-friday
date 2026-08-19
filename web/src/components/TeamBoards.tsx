@@ -721,10 +721,14 @@ function GoalStepper({
   return (
     <div className={`score-side team-${colourIndex + 1}`}>
       <span className="score-label truncate">{label}</span>
+      {/* Both steppers are silent. Entering 5-3 is eight presses in two
+          seconds, and eight of the same chime is a machine gun rather than
+          feedback. See `platform.sound`. */}
       <div className="score-stepper">
         <button
           type="button"
           className="score-step"
+          data-sound="none"
           onClick={() => onChange(Math.max(0, value - 1))}
           disabled={value === 0}
           aria-label={`${label} −1`}
@@ -737,6 +741,7 @@ function GoalStepper({
         <button
           type="button"
           className="score-step"
+          data-sound="none"
           onClick={() => onChange(Math.min(MAX_MATCH_GOALS, value + 1))}
           disabled={value === MAX_MATCH_GOALS}
           aria-label={`${label} +1`}
