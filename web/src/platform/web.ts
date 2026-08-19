@@ -321,8 +321,26 @@ const clipBytes = new Map<SoundName, Promise<ArrayBuffer | null>>();
 const clipBuffers = new Map<SoundName, AudioBuffer>();
 
 let audio: AudioContext | null = null;
+/** Every clip goes through this, so the two stay level with each other. */
+let level: GainNode | null = null;
 /** Latched once a browser has proved it cannot do this, so it is asked once. */
 let audioRefused = false;
+
+/**
+ * How loud a button is, against the clips as they are stored.
+ *
+ * They are mastered close to full scale, which is right for a file and much too
+ * much for a noise that fires on every press: a UI blip should sit under the
+ * conversation the phone is already having, not on top of it. About ten
+ * decibels down puts the press at roughly -11 dBFS, which is audible on a phone
+ * speaker at arm's length and does not make the app the loudest thing in a
+ * room.
+ *
+ * Applied here rather than baked into the files so that the two clips keep the
+ * half-decibel match they were encoded with, and so changing it is one number
+ * rather than a re-encode.
+ */
+const CLIP_GAIN = 0.3;
 
 function audioCtor(): typeof AudioContext | undefined {
   return (
@@ -388,6 +406,9 @@ function wakeAudio(): AudioContext | null {
     audioRefused = true;
     return null;
   }
+  level = audio.createGain();
+  level.gain.value = CLIP_GAIN;
+  level.connect(audio.destination);
   // Warm both clips now rather than at the first press, for the same reason
   // the context is built here.
   for (const name of CLIP_NAMES) void clipBuffer(name);
@@ -449,7 +470,7 @@ function playSound(name: SoundName): void {
 function startClip(context: AudioContext, buffer: AudioBuffer): void {
   const source = context.createBufferSource();
   source.buffer = buffer;
-  source.connect(context.destination);
+  source.connect(level ?? context.destination);
   source.start();
 }
 
