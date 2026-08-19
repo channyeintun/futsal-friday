@@ -27,3 +27,7 @@ api/build/
 
 # Working directories for coding agents.
 .claude/worktrees/
+
+# Reference screenshots dropped in for the restyle. Fifty megabytes of PNG that
+# the app does not ship and the history does not need.
+EA-FC/

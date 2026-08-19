@@ -297,6 +297,17 @@ export function Pitch({
         }}
       >
         <PitchTurf />
+        {/*
+          The formation, written across the grass.
+       
+          Straight off the squad screen, where "4-4-2" sits in enormous ghosted
+          type behind the players. It costs nothing here because the shape is
+          already computed — `pitchLines` *is* the formation — and it is the one
+          piece of FC's vocabulary this app can speak natively.
+        */}
+        <span className="pitch-formation" aria-hidden="true">
+          {lines.join('-')}
+        </span>
         <div className={`pitch-rows${dealing ? ' is-dealing' : ''}`}>
           {lines.map((width, line) => {
             const from = lines.slice(0, line).reduce((a, b) => a + b, 0);

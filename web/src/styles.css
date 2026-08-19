@@ -137,15 +137,23 @@
    * must not be merged: a marking may be faint, because it is decoration, while
    * a ring bounds something you can press and has to clear 3:1.
    */
-  --ff-pitch: #23624a;
-  --ff-pitch-mow: #27694f;
-  --ff-pitch-line: rgb(255 255 255 / 0.55);
-  --ff-pitch-ring: rgb(255 255 255 / 0.9);
-  --ff-pitch-on: #ffffff;
-  /* Armed. `--md-sys-color-error` is 1.1:1 on turf and unusable here — which is
-     why the armed state also changes the label and the caption. Colour is never
-     the only thing carrying it. */
-  --ff-pitch-warn: #ffb4ab;
+  /*
+   * A dark line drawing, not a green field.
+   *
+   * The single biggest thing separating this card from the game: FC draws
+   * its tactics pitch and its match preview as a translucent shape with
+   * thin markings, and saves the saturated green for the squad *builder*.
+   * A bright green rectangle inside a near-black card was the one element
+   * that kept reading as "an app" — it looked pasted on rather than lit.
+   *
+   * The green survives in the hue; it stops carrying the value.
+   */
+  --ff-pitch: #dfe7e2;
+  --ff-pitch-mow: #d7e1db;
+  --ff-pitch-line: rgb(17 17 19 / 0.22);
+  --ff-pitch-ring: rgb(17 17 19 / 0.45);
+  --ff-pitch-on: #111113;
+  --ff-pitch-ghost: rgb(17 17 19 / 0.09);
 
   /* The shared shape language: big soft rectangles, fully round pills. */
   /*
@@ -250,11 +258,12 @@
     /* A night pitch: lifted clear of black like the team set above, and kept
        well away from #4ade80 — a turf that matched the accent would erase the
        difference between the field and the thing you press on it. */
-    --ff-pitch: #13351f;
-    --ff-pitch-mow: #163b23;
-    --ff-pitch-line: rgb(255 255 255 / 0.34);
-    --ff-pitch-ring: rgb(255 255 255 / 0.7);
+    --ff-pitch: #0d1a1a;
+    --ff-pitch-mow: #10201f;
+    --ff-pitch-line: rgb(255 255 255 / 0.26);
+    --ff-pitch-ring: rgb(255 255 255 / 0.72);
     --ff-pitch-on: #ffffff;
+    --ff-pitch-ghost: rgb(255 255 255 / 0.07);
     --ff-pitch-warn: #ffb4ab;
 
     color-scheme: dark;
@@ -1650,15 +1659,24 @@ button.pitch-spot::before {
   color: var(--ff-pitch-on);
 }
 
-/* A dashed ring is already this app's vocabulary for "nobody here" — the same
-   shape `.team-guest` uses on the board. */
+/*
+ * An empty spot is a card placeholder, not a dashed circle.
+ *
+ * FC's empty squad screen is a grid of rounded rectangles with the crest
+ * ghosted in the middle. Keeping the radius small against the round avatars
+ * beside them is what makes "nobody here" read as a slot waiting for somebody
+ * rather than as a person with no picture.
+ */
 .pitch-spot.is-open .pitch-disc {
   border: 2px dashed var(--ff-pitch-ring);
+  border-radius: 6px;
+  background: rgb(127 127 127 / 0.12);
 }
 
 .pitch-spot.is-guest .pitch-disc {
   border: 1px dashed var(--ff-pitch-ring);
-  background: rgb(0 0 0 / 0.18);
+  border-radius: 6px;
+  background: rgb(127 127 127 / 0.1);
 }
 
 /* `Avatar` tints itself `hsl(h 45% 38%)`, which is mid-dark and sinks straight
@@ -1667,8 +1685,78 @@ button.pitch-spot::before {
   border: 2px solid var(--ff-pitch-ring);
 }
 
+/*
+ * Your spot is marked with corner brackets, not a heavier ring.
+ *
+ * That is how the squad screen picks out the card you are on — four cyan
+ * corners standing off the item rather than a stroke around it — and it is
+ * instantly recognisable to anybody who has played it. Eight one-pixel
+ * gradients, four corners, no extra element.
+ */
 .pitch-spot.is-me .avatar {
-  border-width: 3px;
+  border-width: 2px;
+}
+
+.pitch-spot.is-me::after {
+  content: '';
+  position: absolute;
+  /*
+   * Inside the spot, not standing off it.
+   *
+   * Off-box brackets overflowed and the Burmese sweep caught the row at 99
+   * against 94 — the same trap as the hero watermark. They lose nothing by
+   * coming in: the avatar is a circle inscribed in a square box, so brackets on
+   * the box corners already float clear of it.
+   */
+  inset: 0;
+  pointer-events: none;
+  --ff-bracket: 2px;
+  --ff-bracket-arm: 9px;
+  background:
+    linear-gradient(var(--ff-cyan) 0 0) 0 0 / var(--ff-bracket-arm) var(--ff-bracket) no-repeat,
+    linear-gradient(var(--ff-cyan) 0 0) 0 0 / var(--ff-bracket) var(--ff-bracket-arm) no-repeat,
+    linear-gradient(var(--ff-cyan) 0 0) 100% 0 / var(--ff-bracket-arm) var(--ff-bracket) no-repeat,
+    linear-gradient(var(--ff-cyan) 0 0) 100% 0 / var(--ff-bracket) var(--ff-bracket-arm) no-repeat,
+    linear-gradient(var(--ff-cyan) 0 0) 0 100% / var(--ff-bracket-arm) var(--ff-bracket) no-repeat,
+    linear-gradient(var(--ff-cyan) 0 0) 0 100% / var(--ff-bracket) var(--ff-bracket-arm) no-repeat,
+    linear-gradient(var(--ff-cyan) 0 0) 100% 100% / var(--ff-bracket-arm) var(--ff-bracket) no-repeat,
+    linear-gradient(var(--ff-cyan) 0 0) 100% 100% / var(--ff-bracket) var(--ff-bracket-arm) no-repeat;
+}
+
+/* Armed to leave: the brackets turn, so the warning is not colour alone. */
+.pitch-spot.is-me.is-armed::after {
+  --ff-cyan: var(--ff-pitch-warn);
+}
+
+/*
+ * The formation, ghosted across the grass.
+ *
+ * Bottom-left and enormous, the way the squad screen writes "4-4-2" behind the
+ * players. Low enough to be texture rather than text — it is not information,
+ * the pitch above it already is.
+ */
+.pitch-formation {
+  position: absolute;
+  /*
+   * Bounded on both sides and clipping its own overflow, so a long formation —
+   * sixty heads gives 1-8-7-7-7-7-7-7-8-1 — cannot widen the pitch. An element
+   * that clips does not contribute to an ancestor's scrollable overflow, which
+   * is the difference between this and the hero watermark that tripped the
+   * Burmese sweep.
+   */
+  left: 10px;
+  right: 10px;
+  overflow: hidden;
+  white-space: nowrap;
+  bottom: 2px;
+  z-index: 0;
+  pointer-events: none;
+  font-size: 2.6rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--ff-pitch-ghost);
+  font-variant-numeric: tabular-nums;
 }
 
 .pitch-spot.is-armed .avatar {
