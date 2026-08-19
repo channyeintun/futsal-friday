@@ -17,7 +17,7 @@ createRoot(container).render(
 // it only costs offline support and reminders, not the app.
 void platform.registerServiceWorker();
 
-// Every button in the app makes the same noise, and this is the one place that
-// hears all of them — including the ones inside Material Web's shadow roots.
-// See `platform.sound`.
-platform.sound.installPressFeedback();
+// One listener at the document answers every button in the app — including the
+// ones inside Material Web's shadow roots — with whatever that button declared
+// and whatever the member has switched on. See `platform.installPressFeedback`.
+platform.installPressFeedback();

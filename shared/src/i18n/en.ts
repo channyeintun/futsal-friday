@@ -553,6 +553,9 @@ export const en = {
     soundBody: 'The buttons click when you press them. Turn it off if you would rather they did not.',
     soundOn: 'On',
     soundOff: 'Off',
+    haptics: 'Vibration',
+    hapticsBody:
+      'A buzz when you take a spot and when you give one up. Nothing else in the app vibrates.',
   },
 
   editor: {

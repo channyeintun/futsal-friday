@@ -42,6 +42,7 @@ export function AdminPage() {
         <LanguageCard />
         <ClockCard />
         <SoundCard />
+        <HapticsCard />
         <MyDeviceCard />
         <ReminderSettings />
         <div className="card">
@@ -70,6 +71,7 @@ export function AdminPage() {
       <LanguageCard />
       <ClockCard />
       <SoundCard />
+      <HapticsCard />
       <MyDeviceCard />
       <ReminderSettings />
       {/* Above the roster: sharing one link is the normal way to onboard, and
@@ -393,6 +395,49 @@ function SoundCard() {
             onClick={() => {
               if (choice === on) return;
               platform.sound.setEnabled(choice);
+              setOn(choice);
+            }}
+          >
+            {choice ? m.admin.soundOn : m.admin.soundOff}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- vibration */
+
+/**
+ * The buzz, which only two presses in the app make.
+ *
+ * Its own switch rather than a line under the sound one. They are different
+ * senses and the reasons to want them differ: a phone already on silent still
+ * vibrates by design, which is exactly the case where somebody wants to feel a
+ * press land and not hear it.
+ *
+ * Absent entirely where the browser cannot vibrate — which is every iPhone, so
+ * this is not a rare branch. Offering a switch that does nothing is worse than
+ * offering nothing, and it is the same rule `ReminderSettings` follows for push.
+ */
+function HapticsCard() {
+  const m = useMessages();
+  const [on, setOn] = useState(platform.haptics.enabled());
+
+  if (!platform.haptics.supported()) return null;
+
+  return (
+    <div className="card">
+      <h2 className="card-title">{m.admin.haptics}</h2>
+      <p className="card-sub">{m.admin.hapticsBody}</p>
+      <div className="row wrap" style={{ gap: 8 }}>
+        {([true, false] as const).map((choice) => (
+          <Button
+            key={String(choice)}
+            variant={choice === on ? 'filled' : 'outlined'}
+            onClick={() => {
+              if (choice === on) return;
+              platform.haptics.setEnabled(choice);
               setOn(choice);
             }}
           >

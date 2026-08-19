@@ -91,6 +91,24 @@ async function run() {
   await send('Runtime.enable');
   await send('Log.enable');
   await send('Network.enable');
+
+  /*
+   * Stand in for the vibration motor, on every document.
+   *
+   * Two reasons, and the second is the one that bites. Headless Chrome has no
+   * motor, so a real call proves nothing — and Chrome refuses `navigator.vibrate`
+   * outright until the frame has had a genuine tap, which a synthetic `.click()`
+   * never is. Left alone it logs "Blocked call to navigator.vibrate", which the
+   * console-error assertion at the end of this file rightly fails on.
+   *
+   * `addScriptToEvaluateOnNewDocument` rather than a one-off `evalJs`, because a
+   * `Page.navigate` would otherwise wipe the stub and the next pitch press would
+   * reach the real API again.
+   */
+  await send('Page.addScriptToEvaluateOnNewDocument', {
+    source: `window.__buzz = [];
+      navigator.vibrate = (pattern) => { window.__buzz.push(JSON.stringify(pattern)); return true; };`,
+  });
   // iPhone 14-ish viewport: this app lives inside a chat webview on a phone.
   await send('Emulation.setDeviceMetricsOverride', {
     width: 390, height: 844, deviceScaleFactor: 2, mobile: true,
@@ -304,6 +322,11 @@ async function run() {
    * — which is exactly how that shipped unnoticed. Aiming at the far end is
    * what makes the two orders tell different stories.
    */
+  // Recorded by the stub installed on every document above. Cleared here so the
+  // counts below are about these presses and not the sign-in that preceded them.
+  await evalJs(`window.__buzz.length = 0`);
+  const buzzes = () => evalJs(`JSON.stringify(window.__buzz)`);
+
   const pressed = await evalJs(`(() => {
     const spots = [...document.querySelectorAll('.pitch-spot')];
     const open = spots.filter((s) => s.classList.contains('is-open') && s.tagName === 'BUTTON');
@@ -319,6 +342,7 @@ async function run() {
     .findIndex((s) => s.classList.contains('is-me'))`);
   check('YOU STAND WHERE YOU PRESSED, NOT WHERE THE LIST PUT YOU', landed === pressed,
     `pressed ${pressed}, landed on ${landed}`);
+  check('taking a spot buzzes once', (await buzzes()) === '["[18]"]', await buzzes());
   check('and one gap closed', (await openSpots()) === openBefore - 1,
     `before=${openBefore} after=${await openSpots()}`);
   check('the roster agrees', (await playing()) === headsBefore + 1);
@@ -338,10 +362,15 @@ async function run() {
   check('one press arms rather than leaves',
     await evalJs(`!!document.querySelector('.pitch-spot.is-me.is-armed[data-sound="tap-out"]')`));
   check('still on the pitch after that press', (await playing()) === headsBefore + 1);
+  // Arming changes nothing yet, so it must not feel like it did.
+  check('ARMING DOES NOT BUZZ', (await buzzes()) === '["[18]"]', await buzzes());
   await evalJs(`document.querySelector('button.pitch-spot.is-me').click()`);
   await sleep(1600);
   check('the second press gives the spot up', (await playing()) === headsBefore,
     `expected ${headsBefore}, got ${await playing()}`);
+  // A single buzz cannot mean two opposite things, so leaving is a different one.
+  check('and giving it up feels different from taking it',
+    (await buzzes()) === '["[18]","[12,40,22]"]', await buzzes());
   check('and the pitch has its gap back', (await openSpots()) === openBefore);
 
   /*

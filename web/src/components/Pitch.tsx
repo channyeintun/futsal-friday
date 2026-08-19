@@ -449,6 +449,10 @@ function renderSpot({
         className={className}
         style={style}
         disabled={busy}
+        // The only two presses in the app that buzz are this one and its
+        // opposite. Both change what you have promised the group, and both are
+        // worth feeling land without looking. See `platform.haptics`.
+        data-haptic="in"
         onClick={() => onJoin(spot.key, onBench ? null : index)}
         // Every empty spot is the same offer, so only the first is worth
         // announcing — eight identical "Take this spot" is noise, and the
@@ -470,9 +474,12 @@ function renderSpot({
         className={className}
         style={style}
         disabled={busy}
-        // Only once armed. The first press is not a tap-out, and voicing it as
-        // one would say the spot had been given up when it has not.
+        // Both only once armed. The first press is not a tap-out — it changes
+        // nothing yet — and voicing or buzzing it as one would say the spot had
+        // been given up when it has not. The ring, the label and the clip
+        // already say that a press landed.
         data-sound={armed ? 'tap-out' : undefined}
+        data-haptic={armed ? 'out' : undefined}
         aria-label={
           onBench
             ? armed

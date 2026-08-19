@@ -3,6 +3,7 @@ import type {
   CompressedImage,
   EventStream,
   EventStreamHandlers,
+  HapticName,
   Platform,
   PushSubscriptionJson,
   SoundName,
@@ -509,25 +510,43 @@ function isDisabled(element: Element): boolean {
 }
 
 /**
- * Which clip a control asked for, walking up from whatever was actually hit.
+ * What a control declared, walking up from whatever was actually hit.
  *
- * Bounded at the control on purpose. `data-sound` is a property of a button and
- * not of the region it sits in, so an unbounded walk would let one marked
- * container re-voice every button inside it — a bug nobody would ever find by
- * ear. The walk still has to *start* at the target, because a tap on a slotted
- * `<Icon>` inside a Material button lands on the `<svg>`.
+ * Bounded at the control on purpose. These are properties of a button and not
+ * of the region it sits in, so an unbounded walk would let one marked container
+ * re-voice every button inside it — a bug nobody would find by ear. The walk
+ * still has to *start* at the target, because a tap on a slotted `<Icon>`
+ * inside a Material button lands on the `<svg>`.
  */
-function clipFor(target: Element, control: Element): SoundName | null {
+function declaredOn(target: Element, control: Element, attribute: string): string | null {
   let node: Element | null = target;
   while (node) {
-    const marked = node.getAttribute('data-sound');
-    if (marked === 'none') return null;
-    if (marked === 'tap-out') return 'tapOut';
-    if (marked !== null) return 'press';
+    const value = node.getAttribute(attribute);
+    if (value !== null) return value;
     if (node === control) break;
     node = node.parentElement;
   }
-  return 'press';
+  return null;
+}
+
+/** Which clip a control asked for. Every button makes a noise unless it opts out. */
+function clipFor(target: Element, control: Element): SoundName | null {
+  const marked = declaredOn(target, control, 'data-sound');
+  if (marked === 'none') return null;
+  return marked === 'tap-out' ? 'tapOut' : 'press';
+}
+
+/**
+ * Which buzz a control asked for, and `null` for the overwhelming majority.
+ *
+ * The opposite default to the clip: sound is on everywhere unless refused,
+ * haptics is off everywhere unless asked for. A phone that vibrates on every
+ * tap is a phone somebody switches off, and then the two presses that were
+ * worth feeling are switched off with it.
+ */
+function hapticFor(target: Element, control: Element): HapticName | null {
+  const marked = declaredOn(target, control, 'data-haptic');
+  return marked === 'in' || marked === 'out' ? marked : null;
 }
 
 function installPressFeedback(): () => void {
@@ -566,6 +585,8 @@ function installPressFeedback(): () => void {
     if (!control || isDisabled(control)) return;
     const clip = clipFor(target, control);
     if (clip) playSound(clip);
+    const haptic = hapticFor(target, control);
+    if (haptic) buzz(haptic);
   };
 
   document.addEventListener('click', onClick, { capture: true });
@@ -586,7 +607,59 @@ const sound: Platform['sound'] = {
     // way round: the last thing sound does is confirm it heard you.
     if (on) playSound('press');
   },
-  installPressFeedback,
+};
+
+/* --------------------------------------------------------------- haptics */
+
+const HAPTICS_KEY = 'haptics';
+
+/**
+ * What each of the two feels like.
+ *
+ * Short, because the Vibration API's unit is a blunt motor running for a number
+ * of milliseconds rather than anything shaped: past about forty it stops being
+ * a tick and becomes a phone going off in a pocket.
+ *
+ * Taking a spot is one clean tap. Giving one up is two, split by a gap — the
+ * same idea as the second clip. A single buzz cannot mean two opposite things,
+ * and the difference has to survive being felt through a jacket rather than
+ * looked at.
+ */
+const HAPTIC_PATTERNS: Record<HapticName, number[]> = {
+  in: [18],
+  out: [12, 40, 22],
+};
+
+function hapticsSupported(): boolean {
+  return typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
+}
+
+function hapticsEnabled(): boolean {
+  return storage.get(HAPTICS_KEY) !== '0';
+}
+
+function buzz(name: HapticName): void {
+  if (!hapticsEnabled() || !hapticsSupported()) return;
+  try {
+    // Returns false rather than throwing when the browser declines — a
+    // backgrounded tab, a device with no motor, an OS-level setting. There is
+    // nothing to do about any of those, and nothing worth saying about them.
+    navigator.vibrate(HAPTIC_PATTERNS[name]);
+  } catch {
+    /* Some webviews expose it and then refuse. */
+  }
+}
+
+const haptics: Platform['haptics'] = {
+  supported: hapticsSupported,
+  enabled: hapticsEnabled,
+  setEnabled(on) {
+    storage.set(HAPTICS_KEY, on ? '1' : '0');
+    // Turning it on shows what it feels like, for the same reason the sound
+    // switch makes its noise: a setting about a sensation should demonstrate.
+    if (on) buzz('in');
+  },
+  buzz,
 };
 
 /* ----------------------------------------------------------- notifications */
@@ -806,6 +879,8 @@ export const webPlatform: Platform = {
   viewTransition,
   visibility,
   sound,
+  haptics,
+  installPressFeedback,
   openExternal(url) {
     window.open(url, '_blank', 'noopener,noreferrer');
   },

@@ -130,16 +130,36 @@ export interface Sound {
   /** Whether the member wants a noise, for a settings control. */
   enabled(): boolean;
   setEnabled(on: boolean): void;
+}
+
+/** The two things worth feeling: taking a spot, and giving one up. */
+export type HapticName = 'in' | 'out';
+
+/**
+ * A buzz under the thumb.
+ *
+ * Only the two presses that change what you have promised the group — taking a
+ * spot and giving one up. Everything else in the app makes a noise and nothing
+ * else buzzes, because a phone that vibrates on every tap is a phone somebody
+ * turns off, and because these two are the ones you want to feel land without
+ * looking: standing on a pitch, in the dark, deciding on the way to work.
+ *
+ * A separate switch from the sound rather than the same one. They are different
+ * senses and the reasons to want them differ — a phone already on silent still
+ * vibrates by design, which is exactly the case where somebody wants the buzz
+ * and not the click.
+ */
+export interface Haptics {
   /**
-   * Start listening for presses. Called once from the entry point; the
-   * returned teardown exists for hot reloading and nothing else calls it.
-   *
-   * A control opts out with `data-sound="none"`, and one that takes something
-   * away asks for the other clip with `data-sound="tap-out"` — which the
-   * shared `Button` forwards through its own `sound` prop, since React does
-   * not pass unknown attributes to a custom element.
+   * False wherever the browser cannot vibrate — which today is every iPhone and
+   * iPad, since Safari has never implemented this. Checked rather than assumed,
+   * so the setting can be hidden instead of offering a switch that does nothing.
    */
-  installPressFeedback(): () => void;
+  supported(): boolean;
+  enabled(): boolean;
+  setEnabled(on: boolean): void;
+  /** Never throws. Silent where unsupported, switched off, or refused. */
+  buzz(name: HapticName): void;
 }
 
 /** Push notification support, as far as the UI needs to know about it. */
@@ -177,7 +197,24 @@ export interface Platform {
   viewTransition: ViewTransition;
   visibility: Visibility;
   sound: Sound;
+  haptics: Haptics;
   notifications: Notifications;
+  /**
+   * Start listening for presses, once, from the entry point. Returns the
+   * teardown that hot reloading needs and nothing else calls.
+   *
+   * It sits here rather than under `sound` because it is about presses, not
+   * about noise: one listener at the document answers every button in the app,
+   * in whichever ways are switched on. Controls *declare* what a press means
+   * and never reach for `play` or `buzz` themselves — `data-sound="none"` stays
+   * quiet, `data-sound="tap-out"` asks for the other clip, and
+   * `data-haptic="in" | "out"` asks for a buzz. Declaring rather than calling
+   * is what stops a control firing twice: once itself, and once through here.
+   *
+   * The shared `Button` forwards its `sound` prop as `data-sound`, because
+   * React will not pass an unknown attribute to a custom element.
+   */
+  installPressFeedback(): () => void;
   /** Registers the service worker. Resolves false where unsupported. */
   registerServiceWorker(): Promise<boolean>;
   openExternal(url: string): void;
