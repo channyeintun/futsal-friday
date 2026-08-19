@@ -166,7 +166,6 @@
   --ff-pitch-on: #ffffff;
   --ff-pitch-ghost: rgb(255 255 255 / 0.07);
   /* Armed to leave. On the dark field in both themes, so it does not invert. */
-  --ff-pitch-warn: #ffb4ab;
   --ff-item-hi: #f2f4f8;
   --ff-item-lo: #c9ced8;
   --ff-item-on: #111113;
@@ -571,6 +570,30 @@ md-filled-button {
   box-shadow:
     0 0 26px var(--ff-cta-glow),
     0 0 10px rgb(46 217 200 / 0.3);
+
+  /*
+   * Disabled has its own label token, and forgetting it is invisible text.
+   *
+   * `--md-filled-button-label-text-color` does not apply when the button is
+   * disabled — Material switches to a separate property whose default is
+   * `on-surface`, which is *dark* in light mode. On this button's dark fill
+   * that is black on near-black: the label does not disappear politely, it
+   * disappears completely, which is what "Post it" was doing with an empty box.
+   *
+   * The container tokens are left alone deliberately: the fill is painted on
+   * the host, not through them, so dimming the host is what actually reads as
+   * disabled — and the glow goes with it, because a button that cannot be
+   * pressed has no business glowing.
+   */
+  --md-filled-button-disabled-label-text-color: var(--ff-cta-label);
+  --md-filled-button-disabled-label-text-opacity: 1;
+  --md-filled-button-disabled-icon-color: var(--ff-cta-label);
+  --md-filled-button-disabled-icon-opacity: 1;
+}
+
+md-filled-button[disabled] {
+  opacity: 0.45;
+  box-shadow: none;
 }
 
 /*
@@ -1761,6 +1784,25 @@ md-outlined-text-field {
 /* The face fills the card's width and is exactly the avatar's own size, so the
    picture needs no override to sit right. */
 /*
+ * Armed to leave: the card changes metal.
+ *
+ * This used to be four cyan corner brackets standing off the card — the squad
+ * screen's way of marking the item you are on. It went because a selection box
+ * on a pitch where nothing is "selected" is a frame around your own face for no
+ * reason, and it fought the card it was drawn on.
+ *
+ * The state still has to be visible, and a state belongs *on* the item rather
+ * than in a box around it: an armed card turns warm, keeps its changed label,
+ * and the caption under the field says so in words. Colour is never carrying it
+ * alone.
+ */
+.pitch-spot.is-me.is-armed .pitch-card {
+  background:
+    radial-gradient(66% 46% at 52% 26%, rgb(255 255 255 / 0.5), transparent 72%),
+    linear-gradient(158deg, #ffd2cb 0%, #e07a6a 56%, #c25a48 100%);
+}
+
+/*
  * The card itself, inside the spot.
  *
  * A layer of its own so the silhouette mask has something to cut that is not
@@ -1879,7 +1921,6 @@ md-outlined-text-field {
   font-weight: 400;
 }
 
-
 button.pitch-spot {
   cursor: pointer;
 }
@@ -1924,66 +1965,6 @@ button.pitch-spot::before {
   border: 2px dashed var(--ff-pitch-ring);
   border-radius: 6px;
   background: rgb(127 127 127 / 0.12);
-}
-
-.pitch-spot.is-guest .pitch-disc {
-  border: 1px dashed var(--ff-pitch-ring);
-  border-radius: 6px;
-  background: rgb(127 127 127 / 0.1);
-}
-
-/* `Avatar` tints itself `hsl(h 45% 38%)`, which is mid-dark and sinks straight
-   into the turf. One ring fixes every tint and every photograph at once. */
-.pitch-spot .avatar {
-  border: 2px solid var(--ff-pitch-ring);
-}
-
-/*
- * Your spot is marked with corner brackets, not a heavier ring.
- *
- * That is how the squad screen picks out the card you are on — four cyan
- * corners standing off the item rather than a stroke around it — and it is
- * instantly recognisable to anybody who has played it. Eight one-pixel
- * gradients, four corners, no extra element.
- */
-.pitch-spot.is-me .avatar {
-  border-width: 2px;
-}
-
-.pitch-spot.is-me::after {
-  content: '';
-  position: absolute;
-  /*
-   * Inside the spot, not standing off it.
-   *
-   * Off-box brackets overflowed and the Burmese sweep caught the row at 99
-   * against 94 — the same trap as the hero watermark. They lose nothing by
-   * coming in: the avatar is a circle inscribed in a square box, so brackets on
-   * the box corners already float clear of it.
-   */
-  inset: 0;
-  pointer-events: none;
-  --ff-bracket: 2px;
-  --ff-bracket-arm: 9px;
-  background:
-    linear-gradient(var(--ff-cyan) 0 0) 0 0 / var(--ff-bracket-arm) var(--ff-bracket) no-repeat,
-    linear-gradient(var(--ff-cyan) 0 0) 0 0 / var(--ff-bracket) var(--ff-bracket-arm) no-repeat,
-    linear-gradient(var(--ff-cyan) 0 0) 100% 0 / var(--ff-bracket-arm) var(--ff-bracket) no-repeat,
-    linear-gradient(var(--ff-cyan) 0 0) 100% 0 / var(--ff-bracket) var(--ff-bracket-arm) no-repeat,
-    linear-gradient(var(--ff-cyan) 0 0) 0 100% / var(--ff-bracket-arm) var(--ff-bracket) no-repeat,
-    linear-gradient(var(--ff-cyan) 0 0) 0 100% / var(--ff-bracket) var(--ff-bracket-arm) no-repeat,
-    linear-gradient(var(--ff-cyan) 0 0) 100% 100% / var(--ff-bracket-arm) var(--ff-bracket) no-repeat,
-    linear-gradient(var(--ff-cyan) 0 0) 100% 100% / var(--ff-bracket) var(--ff-bracket-arm) no-repeat;
-}
-
-/* Armed to leave: the brackets turn, so the warning is not colour alone. */
-.pitch-spot.is-me.is-armed::after {
-  --ff-cyan: var(--ff-pitch-warn);
-}
-
-
-.pitch-spot.is-armed .avatar {
-  border-color: var(--ff-pitch-warn);
 }
 
 .pitch-spot.is-pending {
@@ -2223,7 +2204,7 @@ button.pitch-spot::before {
   --ff-tier-lo: #9c6438;
 }
 
-/* Yours is bracketed, the same way your spot on the pitch is. */
+/* Yours is bracketed, the way FC marks the item that is you. */
 .fc-card.is-me::after {
   content: '';
   position: absolute;
