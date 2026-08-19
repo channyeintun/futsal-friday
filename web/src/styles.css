@@ -238,10 +238,14 @@
     /* Sampled out of the game. The cyan is the one that does the most work. */
     --ff-cyan: #1ff0e6;
     --ff-azure: #0894fc;
-    --ff-panel-wash: rgb(13 154 128 / 0.16);
+    --ff-panel-wash: rgb(13 154 128 / 0.26);
     --ff-bloom-teal: rgb(13 154 128 / 0.20);
     --ff-bloom-violet: rgb(124 63 224 / 0.16);
     --ff-bloom-green: rgb(7 244 104 / 0.07);
+    --ff-cta-fill: #151626;
+    --ff-cta-label: #f4f4f8;
+    --ff-cta-glow: rgb(124 63 224 / 0.45);
+    --ff-etch-opacity: 0.07;
 
     /* A night pitch: lifted clear of black like the team set above, and kept
        well away from #4ade80 — a turf that matched the accent would erase the
@@ -501,11 +505,32 @@ md-text-button {
   --md-text-button-label-text-size: 0.95rem;
 }
 
-/* The affirmative action: solid accent, dark label. One per screen. */
+/*
+ * The affirmative action, and the loudest object on any FC screen.
+ *
+ * Not a filled accent pill. The fill is DARK, the stroke is a left-to-right
+ * cyan-blue-violet gradient, and the whole thing sits in a soft coloured halo.
+ * That combination is the single most recognisable control in the game and we
+ * had none of it — a flat green pill is a Material button wearing a green coat.
+ *
+ * Built with the two-background trick because a border cannot take a gradient
+ * on its own: the dark fill is painted to the padding box, the gradient to the
+ * border box, and the transparent border lets the second show through the
+ * first. The container colour is forced transparent so the component's own
+ * shadow-root fill does not paint over the host.
+ */
 md-filled-button {
-  --md-filled-button-container-color: var(--md-sys-color-primary);
-  --md-filled-button-label-text-color: var(--md-sys-color-on-primary);
-  --md-filled-button-icon-color: var(--md-sys-color-on-primary);
+  --md-filled-button-container-color: transparent;
+  --md-filled-button-label-text-color: var(--ff-cta-label);
+  --md-filled-button-icon-color: var(--ff-cta-label);
+  border: 2px solid transparent;
+  border-radius: var(--ff-radius-pill);
+  background:
+    linear-gradient(var(--ff-cta-fill), var(--ff-cta-fill)) padding-box,
+    linear-gradient(90deg, #2ed9c8 0%, #2f6be0 55%, #7c3fe0 100%) border-box;
+  box-shadow:
+    0 0 26px var(--ff-cta-glow),
+    0 0 10px rgb(46 217 200 / 0.3);
 }
 
 /*
@@ -751,9 +776,13 @@ md-outlined-text-field {
  * and a stroke appears only on the thing that has focus.
  */
 .card {
+  position: relative;
   background:
-    linear-gradient(180deg, var(--ff-panel-wash) 0%, transparent 45%),
+    linear-gradient(180deg, var(--ff-panel-wash) 0%, transparent 55%),
     var(--md-sys-color-surface-container);
+  /* A lit top edge. One pixel, and it is the difference between a slab with
+     light falling on it and a rectangle of a slightly different grey. */
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07);
   border-radius: var(--ff-radius-card);
   padding: 18px 16px;
   display: flex;
@@ -827,7 +856,42 @@ md-outlined-text-field {
  * and weight, not from filling the block with the accent — which it saves for
  * one small mark per screen.
  */
+/*
+ * The watermark.
+ *
+ * Every FC screen has an enormous piece of cropped geometry bleeding off one
+ * edge at a few percent opacity — chevrons, a trophy, a giant letterform. It is
+ * cheap, it is unmistakable, and leaving it out is most of why the first pass
+ * read as "a dark theme" rather than as the game.
+ *
+ * Thin stroke, no fill, deliberately running past the panel's edge so it reads
+ * as a crop rather than as an icon that happens to be large.
+ */
+/*
+ * Cropped by the background, not by a box that hangs over the edge.
+ *
+ * The first cut sized this larger than the hero and pulled it out with negative
+ * offsets. `overflow: hidden` hides that but does not un-scroll it — the
+ * element is still scrollable, `scrollWidth` still counts the overhang, and the
+ * Burmese sweep caught the hero at 417 against a 366 box. Insetting the
+ * pseudo-element to the panel and letting negative `background-position` do the
+ * cropping gives the same picture with nothing overflowing anything.
+ */
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--ff-etch-opacity);
+  background-repeat: no-repeat;
+  background-position: right -14% top -18%;
+  background-size: 68% auto;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='7' stroke-linejoin='round'%3E%3Cpath d='M18 8 L112 100 L18 192'/%3E%3Cpath d='M96 8 L190 100 L96 192'/%3E%3C/g%3E%3C/svg%3E");
+}
+
 .hero {
+  position: relative;
   background: var(--md-sys-color-surface-container);
   color: var(--md-sys-color-on-surface);
   border-radius: var(--ff-radius-card);
