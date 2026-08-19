@@ -16,7 +16,12 @@ export interface SessionsOverview {
 }
 
 export interface RegisterResult {
-  registration: Registration;
+  /**
+   * Absent, not null, when there was nothing to return — the field carries
+   * `skip_serializing_if = "Option::is_none"` on the Worker side. Callers have
+   * to reach for it optionally or a tap that changed nothing throws.
+   */
+  registration?: Registration;
   counts: { in: number; waitlist: number };
   /** False when the tap was a no-op because you were already registered. */
   changed: boolean;

@@ -88,6 +88,60 @@ export interface Visibility {
   onInteraction(listener: () => void): () => void;
 }
 
+/**
+ * The two noises the app makes.
+ *
+ * Named for what happened rather than for the files behind them, so a clip can
+ * be swapped without a component having to know: `press` is every button in
+ * the app, and `tapOut` is the one action that takes something away.
+ */
+export type SoundName = 'press' | 'tapOut';
+
+/**
+ * Button feedback.
+ *
+ * A capability rather than an `<audio>` tag in a component, on the usual rule
+ * and for two reasons of its own.
+ *
+ * Browsers will not let a page make a noise until somebody has touched it, so
+ * *when* the audio hardware may wake up is a platform fact rather than any
+ * component's business — and getting it wrong is visible, because the press
+ * that wakes it is the press that does not sound. And "every button in the
+ * app" is a claim no component can make on its own: it holds because this
+ * listens at the document, which is the one place that sees all of them,
+ * including the ones inside Material Web's shadow roots and including the
+ * button somebody adds next month.
+ */
+export interface Sound {
+  /**
+   * Play a clip now. Never throws and never waits: a browser without Web
+   * Audio, a clip that failed to load, and a member who turned sound off all
+   * come out as silence rather than as an error a caller has to handle.
+   */
+  play(name: SoundName): void;
+  /**
+   * False where the browser cannot make a noise at all — an old webview, a
+   * locked-down browser. Separate from `enabled()`, which is the member's
+   * answer rather than the machine's: a settings row that toggles a preference
+   * nothing can act on is the thing `notifications.supported()` exists to
+   * avoid, and this follows it.
+   */
+  supported(): boolean;
+  /** Whether the member wants a noise, for a settings control. */
+  enabled(): boolean;
+  setEnabled(on: boolean): void;
+  /**
+   * Start listening for presses. Called once from the entry point; the
+   * returned teardown exists for hot reloading and nothing else calls it.
+   *
+   * A control opts out with `data-sound="none"`, and one that takes something
+   * away asks for the other clip with `data-sound="tap-out"` — which the
+   * shared `Button` forwards through its own `sound` prop, since React does
+   * not pass unknown attributes to a custom element.
+   */
+  installPressFeedback(): () => void;
+}
+
 /** Push notification support, as far as the UI needs to know about it. */
 export interface Notifications {
   /** False on browsers without the Push API, and in a non-installed iOS tab. */
@@ -122,6 +176,7 @@ export interface Platform {
   navigation: Navigation;
   viewTransition: ViewTransition;
   visibility: Visibility;
+  sound: Sound;
   notifications: Notifications;
   /** Registers the service worker. Resolves false where unsupported. */
   registerServiceWorker(): Promise<boolean>;

@@ -109,7 +109,7 @@ export function SessionView({
       } else {
         const result = await registerForSession(session.id);
         toast(
-          result.registration.status === 'waitlist' ? m.toast.youreOnWaitlist : m.toast.youreIn,
+          result.registration?.status === 'waitlist' ? m.toast.youreOnWaitlist : m.toast.youreIn,
         );
       }
       onChanged();
@@ -182,6 +182,10 @@ export function SessionView({
             variant={me ? 'outlined' : 'filled'}
             onClick={toggleRegistration}
             disabled={busy}
+            // One control, two directions, and only this component knows which
+            // way round it currently is — a listener at the document sees the
+            // same element either way. See `platform.sound`.
+            sound={me ? 'tap-out' : undefined}
           >
             {busy
               ? m.app.working

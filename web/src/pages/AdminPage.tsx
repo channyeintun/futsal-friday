@@ -16,6 +16,7 @@ import { Icon } from '../components/Icon.js';
 import { GroupInviteCard, MemberInviteControls, MyDeviceCard } from '../components/InviteLink.js';
 import { PaymentDetailsCard } from '../components/PaymentDetailsCard.js';
 import { PendingApprovals } from '../components/PendingApprovals.js';
+import { platform } from '../platform/index.js';
 import { ReminderSettings } from '../components/ReminderSettings.js';
 import { Button, Dialog, ErrorBanner, Spinner, Switch, TextField } from '../components/ui.js';
 import { useQueryClient } from '@tanstack/react-query';
@@ -40,6 +41,7 @@ export function AdminPage() {
         {/* Reminders are everyone's setting, not an organizer tool. */}
         <LanguageCard />
         <ClockCard />
+        <SoundCard />
         <MyDeviceCard />
         <ReminderSettings />
         <div className="card">
@@ -67,6 +69,7 @@ export function AdminPage() {
       <PendingApprovals onChanged={() => void queryClient.invalidateQueries({ queryKey: queryKeys.members })} />
       <LanguageCard />
       <ClockCard />
+      <SoundCard />
       <MyDeviceCard />
       <ReminderSettings />
       {/* Above the roster: sharing one link is the normal way to onboard, and
@@ -347,6 +350,53 @@ function ClockCard() {
             onClick={() => setHour12(choice)}
           >
             {formatTime(sample, choice)}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* --------------------------------------------------------------- sound */
+
+/**
+ * The buttons make a noise. This is the way out of it.
+ *
+ * Next to the language and the clock because it is the same kind of setting —
+ * about this device rather than about the group — and it is stored the same
+ * way, for the same reason: somebody who wants a silent phone in a meeting
+ * wants that phone silent, not their laptop too.
+ */
+function SoundCard() {
+  const m = useMessages();
+  // `platform.sound.enabled()` reads a stored string, and nothing tells React
+  // when it changes, so this keeps its own copy of the answer.
+  const [on, setOn] = useState(platform.sound.enabled());
+
+  // Nothing to offer where the browser cannot make a noise in the first place.
+  if (!platform.sound.supported()) return null;
+
+  return (
+    <div className="card">
+      <h2 className="card-title">{m.admin.sound}</h2>
+      <p className="card-sub">{m.admin.soundBody}</p>
+      <div className="row wrap" style={{ gap: 8 }}>
+        {([true, false] as const).map((choice) => (
+          <Button
+            key={String(choice)}
+            variant={choice === on ? 'filled' : 'outlined'}
+            /* Nothing here asks for `data-sound`, and the ordering works out on
+               its own: turning it off still clicks on the way down, which is
+               the right last word, and turning it on is answered by
+               `setEnabled` playing the clip. The guard is what stops a press
+               that changes nothing from doing both. */
+            onClick={() => {
+              if (choice === on) return;
+              platform.sound.setEnabled(choice);
+              setOn(choice);
+            }}
+          >
+            {choice ? m.admin.soundOn : m.admin.soundOff}
           </Button>
         ))}
       </div>

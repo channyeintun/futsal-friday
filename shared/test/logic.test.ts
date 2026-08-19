@@ -10,6 +10,7 @@ import { canVoteFor, mvpLeaders, sortTally } from '../src/mvp.ts';
 import { paymentsSummary, registrationSummary } from '../src/summary.ts';
 import { en } from '../src/i18n/en.ts';
 import { totalArrivedHeads } from '../src/attendance.ts';
+import { partyFits, pitchSlotCount, registeredSlots } from '../src/pitch.ts';
 import type { TeamMatch, TeamSlot } from '../src/models.ts';
 
 let failures = 0;
@@ -562,6 +563,50 @@ check('left unset, nothing moves',
 check('Burmese on a 12h clock is still Arabic numerals',
   sessionAnnouncement(clockFixture, { locale: 'my', hour12: true, random: () => 0 })
     .includes('7:30 PM'), true);
+
+
+// --- the pitch: spots, caps and parties -----------------------------------
+
+const roster = [
+  { memberId: 'm1', memberName: 'Aung', guests: 0, status: 'in' as const },
+  { memberId: 'm2', memberName: 'Kyaw', guests: 2, status: 'in' as const },
+  { memberId: 'm3', memberName: 'Min', guests: 1, status: 'waitlist' as const },
+  { memberId: 'm4', memberName: 'Thu', guests: 0, status: 'in' as const },
+];
+
+// Guests are bodies, so the party of three occupies three spots in a row.
+check('a guest takes a spot of their own',
+  registeredSlots(roster).map((s) => `${s.memberId}:${s.guestIndex}`),
+  ['m1:0', 'm2:0', 'm2:1', 'm2:2', 'm4:0']);
+
+// The whole meaning of the waitlist is having no spot on the field.
+check('the waitlist is not on the pitch',
+  registeredSlots(roster).some((s) => s.memberId === 'm3'), false);
+
+check('the avatar token comes along, defaulted',
+  registeredSlots([{ memberId: 'm1', memberName: 'Aung', status: 'in' as const }]),
+  [{ memberId: 'm1', memberName: 'Aung', memberAvatarUpdatedAt: null, guestIndex: 0 }]);
+
+// A cap is the number of spots, filled or not — that is what makes the gaps
+// worth looking at.
+check('a cap with room to spare draws the cap', pitchSlotCount(5, 12, true), 12);
+check('a full pitch draws the cap', pitchSlotCount(12, 12, true), 12);
+
+// The organizer can lower the cap under a roster that has already outgrown it,
+// and nothing demotes. Drawing the cap would hide people who are playing.
+check('a cap the roster outgrew loses to the roster', pitchSlotCount(12, 8, true), 12);
+
+// No cap is the common case: the pitch is the people on it, plus the one open
+// spot that says you can still join.
+check('no cap draws one open spot', pitchSlotCount(7, null, true), 8);
+check('no cap and closed draws nobody extra', pitchSlotCount(7, null, false), 7);
+check('no cap and nobody yet still offers a spot', pitchSlotCount(0, null, true), 1);
+
+// The server decides in/waitlist for the whole party at once.
+check('a solo fits the last spot', partyFits(11, 12, 0), true);
+check('a party of three does not fit two spots', partyFits(10, 12, 2), false);
+check('and the party that does not fit leaves the spots empty', partyFits(11, 12, 1), false);
+check('without a cap everybody fits', partyFits(99, null, 5), true);
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

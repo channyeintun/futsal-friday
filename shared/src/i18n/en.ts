@@ -522,6 +522,10 @@ export const en = {
     clockBody: 'How times are shown across the app, and in your reminders.',
     language: 'Language',
     languageBody: 'Changes the app, reminders and the text you copy into the chat.',
+    sound: 'Sound',
+    soundBody: 'The buttons click when you press them. Turn it off if you would rather they did not.',
+    soundOn: 'On',
+    soundOff: 'Off',
   },
 
   editor: {

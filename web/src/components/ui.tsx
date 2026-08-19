@@ -237,6 +237,15 @@ interface ButtonProps {
   lang?: string;
   /** For buttons whose visible content is an icon. */
   ariaLabel?: string;
+  /**
+   * Which clip this button plays, when it is not the app's usual one.
+   *
+   * Every button makes a noise without being asked — the listener that does it
+   * lives in `platform.sound` and matches on the element, not on this prop.
+   * This is only for the two exceptions: an action that takes something away
+   * (`tap-out`), and one that should stay quiet (`none`).
+   */
+  sound?: 'tap-out' | 'none';
 }
 
 /*
@@ -263,6 +272,7 @@ export function Button({
   danger,
   lang,
   ariaLabel,
+  sound,
 }: ButtonProps) {
   const props = {
     onClick,
@@ -270,6 +280,7 @@ export function Button({
     type,
     ...(lang ? { lang } : {}),
     ...(ariaLabel ? { 'aria-label': ariaLabel } : {}),
+    ...(sound ? { 'data-sound': sound } : {}),
     ...(danger ? { style: DANGER_TOKENS } : {}),
   };
 

@@ -5,8 +5,21 @@ import type {
   EventStreamHandlers,
   Platform,
   PushSubscriptionJson,
+  SoundName,
 } from './index.js';
 import { flushSync } from 'react-dom';
+/*
+ * Hashed into `/assets/` by the build, which is the prefix the service worker
+ * caches first — so the second launch makes its noise without a request. A
+ * file in `web/public/` would be served from the site root instead, match
+ * neither cached prefix, and be fetched again on every cold start.
+ *
+ * Mono, trimmed to the part that is not silence, and levelled to within half a
+ * decibel of each other so the two do not sound like different apps. Twenty
+ * kilobytes the pair, down from three hundred and fifty of stereo PCM.
+ */
+import pressClip from '../assets/press.mp3';
+import tapOutClip from '../assets/tap-out.mp3';
 
 /**
  * Browser implementation of the platform seam. This is the only file in the
@@ -281,6 +294,246 @@ function dismissSplash(): void {
   document.getElementById('splash')?.remove();
 }
 
+/* ------------------------------------------------------------------ sound */
+
+/*
+ * Two clips, decoded once and fired from one context.
+ *
+ * `<audio>` was the obvious thing and is the wrong thing: an element can only
+ * be playing one copy of itself, so a second tap arriving before the first has
+ * finished seeks the first back to the start — and the guest picker, the goal
+ * stepper and the team-count row are all places where two taps land eighty
+ * milliseconds apart. A buffer source is one-shot and disposable, so overlaps
+ * cost nothing and need no pool of clones.
+ */
+
+const SOUND_KEY = 'sound';
+
+const CLIP_NAMES = ['press', 'tapOut'] as const;
+
+const CLIP_URLS: Record<SoundName, string> = {
+  press: pressClip,
+  tapOut: tapOutClip,
+};
+
+/** Encoded bytes, fetched ahead of the first press so that press is not silent. */
+const clipBytes = new Map<SoundName, Promise<ArrayBuffer | null>>();
+const clipBuffers = new Map<SoundName, AudioBuffer>();
+
+let audio: AudioContext | null = null;
+/** Latched once a browser has proved it cannot do this, so it is asked once. */
+let audioRefused = false;
+
+function audioCtor(): typeof AudioContext | undefined {
+  return (
+    window.AudioContext ??
+    (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  );
+}
+
+function soundSupported(): boolean {
+  return !audioRefused && audioCtor() !== undefined;
+}
+
+function soundEnabled(): boolean {
+  // On unless somebody turned it off. A fresh install should sound like the
+  // app was meant to; the switch on the setup screen is the way out.
+  return storage.get(SOUND_KEY) !== '0';
+}
+
+/** ~20 KB the service worker then keeps, alongside the rest of `/assets/`. */
+function fetchClips(): void {
+  if (clipBytes.size > 0) return;
+  for (const name of CLIP_NAMES) {
+    clipBytes.set(
+      name,
+      fetch(CLIP_URLS[name])
+        .then((response) => (response.ok ? response.arrayBuffer() : null))
+        // A clip that will not load costs a quiet button and nothing else.
+        .catch(() => null),
+    );
+  }
+}
+
+/**
+ * The audio context, built on the first interaction and then kept.
+ *
+ * Deliberately not built at boot: every browser starts one suspended until a
+ * gesture has happened, and Safari will only resume one from inside a real
+ * gesture, in the same task as that gesture rather than after an `await`.
+ *
+ * Deliberately not built on the first *press*, either — that press would be
+ * the silent one, while `resume` and a decode finished behind it. It rides
+ * `visibility.onInteraction` instead, which fires on a scroll or a stray tap
+ * long before anybody has aimed at a button.
+ */
+function wakeAudio(): AudioContext | null {
+  if (audio) {
+    // Backgrounding a tab suspends the context; coming back has to ask again.
+    if (audio.state === 'suspended') void audio.resume();
+    return audio;
+  }
+  if (audioRefused) return null;
+
+  const Ctor = audioCtor();
+  if (!Ctor) {
+    audioRefused = true;
+    return null;
+  }
+
+  try {
+    audio = new Ctor();
+  } catch {
+    // Some webviews expose the constructor and then refuse to build one.
+    audioRefused = true;
+    return null;
+  }
+  // Warm both clips now rather than at the first press, for the same reason
+  // the context is built here.
+  for (const name of CLIP_NAMES) void clipBuffer(name);
+  return audio;
+}
+
+async function clipBuffer(name: SoundName): Promise<AudioBuffer | null> {
+  const ready = clipBuffers.get(name);
+  if (ready) return ready;
+  if (!audio) return null;
+
+  fetchClips();
+  const bytes = await clipBytes.get(name);
+  if (!bytes) return null;
+
+  try {
+    // A copy: `decodeAudioData` detaches the buffer it is handed, and the same
+    // bytes have to survive being decoded a second time.
+    const decoded = await audio.decodeAudioData(bytes.slice(0));
+    clipBuffers.set(name, decoded);
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
+function playSound(name: SoundName): void {
+  if (!soundEnabled()) return;
+  const context = wakeAudio();
+  if (!context) return;
+
+  const ready = clipBuffers.get(name);
+  if (ready) {
+    startClip(context, ready);
+    return;
+  }
+  // Only reached before the warm-up above has landed, and only by however long
+  // a decode takes — a few milliseconds for a third of a second of mono.
+  void clipBuffer(name).then((buffer) => {
+    if (buffer) startClip(context, buffer);
+  });
+}
+
+function startClip(context: AudioContext, buffer: AudioBuffer): void {
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  source.connect(context.destination);
+  source.start();
+}
+
+/**
+ * Everything that counts as a button.
+ *
+ * Material Web's buttons are custom elements that keep their real `<button>`
+ * inside an open shadow root, so a listener at the document never sees that
+ * element — the event is retargeted to the host on its way out, which is
+ * exactly what makes matching on these host names work, and exactly why
+ * `closest('button')` on its own would match none of them.
+ *
+ * Text fields, selects and the dialog itself are deliberately absent. Tapping
+ * into a field is not pressing a button, and the one native `<select>` in the
+ * app opens a menu the page does not own.
+ */
+const PRESSABLE = [
+  'button',
+  '[role="button"]',
+  'md-filled-button',
+  'md-filled-tonal-button',
+  'md-outlined-button',
+  'md-text-button',
+  'md-icon-button',
+  'md-assist-chip',
+  'md-select-option',
+  'md-switch',
+].join(',');
+
+function isDisabled(element: Element): boolean {
+  return element.hasAttribute('disabled') || element.getAttribute('aria-disabled') === 'true';
+}
+
+/** Which clip a control asked for, walking up from whatever was actually hit. */
+function clipFor(target: Element): SoundName | null {
+  const marked = target.closest('[data-sound]')?.getAttribute('data-sound');
+  if (marked === 'none') return null;
+  return marked === 'tap-out' ? 'tapOut' : 'press';
+}
+
+function installPressFeedback(): () => void {
+  fetchClips();
+
+  // The hardware wakes on the first interaction of any kind — a scroll, a tap
+  // on a card — rather than on the first button, so the first button is not
+  // the one that misses. Unsubscribes itself: it only needs to happen once.
+  let stopPriming = () => {};
+  stopPriming = visibility.onInteraction(() => {
+    wakeAudio();
+    stopPriming();
+  });
+
+  /*
+   * On `click`, in the capture phase.
+   *
+   * `pointerdown` was the tempting one — the noise is feedback for the finger,
+   * and firing it on the way down is a frame tighter. It is wrong here for one
+   * specific reason: half the rows in this app *are* buttons, inside
+   * virtualized scrollers, so a thumb starting a scroll on the history list or
+   * the roster would chime every time somebody scrolled. `click` never fires
+   * for a gesture that turned into a scroll.
+   *
+   * It also gets the keyboard for free: Enter and Space on a focused button
+   * produce a click and no pointer event at all, so there is nothing extra to
+   * listen for and no way to sound twice for one press.
+   *
+   * Capture, so the sound starts while React's own handler is still deciding
+   * what to do — the button never waits on the network to make its noise.
+   */
+  const onClick = (event: MouseEvent) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const control = target.closest(PRESSABLE);
+    if (!control || isDisabled(control)) return;
+    const clip = clipFor(target);
+    if (clip) playSound(clip);
+  };
+
+  document.addEventListener('click', onClick, { capture: true });
+  return () => {
+    stopPriming();
+    document.removeEventListener('click', onClick, { capture: true });
+  };
+}
+
+const sound: Platform['sound'] = {
+  play: playSound,
+  supported: soundSupported,
+  enabled: soundEnabled,
+  setEnabled(on) {
+    storage.set(SOUND_KEY, on ? '1' : '0');
+    // Turning it back on says what it sounds like. The press that turns it
+    // *off* has already made its noise on the way through, which is the right
+    // way round: the last thing sound does is confirm it heard you.
+    if (on) playSound('press');
+  },
+  installPressFeedback,
+};
+
 /* ----------------------------------------------------------- notifications */
 
 /**
@@ -497,6 +750,7 @@ export const webPlatform: Platform = {
   navigation,
   viewTransition,
   visibility,
+  sound,
   openExternal(url) {
     window.open(url, '_blank', 'noopener,noreferrer');
   },
