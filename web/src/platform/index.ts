@@ -89,13 +89,14 @@ export interface Visibility {
 }
 
 /**
- * The two noises the app makes.
+ * The noises the app makes.
  *
  * Named for what happened rather than for the files behind them, so a clip can
- * be swapped without a component having to know: `press` is every button in
- * the app, and `tapOut` is the one action that takes something away.
+ * be swapped without a component having to know. `press` is every button in the
+ * app, `tapOut` is the one action that takes something away, and `modalOpen` is
+ * a panel arriving over the top of everything.
  */
-export type SoundName = 'press' | 'tapOut';
+export type SoundName = 'press' | 'tapOut' | 'modalOpen';
 
 /**
  * Button feedback.
@@ -117,6 +118,11 @@ export interface Sound {
    * Play a clip now. Never throws and never waits: a browser without Web
    * Audio, a clip that failed to load, and a member who turned sound off all
    * come out as silence rather than as an error a caller has to handle.
+   *
+   * Presses do not come through here — they are declared with `data-sound` and
+   * played by the one listener, which is what stops a control sounding twice.
+   * This is for the things that are not presses: a dialog opening, and the
+   * confirmation the sound switch makes when it is turned back on.
    */
   play(name: SoundName): void;
   /**

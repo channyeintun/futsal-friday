@@ -21,6 +21,7 @@ import { flushSync } from 'react-dom';
  */
 import pressClip from '../assets/press.mp3';
 import tapOutClip from '../assets/tap-out.mp3';
+import modalOpenClip from '../assets/modal-open.mp3';
 
 /**
  * Browser implementation of the platform seam. This is the only file in the
@@ -310,11 +311,12 @@ function dismissSplash(): void {
 
 const SOUND_KEY = 'sound';
 
-const CLIP_NAMES = ['press', 'tapOut'] as const;
+const CLIP_NAMES = ['press', 'tapOut', 'modalOpen'] as const;
 
 const CLIP_URLS: Record<SoundName, string> = {
   press: pressClip,
   tapOut: tapOutClip,
+  modalOpen: modalOpenClip,
 };
 
 /** Encoded bytes, fetched ahead of the first press so that press is not silent. */

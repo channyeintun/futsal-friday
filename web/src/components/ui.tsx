@@ -15,6 +15,7 @@ import '@material/web/chips/chip-set.js';
 import '@material/web/chips/assist-chip.js';
 
 import { type ReactNode, useEffect, useRef } from 'react';
+import { platform } from '../platform/index.js';
 
 /**
  * Thin React wrappers over the Material Web custom elements.
@@ -200,8 +201,20 @@ export function Dialog({ open, onClose, headline, children, actions }: DialogPro
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
-    if (open && !element.open) element.show();
-    else if (!open && element.open) element.close();
+    if (open && !element.open) {
+      element.show();
+      /*
+       * The one place a component plays a clip rather than declaring one.
+       *
+       * Everything else says what it sounds like with `data-sound` and lets the
+       * single document listener play it, which is what stops a control
+       * sounding twice. A dialog opening is not a press, so that listener
+       * cannot see it at all — and the press that opened it has already made
+       * its own click, which is right: the button answers the finger, and this
+       * answers the panel arriving over the top of it.
+       */
+      platform.sound.play('modalOpen');
+    } else if (!open && element.open) element.close();
   }, [open]);
 
   return (

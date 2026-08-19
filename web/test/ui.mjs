@@ -107,7 +107,16 @@ async function run() {
    */
   await send('Page.addScriptToEvaluateOnNewDocument', {
     source: `window.__buzz = [];
-      navigator.vibrate = (pattern) => { window.__buzz.push(JSON.stringify(pattern)); return true; };`,
+      navigator.vibrate = (pattern) => { window.__buzz.push(JSON.stringify(pattern)); return true; };
+      /* Which clip the app actually started, identified by its length — the
+         three are 0.36s, 0.75s and 0.63s, so the buffer names itself. */
+      window.__clips = [];
+      const __start = AudioBufferSourceNode.prototype.start;
+      AudioBufferSourceNode.prototype.start = function (...a) {
+        const d = this.buffer ? +this.buffer.duration.toFixed(2) : -1;
+        window.__clips.push({ 0.36: 'press', 0.75: 'tapOut', 0.63: 'modalOpen' }[d] || ('unknown:' + d));
+        return __start.apply(this, a);
+      };`,
   });
   // iPhone 14-ish viewport: this app lives inside a chat webview on a phone.
   await send('Emulation.setDeviceMetricsOverride', {
@@ -390,6 +399,33 @@ async function run() {
   await evalJs(`localStorage.removeItem('futsal:haptics'); true`);
   await leaveFromPitch();
   await sleep(1600);
+
+  /*
+   * A panel arriving has its own sound, layered over the press that opened it.
+   *
+   * The press is declared on the button and played by the document listener;
+   * the whoosh is the one clip a component plays directly, because a dialog
+   * opening is not a press and that listener cannot see it. Both, in that
+   * order, is the whole design.
+   */
+  console.log('\nopening a panel');
+  await evalJs(`window.__clips.length = 0`);
+  const openedDialog = await evalJs(`(() => {
+    const b = [...document.querySelectorAll('md-filled-tonal-button')]
+      .find((x) => x.textContent.trim() === 'Edit');
+    if (!b) return false; b.click(); return true;
+  })()`);
+  if (openedDialog) {
+    await sleep(1200);
+    check('the panel opened', await evalJs(`!!document.querySelector('md-dialog[open]')`));
+    check('A PANEL SOUNDS DIFFERENT FROM THE BUTTON THAT OPENED IT',
+      (await evalJs(`JSON.stringify(window.__clips)`)) === '["press","modalOpen"]',
+      await evalJs(`JSON.stringify(window.__clips)`));
+    await evalJs(`document.querySelector('md-dialog[open]')?.close()`);
+    await sleep(700);
+  } else {
+    check('the panel opened', false, 'no Edit button — not signed in as the organizer?');
+  }
   check('and the pitch has its gap back', (await openSpots()) === openBefore);
 
   /*
