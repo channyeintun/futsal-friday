@@ -667,7 +667,7 @@ check('the pitch never grows past its box',
 check('a spot never gets too small to see',
   everyCount.filter((n) => pitchLines(n).length > 0 && pitchSlotSize(pitchLines(n)) < 24), []);
 check('a roster this big does shrink the cards', pitchSlotSize(pitchLines(38)), 27);
-check('and a normal Friday does not', pitchSlotSize(pitchLines(12)), 44);
+check('and a normal Friday does not', pitchSlotSize(pitchLines(12)), 50);
 
 
 // --- the pitch: standing where you pressed ---------------------------------

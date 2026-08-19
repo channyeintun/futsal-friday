@@ -1747,28 +1747,42 @@ md-outlined-text-field {
  */
 .pitch-card-shirt {
   position: absolute;
-  top: 3%;
-  left: 9%;
-  font-size: calc(var(--ff-spot, 44px) * 0.3);
+  z-index: 1;
+  top: 2%;
+  left: 7%;
+  font-size: calc(var(--ff-spot, 52px) * 0.3);
   font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  /* It sits on the portrait now, which may be a photograph of anything. */
+  color: #fff;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.75);
 }
 
-/* Nudged right and down, out from under the number, the way a portrait sits. */
+/*
+ * The portrait is the top of the card, not a badge sitting on it.
+ *
+ * Square, full width, centred, cropped by the card rather than shrunk to fit —
+ * which is what a player item is. It had been a small circle nudged off centre
+ * to clear the number, and a circle inside a rectangle is a chip, not a card.
+ *
+ * The crop is the point: an `Avatar` is square, the space for it is not, and
+ * letting the bottom of it run under the name is how a real portrait is framed.
+ */
 .pitch-card-face {
   position: absolute;
-  top: 17%;
+  top: 0;
   left: 0;
   right: 0;
+  height: 66%;
+  overflow: hidden;
   display: flex;
+  align-items: flex-start;
   justify-content: center;
-  padding-left: 20%;
 }
 
 .pitch-card-face .avatar {
-  border-radius: 50%;
-  border: 1px solid rgb(255 255 255 / 0.45);
+  border-radius: 0;
 }
 
 /*
@@ -1780,13 +1794,14 @@ md-outlined-text-field {
  */
 .pitch-card-name {
   position: absolute;
-  left: 7%;
-  right: 7%;
-  bottom: 15%;
-  padding-top: 2px;
+  z-index: 1;
+  left: 6%;
+  right: 6%;
+  bottom: 13%;
+  padding-top: 1px;
   border-top: 1px solid rgb(42 30 5 / 0.34);
   text-align: center;
-  font-size: clamp(6px, calc(var(--ff-spot, 44px) * 0.185), 10px);
+  font-size: clamp(6px, calc(var(--ff-spot, 52px) * 0.17), 10px);
   font-weight: 700;
   line-height: 1.1;
 }

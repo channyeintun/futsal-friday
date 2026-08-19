@@ -509,7 +509,7 @@ function renderSpot({
             memberId={spot.slot.memberId}
             name={spot.slot.memberName}
             avatarUpdatedAt={spot.slot.memberAvatarUpdatedAt}
-            size={Math.round(spotSize * 0.6)}
+            size={spotSize}
           />
         ) : (
           <span className="pitch-disc">

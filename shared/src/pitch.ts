@@ -144,7 +144,15 @@ export const PITCH_CARD_RATIO = 1.34;
 /** Between one line and the next. Shared with the stylesheet. */
 export const PITCH_LINE_GAP = 8;
 const PITCH_PAD = 24;
-const SPOT_MAX = 44;
+/*
+ * Raised from 44, which was too small to be a card.
+ *
+ * At 44 there was no room for a portrait and a number side by side, and the
+ * portrait ended up a shrunken circle pushed off centre to clear the corner.
+ * The width budget always allowed more — three across a 320px phone leaves 80
+ * each — it was the height ceiling doing the squeezing.
+ */
+const SPOT_MAX = 52;
 const SPOT_MIN = 24;
 /**
  * What a line has to fit into on the narrowest phone anybody drives this on:
