@@ -972,6 +972,55 @@ async function run() {
     await evalJs(`document.body.innerText.includes('Playing')`),
     await evalJs(`document.body.innerText.slice(0, 120)`));
 
+  /*
+   * Every token the dark theme defines has to resolve in light too.
+   *
+   * This is a bug class, not a hypothetical: an edit to the token block dropped
+   * four of them from `:root` while leaving them in the dark override, and the
+   * failure is silent and total. An undefined custom property invalidates the
+   * whole declaration it appears in — so the primary button lost its fill *and*
+   * its label colour at once and became a white pill with white text on it,
+   * unreadable, with nothing in the console.
+   *
+   * Read out of the live stylesheet rather than a list kept by hand, because a
+   * list kept by hand is the thing that went stale in the first place.
+   */
+  console.log('\ntokens resolve in both themes');
+  /*
+   * Forced to light explicitly, and that is the whole test.
+   *
+   * Headless Chrome reports `prefers-color-scheme: dark` by default, so a check
+   * that just runs "before the dark-mode section" is running in dark and
+   * resolving the very overrides it is supposed to be looking past. Verified by
+   * deleting a token and watching this pass.
+   */
+  await send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-color-scheme', value: 'light' }],
+  });
+  await sleep(400);
+  const orphanTokens = await evalJs(`(() => {
+    /* Walked through the CSSOM rather than matched in the stylesheet text: a
+       text scan also picks up variables declared on ordinary elements inside
+       the dark block — the corner-bracket sizes, the podium tiers — which are
+       element-scoped by design and correctly do not resolve at :root. */
+    const names = new Set();
+    for (const sheet of document.styleSheets) {
+      let rules;
+      try { rules = [...sheet.cssRules]; } catch { continue; }
+      for (const rule of rules) {
+        if (!rule.conditionText || !rule.conditionText.includes('prefers-color-scheme: dark')) continue;
+        for (const inner of rule.cssRules) {
+          if (!inner.selectorText || !inner.selectorText.includes(':root')) continue;
+          for (const prop of inner.style) if (prop.startsWith('--ff-')) names.add(prop);
+        }
+      }
+    }
+    if (names.size === 0) return 'NO DARK :root FOUND';
+    const root = getComputedStyle(document.documentElement);
+    return JSON.stringify([...names].filter((n) => root.getPropertyValue(n).trim() === ''));
+  })()`);
+  check('EVERY DARK-THEME TOKEN ALSO RESOLVES IN LIGHT', orphanTokens === '[]', orphanTokens);
+
   console.log('\ndark mode');
   await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }] });
   await evalJs(`[...document.querySelectorAll('.bottom-nav button')].find(b => /Session/i.test(b.textContent ?? ''))?.click()`);

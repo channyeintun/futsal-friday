@@ -25,13 +25,53 @@ export function PitchTurf() {
       aria-hidden="true"
       focusable="false"
     >
+      <defs>
+        {/*
+          Floodlight falloff.
+
+          Sampled off the real thing: the middle of the pitch sits around
+          #2e3d2a and the touchlines drop to #1e271a — a much heavier vignette
+          than a flat fill suggests, and most of why a photograph of a pitch
+          does not look like a green rectangle.
+        */}
+        <radialGradient id="ff-pitch-lighting" cx="50%" cy="44%" r="66%">
+          <stop className="pitch-vignette-in" offset="0%" />
+          <stop className="pitch-vignette-mid" offset="55%" />
+          <stop className="pitch-vignette-out" offset="100%" />
+        </radialGradient>
+        <clipPath id="ff-pitch-edge">
+          <path d="M68 8 H232 L292 392 H8 Z" />
+        </clipPath>
+      </defs>
+
       {/* The far edge is narrower than the near one; every marking below is
           drawn to that same taper so the field reads as one plane. */}
       <path className="pitch-grass" d="M68 8 H232 L292 392 H8 Z" />
 
-      {/* Mown bands, each one a slice of the same trapezoid. */}
-      <path className="pitch-mow" d="M79.5 82 H220.5 L232 158 H68 Z" />
-      <path className="pitch-mow" d="M91 234 H209 L220.5 310 H79.5 Z" />
+      {/*
+        Mown stripes, running goal to goal and converging with the field.
+
+        Vertical rather than the horizontal bands this had before, because that
+        is the direction a groundsman actually walks it and the direction the
+        reference shows. Each one is a slice of the same trapezoid, so they meet
+        the touchlines exactly.
+      */}
+      <g clipPath="url(#ff-pitch-edge)">
+      <path className="pitch-mow" d="M88.5 8 H109.0 L79.0 392 H43.5 Z" />
+      <path className="pitch-mow" d="M129.5 8 H150.0 L150.0 392 H114.5 Z" />
+      <path className="pitch-mow" d="M170.5 8 H191.0 L221.0 392 H185.5 Z" />
+      <path className="pitch-mow" d="M211.5 8 H232.0 L292.0 392 H256.5 Z" />
+      </g>
+
+      {/* Over the grass and under the markings, so the lines stay crisp at the
+          edges where the light has fallen away. */}
+      <rect
+        className="pitch-vignette"
+        width="300"
+        height="400"
+        fill="url(#ff-pitch-lighting)"
+        clipPath="url(#ff-pitch-edge)"
+      />
 
       <path className="pitch-line" d="M68 8 H232 L292 392 H8 Z" vectorEffect="non-scaling-stroke" />
 

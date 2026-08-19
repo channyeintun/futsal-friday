@@ -159,15 +159,35 @@
    * take — so it stays dark in both themes and reads as a screen inside the
    * page, which is exactly what it is.
    */
-  --ff-pitch: #0d1a1a;
-  --ff-pitch-mow: #10201f;
-  --ff-pitch-line: rgb(255 255 255 / 0.26);
-  --ff-pitch-ring: rgb(255 255 255 / 0.72);
+  --ff-pitch: #2e3d2a;
+  --ff-pitch-mow: #35452f;
+  --ff-pitch-line: rgb(255 255 255 / 0.5);
+  --ff-pitch-ring: rgb(255 255 255 / 0.8);
   --ff-pitch-on: #ffffff;
   --ff-pitch-ghost: rgb(255 255 255 / 0.07);
+  /* Armed to leave. On the dark field in both themes, so it does not invert. */
+  --ff-pitch-warn: #ffb4ab;
   --ff-item-hi: #f2f4f8;
   --ff-item-lo: #c9ced8;
   --ff-item-on: #111113;
+
+  /*
+   * The loud button, and the watermark behind the hero.
+   *
+   * These went missing from light mode once — a line-based edit to the pitch
+   * tokens above took them with it — and the failure is silent and total. An
+   * undefined custom property makes the whole `background` shorthand invalid,
+   * so the fill vanished, and the same edit took the label colour with it: a
+   * white label on a white card is a button nobody can read.
+   *
+   * A dark pill on a light page is deliberate rather than a leftover. It is
+   * what the game does, and a gradient stroke needs something to sit on.
+   */
+  --ff-cta-fill: #12131c;
+  --ff-cta-label: #f4f4f8;
+  --ff-cta-glow: rgb(124 63 224 / 0.28);
+  --ff-etch: rgb(17 17 19 / 0.9);
+  --ff-etch-opacity: 0.05;
 
   /* The shared shape language: big soft rectangles, fully round pills. */
   /*
@@ -264,6 +284,7 @@
     --ff-bloom-teal: rgb(13 154 128 / 0.20);
     --ff-bloom-violet: rgb(124 63 224 / 0.16);
     --ff-bloom-green: rgb(7 244 104 / 0.07);
+    --ff-etch: rgb(255 255 255 / 0.9);
     --ff-cta-fill: #151626;
     --ff-cta-label: #f4f4f8;
     --ff-cta-glow: rgb(124 63 224 / 0.45);
@@ -915,10 +936,18 @@ md-outlined-text-field {
   z-index: 0;
   pointer-events: none;
   opacity: var(--ff-etch-opacity);
-  background-repeat: no-repeat;
-  background-position: right -14% top -18%;
-  background-size: 68% auto;
-  background-image:
+  /*
+   * Masked rather than drawn, so the colour comes from the theme.
+   *
+   * As a background image the chevron was baked white, which is invisible on a
+   * light card — the watermark simply did not exist in light mode. A mask lets
+   * `background-color` carry it, and one shape serves both.
+   */
+  background-color: var(--ff-etch);
+  mask-repeat: no-repeat;
+  mask-position: right -14% top -18%;
+  mask-size: 68% auto;
+  mask-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='7' stroke-linejoin='round'%3E%3Cpath d='M18 8 L112 100 L18 192'/%3E%3Cpath d='M96 8 L190 100 L96 192'/%3E%3C/g%3E%3C/svg%3E");
 }
 
@@ -1623,6 +1652,29 @@ md-outlined-text-field {
 
 .pitch-mark {
   fill: var(--ff-pitch-line);
+}
+
+/*
+ * The lighting, and the one part of the pitch with no token behind it.
+ *
+ * These stops are the same in both themes by construction rather than by a
+ * duplicated block — the field is a depiction and does not invert — so writing
+ * them as literals here says that more clearly than two identical token sets
+ * would.
+ */
+.pitch-vignette-in {
+  stop-color: #060a05;
+  stop-opacity: 0;
+}
+
+.pitch-vignette-mid {
+  stop-color: #060a05;
+  stop-opacity: 0.2;
+}
+
+.pitch-vignette-out {
+  stop-color: #060a05;
+  stop-opacity: 0.74;
 }
 
 /* Above the turf, and the reason the turf is absolutely placed: the rows are
