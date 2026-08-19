@@ -110,6 +110,15 @@ export function SessionView({
 
   const summary = registrationSummary(detail, { appUrl: platform.appUrl, locale, hour12 });
 
+  // Drawn once and placed in whichever wrapper the venue has earned: a button
+  // when there is a map behind it, plain text when there is not.
+  const venueLine = session.venue ? (
+    <>
+      <Icon name="place" size={16} />
+      <span className="truncate">{session.venue.name}</span>
+    </>
+  ) : null;
+
   return (
     <>
       <section className="hero">
@@ -122,13 +131,30 @@ export function SessionView({
         </span>
         <span className="when">{formatKickoff(session.startsAt, locale, hour12)}</span>
 
-        {session.venue ? (
-          <span className="where row" style={{ gap: 6 }}>
-            <Icon name="place" size={16} />
-            <span className="truncate">{session.venue.name}</span>
-          </span>
-        ) : (
+        {/*
+          The venue *is* the way to the map.
+
+          It replaced a separate "Open map" button under the card, which spent a
+          whole control saying what a pin beside an address already says — and
+          put the thing you press somewhere other than the thing it is about.
+        */}
+        {session.venue == null ? (
           <span className="where">{m.session.noVenue}</span>
+        ) : session.venue.mapUrl ? (
+          <button
+            type="button"
+            className="where row is-link"
+            style={{ gap: 6 }}
+            onClick={() => platform.openExternal(session.venue!.mapUrl!)}
+            aria-label={m.session.openMap}
+            title={m.session.openMap}
+          >
+            {venueLine}
+          </button>
+        ) : (
+          <span className="where row" style={{ gap: 6 }}>
+            {venueLine}
+          </span>
         )}
 
         {/* The pitch's hourly rate, not a per-person guess. What a head costs
@@ -138,13 +164,6 @@ export function SessionView({
           <span className="where">{session.venue.priceNote}</span>
         ) : null}
       </section>
-
-      {session.venue?.mapUrl ? (
-        <Button variant="text" onClick={() => platform.openExternal(session.venue!.mapUrl!)}>
-          <Icon name="place" size={18} slot="icon" />
-          {m.session.openMap}
-        </Button>
-      ) : null}
 
       {error ? <ErrorBanner>{error}</ErrorBanner> : null}
 

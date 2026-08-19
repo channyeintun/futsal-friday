@@ -727,6 +727,53 @@ md-outlined-text-field {
   color: var(--md-sys-color-on-surface-variant);
 }
 
+/*
+ * The venue line, when there is a map behind it.
+ *
+ * A dotted underline rather than a link colour: the hero spends its one accent
+ * on the countdown, and a second coloured thing three lines under it would be
+ * two marks competing on the quietest card in the app.
+ *
+ * Only the button chrome is reset. `font-size` and `font-weight` come from
+ * `.where` above and must keep coming from there — a `font: inherit` here would
+ * win on specificity and quietly resize the line.
+ */
+.where.is-link {
+  border: 0;
+  padding: 0;
+  background: none;
+  font-family: inherit;
+  color: var(--md-sys-color-on-surface-variant);
+  text-align: left;
+  max-width: 100%;
+  cursor: pointer;
+}
+
+/*
+ * The mark goes under the name, and it is a border rather than an underline.
+ *
+ * Two traps, both of which render nothing while `getComputedStyle` cheerfully
+ * reports the rule as applied. `.row` makes this a flex container and the name a
+ * flex item, and text decoration does not propagate into flex items — so set on
+ * the button it never reaches the text. Moved onto the name it still vanished:
+ * `.truncate` carries `overflow: hidden` for its ellipsis, and that clips an
+ * underline sitting below the content box.
+ *
+ * A border is drawn on the border box, which overflow does not clip, so it
+ * survives both. Dotted and in the text's own colour: the hero spends its one
+ * accent on the countdown, and a second coloured thing three lines below would
+ * be two marks competing on the quietest card in the app.
+ */
+.where.is-link > .truncate {
+  padding-bottom: 2px;
+  border-bottom: 1px dotted currentColor;
+}
+
+.where.is-link:hover,
+.where.is-link:focus-visible {
+  color: var(--md-sys-color-on-surface);
+}
+
 .hero .countdown {
   font-size: 0.72rem;
   font-weight: 700;
