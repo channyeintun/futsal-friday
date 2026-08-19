@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { LeaderboardRow } from '../api/members.js';
 import { Avatar } from '../components/Avatar.js';
+import { TopPlayers } from '../components/TopPlayers.js';
 import { VirtualList } from '../components/VirtualList.js';
 import { Button, ErrorBanner, Spinner } from '../components/ui.js';
 import { useLeaderboard } from '../hooks/queries.js';
@@ -64,6 +65,10 @@ export function LeaderboardPage() {
 
       {query.error ? <ErrorBanner>{query.error.message}</ErrorBanner> : null}
       {query.isPending ? <Spinner label={m.board.loading} /> : null}
+
+      {/* The podium above the table. The table still holds everybody — this is
+          the part you can read without reading. */}
+      <TopPlayers rows={rows} board={board} viewerId={identity.memberId} />
 
       <VirtualList
         query={query}

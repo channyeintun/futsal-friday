@@ -117,6 +117,10 @@ export const my: Messages = {
   },
 
   board: {
+    topPlayers: 'ထိပ်တန်း ကစားသမားများ',
+    codeStreak: 'ဆက်',
+    codeGoals: 'ဂိုး',
+    codeMvp: 'ဆု',
     title: 'အဆင့်ဇယား',
     streaks: 'ဆက်တိုက်',
     goals: 'ဂိုးများ',

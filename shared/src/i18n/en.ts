@@ -107,6 +107,10 @@ export const en = {
   },
 
   board: {
+    topPlayers: 'Top players',
+    codeStreak: 'STK',
+    codeGoals: 'GLS',
+    codeMvp: 'MVP',
     title: 'Leaderboard',
     streaks: 'Streaks',
     goals: 'Goals',
