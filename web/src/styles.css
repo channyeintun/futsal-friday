@@ -148,12 +148,23 @@
    *
    * The green survives in the hue; it stops carrying the value.
    */
-  --ff-pitch: #dfe7e2;
-  --ff-pitch-mow: #d7e1db;
-  --ff-pitch-line: rgb(17 17 19 / 0.22);
-  --ff-pitch-ring: rgb(17 17 19 / 0.45);
-  --ff-pitch-on: #111113;
-  --ff-pitch-ghost: rgb(17 17 19 / 0.09);
+  /*
+   * The field does not invert with the theme.
+   *
+   * Light mode had a pale version of it, and pale is what a pitch cannot be:
+   * the markings had nothing to sit on, the dashed empty spots vanished, and
+   * the whole panel read as a blank area of the card rather than as a place.
+   *
+   * It is a depiction rather than a surface — the same licence the team colours
+   * take — so it stays dark in both themes and reads as a screen inside the
+   * page, which is exactly what it is.
+   */
+  --ff-pitch: #0d1a1a;
+  --ff-pitch-mow: #10201f;
+  --ff-pitch-line: rgb(255 255 255 / 0.26);
+  --ff-pitch-ring: rgb(255 255 255 / 0.72);
+  --ff-pitch-on: #ffffff;
+  --ff-pitch-ghost: rgb(255 255 255 / 0.07);
   --ff-item-hi: #f2f4f8;
   --ff-item-lo: #c9ced8;
   --ff-item-on: #111113;
@@ -261,16 +272,9 @@
     /* A night pitch: lifted clear of black like the team set above, and kept
        well away from #4ade80 — a turf that matched the accent would erase the
        difference between the field and the thing you press on it. */
-    --ff-pitch: #0d1a1a;
-    --ff-pitch-mow: #10201f;
-    --ff-pitch-line: rgb(255 255 255 / 0.26);
-    --ff-pitch-ring: rgb(255 255 255 / 0.72);
-    --ff-pitch-on: #ffffff;
-    --ff-pitch-ghost: rgb(255 255 255 / 0.07);
     --ff-item-hi: #47506a;
     --ff-item-lo: #232a3c;
     --ff-item-on: #f4f4f8;
-    --ff-pitch-warn: #ffb4ab;
 
     color-scheme: dark;
   }
@@ -892,10 +896,23 @@ md-outlined-text-field {
  * pseudo-element to the panel and letting negative `background-position` do the
  * cropping gives the same picture with nothing overflowing anything.
  */
+/*
+ * Behind the text, which took a stacking context to arrange.
+ *
+ * An absolutely positioned `::after` paints *above* its non-positioned
+ * siblings, so the chevron was landing on top of the kickoff — invisible on a
+ * dark ground and, in light mode, a grey wedge sitting across "7:30 PM".
+ */
+.hero > * {
+  position: relative;
+  z-index: 1;
+}
+
 .hero::after {
   content: '';
   position: absolute;
   inset: 0;
+  z-index: 0;
   pointer-events: none;
   opacity: var(--ff-etch-opacity);
   background-repeat: no-repeat;
