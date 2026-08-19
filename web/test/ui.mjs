@@ -978,9 +978,17 @@ async function run() {
   await sleep(1200);
   await shoot('08-dark');
   const bg = await evalJs(`getComputedStyle(document.body).backgroundColor`);
-  // Pure black, not a tinted charcoal — that is the whole basis of the dark
-  // theme, so it is worth pinning rather than asserting "something dark".
-  check('dark theme applies', bg === 'rgb(0, 0, 0)', bg);
+  /*
+   * Near-black with a blue-violet cast, and deliberately NOT pure black.
+   *
+   * This used to pin `rgb(0, 0, 0)` on the reasoning that pure black was the
+   * whole basis of the theme. It is now #0A0B13, sampled across EA FC's menus,
+   * where the ground never goes fully black and the surfaces above it climb the
+   * same hue instead of turning grey. Still pinned exactly rather than as
+   * "something dark", for the same reason as before: the specific value is the
+   * design.
+   */
+  check('dark theme applies', bg === 'rgb(10, 11, 19)', bg);
 
   console.log('\nevery long list is paged and windowed');
   // The same three properties on each: a bounded first request, a DOM holding

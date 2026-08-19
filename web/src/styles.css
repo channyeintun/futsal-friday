@@ -101,6 +101,30 @@
   --ff-team-6: #3f4f9c;
 
   /*
+   * The three accents, and the point is that they have different jobs.
+   *
+   * FC 26 runs cyan, green and azure at once and never interchanges them:
+   * cyan is *structural* — section labels, meta lines, the stroke on whatever
+   * has focus, and never a fill. Green is *state* — a check, an active dot, a
+   * positive number. Azure is *you* — your row, your progress.
+   *
+   * The app already had the green. Giving the other two jobs of their own is
+   * most of what separates "a dark theme with an accent" from the thing the
+   * user is pointing at.
+   *
+   * Light-mode values are darkened until they carry text on white; the dark
+   * ones are EA's own, sampled from the game.
+   */
+  --ff-cyan: #0d7c74;
+  --ff-azure: #0568c9;
+  /* The light falling on the top of a panel. */
+  --ff-panel-wash: rgb(0 122 67 / 0.05);
+  /* Barely there on a light ground: the bloom exists to lift near-black. */
+  --ff-bloom-teal: rgb(13 154 128 / 0.05);
+  --ff-bloom-violet: rgb(124 63 224 / 0.04);
+  --ff-bloom-green: rgb(7 244 104 / 0.03);
+
+  /*
    * The pitch.
    *
    * A depiction rather than a surface — the same licence the team colours take
@@ -124,8 +148,15 @@
   --ff-pitch-warn: #ffb4ab;
 
   /* The shared shape language: big soft rectangles, fully round pills. */
-  --ff-radius-card: 20px;
-  --ff-radius-row: 16px;
+  /*
+   * Measured off FC 26: a panel corner is ~14px on a ~460px panel, which is
+   * about 3% of its width. Ours was 20px on a ~350px card — 5.7%, half again as
+   * round. Matching the *proportion* on a phone means tightening, which is the
+   * opposite of what "make it look like a game" suggests. Buttons stay fully
+   * round; EA's own token is `border-radius-full` for those.
+   */
+  --ff-radius-card: 12px;
+  --ff-radius-row: 10px;
   --ff-radius-pill: 999px;
   /* The gap between the floating nav and the screen edge. */
   --ff-nav-inset: 10px;
@@ -160,20 +191,31 @@
     --md-sys-color-on-error: #690005;
     --md-sys-color-error-container: #4a1512;
     --md-sys-color-on-error-container: #ffdad6;
-    --md-sys-color-background: #000000;
-    --md-sys-color-on-background: #ffffff;
-    --md-sys-color-surface: #000000;
-    --md-sys-color-on-surface: #ffffff;
-    --md-sys-color-surface-variant: #2c2c2e;
-    /* Secondary text. Grey enough to recede, light enough to read on black. */
-    --md-sys-color-on-surface-variant: #98989f;
-    --md-sys-color-outline: #48484a;
-    --md-sys-color-outline-variant: #2c2c2e;
-    --md-sys-color-surface-container-lowest: #000000;
-    --md-sys-color-surface-container-low: #141416;
-    --md-sys-color-surface-container: #1c1c1e;
-    --md-sys-color-surface-container-high: #242427;
-    --md-sys-color-surface-container-highest: #2c2c2e;
+    /*
+     * Never pure black.
+     *
+     * Sampled across FC 26's menus the ground sits around #0A0B13 — near-black
+     * with a distinct blue-violet cast — and the surfaces above it climb the
+     * same hue rather than going grey. It is a small move that does a
+     * surprising amount: pure #000 is what makes a dark theme read as "dark
+     * mode" rather than as a screen with lights on it.
+     */
+    --md-sys-color-background: #0a0b13;
+    --md-sys-color-on-background: #f4f4f8;
+    --md-sys-color-surface: #0a0b13;
+    /* Cool near-white rather than #fff, which is what the game uses. */
+    --md-sys-color-on-surface: #f4f4f8;
+    --md-sys-color-surface-variant: #23232e;
+    /* Secondary text. Grey enough to recede, light enough to read on the ground. */
+    --md-sys-color-on-surface-variant: #9a9aa8;
+    --md-sys-color-outline: #4a4a57;
+    /* The hairline. FC draws every in-panel rule at ~12% white. */
+    --md-sys-color-outline-variant: #2a2a34;
+    --md-sys-color-surface-container-lowest: #0a0b13;
+    --md-sys-color-surface-container-low: #101019;
+    --md-sys-color-surface-container: #14141c;
+    --md-sys-color-surface-container-high: #1b1b25;
+    --md-sys-color-surface-container-highest: #23232e;
     --md-sys-color-inverse-surface: #f5f5f7;
     --md-sys-color-inverse-on-surface: #1c1c1e;
     --md-sys-color-inverse-primary: #007a43;
@@ -192,6 +234,14 @@
     --ff-team-4: #f0a6e8;
     --ff-team-5: #ff8f6b;
     --ff-team-6: #9fb0ff;
+
+    /* Sampled out of the game. The cyan is the one that does the most work. */
+    --ff-cyan: #1ff0e6;
+    --ff-azure: #0894fc;
+    --ff-panel-wash: rgb(13 154 128 / 0.16);
+    --ff-bloom-teal: rgb(13 154 128 / 0.20);
+    --ff-bloom-violet: rgb(124 63 224 / 0.16);
+    --ff-bloom-green: rgb(7 244 104 / 0.07);
 
     /* A night pitch: lifted clear of black like the team set above, and kept
        well away from #4ade80 — a turf that matched the accent would erase the
@@ -216,6 +266,38 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100%;
+}
+
+/*
+ * The ambient bloom.
+ *
+ * Enormous, very soft, very blurred colour sitting behind everything and
+ * bleeding off the edges — teal low-left, violet high-right, a little green
+ * through the middle. It is the thing that keeps a near-black screen from
+ * reading as a plain dark theme, and in the game it is doing most of the work
+ * that people attribute to the panels.
+ *
+ * Fixed, so it does not travel with the scroll — the light is in the room, not
+ * on the page. Painted on `body::before` beneath the content rather than as a
+ * background layer on `body` itself, so the ground colour underneath still
+ * shows through where the bloom fades to nothing.
+ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(70% 45% at 10% 100%, var(--ff-bloom-teal), transparent 70%),
+    radial-gradient(60% 40% at 95% 8%, var(--ff-bloom-violet), transparent 70%),
+    radial-gradient(55% 35% at 75% 55%, var(--ff-bloom-green), transparent 70%);
+}
+
+/* Everything the app draws sits above it. */
+.app {
+  position: relative;
+  z-index: 1;
 }
 
 body {
@@ -487,7 +569,15 @@ md-outlined-text-field {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: var(--md-sys-color-background);
+  /*
+   * Transparent, so the bloom on `body::before` reads through.
+   *
+   * This used to paint the ground colour, which was harmless while the ground
+   * was flat and is exactly what hid the bloom the first time — the light was
+   * being drawn and then covered by a shell the same colour. `body` still
+   * paints the ground underneath, so nothing is lost.
+   */
+  background: transparent;
 
   /*
    * How much of the viewport the header and the floating nav take between
@@ -632,8 +722,17 @@ md-outlined-text-field {
  * at this contrast the fill alone separates it, and an outline would only
  * reintroduce the boxed-in look the reference avoids.
  */
+/*
+ * A panel is a fill, a radius and light falling on its top edge.
+ *
+ * No border and no shadow at rest — that is not an omission, it is what FC 26
+ * does: panels are told apart from the ground by the wash and the corner alone,
+ * and a stroke appears only on the thing that has focus.
+ */
 .card {
-  background: var(--md-sys-color-surface-container);
+  background:
+    linear-gradient(180deg, var(--ff-panel-wash) 0%, transparent 45%),
+    var(--md-sys-color-surface-container);
   border-radius: var(--ff-radius-card);
   padding: 18px 16px;
   display: flex;
@@ -646,7 +745,10 @@ md-outlined-text-field {
   padding: 0;
 }
 
+/* Panel titles stay title case — in FC only hero titles and enum values shout.
+   What carries them is weight, not case or tracking. */
 .card-title {
+  font-weight: 800;
   letter-spacing: -0.01em;
   margin: 0;
   font-size: 1rem;
@@ -714,10 +816,22 @@ md-outlined-text-field {
   gap: 6px;
 }
 
+/*
+ * The one heading that shouts.
+ *
+ * FC reserves uppercase for exactly two tiers — the hero title on a screen, and
+ * the value in a label/value row. Panel titles and body stay mixed case, which
+ * is why a blanket uppercase reads as shouting rather than as the game.
+ *
+ * Myanmar has no case, so this is a no-op in Burmese rather than something
+ * needing an escape hatch — and the negative tracking, which *would* have
+ * mattered there, is scoped away below.
+ */
 .hero .when {
   font-size: 2.1rem;
   font-weight: 800;
   line-height: 1.1;
+  text-transform: uppercase;
   letter-spacing: -0.03em;
 }
 
@@ -774,12 +888,24 @@ md-outlined-text-field {
   color: var(--md-sys-color-on-surface);
 }
 
+/*
+ * The meta line above the kickoff, and the app's first cyan.
+ *
+ * FC puts its structural labels — "Event Ends In", "Tournament · 4 Rounds" — in
+ * a bright aqua above the thing they describe, and never uses that colour as a
+ * fill. This is the same line doing the same job, so it takes the same colour,
+ * and the green goes back to meaning state.
+ *
+ * The letter-spacing is gone. EA's own display token is `letter-spacing: 0` —
+ * the width in a FIFA heading comes from an expanded face at weight 900, not
+ * from tracking. Dropping it costs nothing here and removes the one typographic
+ * move that actively breaks Myanmar script.
+ */
 .hero .countdown {
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--md-sys-color-primary);
+  color: var(--ff-cyan);
 }
 
 .player-row {
@@ -879,6 +1005,11 @@ md-outlined-text-field {
 
 /* --------------------------------------------------------------- badges */
 
+/*
+ * A badge is a value, and FC sets values in uppercase bold — "SHORT PASSING",
+ * "4-2-3-1 WIDE", "OFF". Myanmar has no case, so this is a no-op there rather
+ * than something needing a :lang(my) escape.
+ */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -887,6 +1018,7 @@ md-outlined-text-field {
   border-radius: var(--ff-radius-pill);
   font-size: 0.72rem;
   font-weight: 700;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
