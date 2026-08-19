@@ -616,18 +616,27 @@ const HAPTICS_KEY = 'haptics';
 /**
  * What each of the two feels like.
  *
- * Short, because the Vibration API's unit is a blunt motor running for a number
- * of milliseconds rather than anything shaped: past about forty it stops being
- * a tick and becomes a phone going off in a pocket.
+ * Short, because the API's unit is a blunt motor running for a number of
+ * milliseconds rather than anything shaped: past about forty it stops being a
+ * tick and becomes a phone going off in a pocket.
  *
  * Taking a spot is one clean tap. Giving one up is two, split by a gap — the
- * same idea as the second clip. A single buzz cannot mean two opposite things,
- * and the difference has to survive being felt through a jacket rather than
- * looked at.
+ * same idea as the second clip, and for the same reason: a single buzz cannot
+ * mean two opposite things.
+ *
+ * Both pulses are 25ms rather than the 12 the first cut of this used. The cheap
+ * rotating-mass actuators in the phones this group actually carries need time to
+ * spin up, and a pulse that short can produce nothing you would feel — which
+ * would have quietly collapsed `out` into a single buzz indistinguishable from
+ * `in`, destroying the one distinction the whole thing exists to make. It would
+ * have looked correct in the test and been wrong in the hand.
+ *
+ * Odd-length on purpose. Chromium discards a trailing entry when the pattern
+ * ends on a pause, so an even-length pattern is not the pattern you wrote.
  */
 const HAPTIC_PATTERNS: Record<HapticName, number[]> = {
-  in: [18],
-  out: [12, 40, 22],
+  in: [25],
+  out: [25, 45, 25],
 };
 
 function hapticsSupported(): boolean {

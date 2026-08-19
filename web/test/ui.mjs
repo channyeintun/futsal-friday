@@ -342,7 +342,7 @@ async function run() {
     .findIndex((s) => s.classList.contains('is-me'))`);
   check('YOU STAND WHERE YOU PRESSED, NOT WHERE THE LIST PUT YOU', landed === pressed,
     `pressed ${pressed}, landed on ${landed}`);
-  check('taking a spot buzzes once', (await buzzes()) === '["[18]"]', await buzzes());
+  check('taking a spot buzzes once', (await buzzes()) === '["[25]"]', await buzzes());
   check('and one gap closed', (await openSpots()) === openBefore - 1,
     `before=${openBefore} after=${await openSpots()}`);
   check('the roster agrees', (await playing()) === headsBefore + 1);
@@ -363,14 +363,33 @@ async function run() {
     await evalJs(`!!document.querySelector('.pitch-spot.is-me.is-armed[data-sound="tap-out"]')`));
   check('still on the pitch after that press', (await playing()) === headsBefore + 1);
   // Arming changes nothing yet, so it must not feel like it did.
-  check('ARMING DOES NOT BUZZ', (await buzzes()) === '["[18]"]', await buzzes());
+  check('ARMING DOES NOT BUZZ', (await buzzes()) === '["[25]"]', await buzzes());
   await evalJs(`document.querySelector('button.pitch-spot.is-me').click()`);
   await sleep(1600);
   check('the second press gives the spot up', (await playing()) === headsBefore,
     `expected ${headsBefore}, got ${await playing()}`);
   // A single buzz cannot mean two opposite things, so leaving is a different one.
   check('and giving it up feels different from taking it',
-    (await buzzes()) === '["[18]","[12,40,22]"]', await buzzes());
+    (await buzzes()) === '["[25]","[25,45,25]"]', await buzzes());
+
+  /*
+   * The preference actually gates it.
+   *
+   * Set through storage rather than by pressing the card, so the assertion does
+   * not depend on which language the account is in — and because what is
+   * untested is `hapticsEnabled()` reading the key, not the ten lines of card
+   * that mirror the sound one.
+   */
+  await evalJs(`localStorage.setItem('futsal:haptics', '0'); window.__buzz.length = 0; true`);
+  await evalJs(`(() => { const s = document.querySelector('button.pitch-spot.is-open'); if (s) s.click(); })()`);
+  await sleep(1600);
+  check('SWITCHED OFF, A PRESS DOES NOT BUZZ', (await buzzes()) === '[]', await buzzes());
+  check('and it still signs you up', await evalJs(`!!document.querySelector('.pitch-spot.is-me')`));
+
+  // Put it back, and leave, so the rest of the run starts where it expected to.
+  await evalJs(`localStorage.removeItem('futsal:haptics'); true`);
+  await leaveFromPitch();
+  await sleep(1600);
   check('and the pitch has its gap back', (await openSpots()) === openBefore);
 
   /*

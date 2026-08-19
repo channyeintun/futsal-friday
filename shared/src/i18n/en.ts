@@ -555,7 +555,7 @@ export const en = {
     soundOff: 'Off',
     haptics: 'Vibration',
     hapticsBody:
-      'A buzz when you take a spot and when you give one up. Nothing else in the app vibrates.',
+      'A buzz when you take a spot and when you give one up. Nothing else in the app vibrates, and a phone on silent may not vibrate at all.',
   },
 
   editor: {
