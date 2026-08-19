@@ -407,7 +407,14 @@ async fn register(
         ));
     }
 
-    let guests = register_input(&parse_optional_body(req).await?)?;
+    let body = parse_optional_body(req).await?;
+    let guests = register_input(&body)?;
+    // Where they pressed, if the client had a pitch to press. Stored as given
+    // and never validated against the formation here: how many spots there are
+    // is a question about a drawing, the cap can move under it, and a number
+    // that no longer fits is not an error — the screen simply falls back to a
+    // gap. See `placeOnPitch`.
+    let slot = slot_input(&body)?;
     let timestamp = http::now_iso();
 
     // One statement so the cap check, the position and the insert cannot be
@@ -420,7 +427,7 @@ async fn register(
     let result = db_handle
         .prepare(
             "INSERT INTO registrations
-         (id, session_id, member_id, guests, status, position, created_at)
+         (id, session_id, member_id, guests, status, position, created_at, slot)
        SELECT ?1, ?2, ?3, ?6,
               CASE
                 WHEN ?4 IS NULL THEN 'in'
@@ -429,7 +436,7 @@ async fn register(
                 ELSE 'waitlist'
               END,
               COALESCE((SELECT MAX(position) FROM registrations WHERE session_id = ?2), 0) + 1,
-              ?5
+              ?5, ?7
         WHERE NOT EXISTS (
           SELECT 1 FROM registrations WHERE session_id = ?2 AND member_id = ?3
         )",
@@ -441,6 +448,7 @@ async fn register(
             maybe_number(session.max_players),
             text(&timestamp),
             number(guests),
+            maybe_number(slot),
         ])?
         .run()
         .await?;
@@ -464,6 +472,7 @@ async fn register(
                     "memberName": identity.name,
                     "memberAvatarUpdatedAt": mine.member_avatar_updated_at,
                     "guests": mine.guests,
+                    "slot": mine.slot,
                     "status": mine.status,
                     "position": mine.position,
                     "counts": counts,
@@ -2154,6 +2163,16 @@ fn is_iso_datetime(text: &str) -> bool {
 fn register_input(raw: &Value) -> ApiResult<i64> {
     let object = object_of(raw)?;
     Ok(optional(object, "guests", |value, path| int_of(value, path, 0, 5))?.unwrap_or(0))
+}
+
+/// Which spot on the pitch was pressed. Absent means no preference.
+///
+/// Bounded only by the widest formation the app can draw — sixty spots, the
+/// same ceiling as `maxPlayers` — because the real bound is a drawing the
+/// server has never seen and which changes whenever the cap does.
+fn slot_input(raw: &Value) -> ApiResult<Option<i64>> {
+    let object = object_of(raw)?;
+    optional(object, "slot", |value, path| int_of(value, path, 0, 59))
 }
 
 struct CreateSession {

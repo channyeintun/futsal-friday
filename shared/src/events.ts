@@ -50,6 +50,12 @@ export const playerJoinedSchema = z.object({
   memberAvatarUpdatedAt: isoSchema.nullable().default(null),
   /** How many friends they brought; they answer for the spots and the cost. */
   guests: z.number().int().min(0).default(0),
+  /**
+   * Where they stood. Carried for the same reason as the name and the picture:
+   * without it every other phone draws the arrival into the first gap, and only
+   * a refetch would slide it across to where they actually pressed.
+   */
+  slot: z.number().int().nullable().default(null),
   status: registrationStatusSchema,
   position: z.number().int(),
   counts,

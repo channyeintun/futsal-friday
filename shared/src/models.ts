@@ -208,9 +208,18 @@ export type UpdateSessionInput = z.infer<typeof updateSessionSchema>;
 export const registrationStatusSchema = z.enum(['in', 'waitlist']);
 export type RegistrationStatus = z.infer<typeof registrationStatusSchema>;
 
-/** Sign up, optionally bringing friends. */
+/** Sign up, optionally bringing friends, optionally standing somewhere. */
 export const registerSchema = z.object({
   guests: z.number().int().min(0).max(5).default(0),
+  /**
+   * Which spot on the pitch was pressed, if the client drew one.
+   *
+   * Bounded only by the widest formation the app can draw, because the real
+   * bound is a picture the server has never seen and which is redrawn whenever
+   * the cap moves. A number that no longer fits is not refused — the screen
+   * puts that person in a gap instead. See `placeOnPitch`.
+   */
+  slot: z.number().int().min(0).max(59).nullish(),
 });
 export type RegisterInput = z.infer<typeof registerSchema>;
 
@@ -226,6 +235,8 @@ export const registrationSchema = z.object({
    * this member answers for both.
    */
   guests: z.number().int().min(0).max(5).default(0),
+  /** Where on the pitch they stood. Null is no preference, and is common. */
+  slot: z.number().int().nullable().default(null),
   status: registrationStatusSchema,
   /**
    * Whether they actually turned up. `null` means nobody has said, which is

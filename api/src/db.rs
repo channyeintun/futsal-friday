@@ -108,6 +108,7 @@ pub struct RegistrationRow {
     pub member_name: String,
     pub member_avatar_updated_at: Option<String>,
     pub guests: i64,
+    pub slot: Option<i64>,
     pub attended: Option<i64>,
     pub guests_arrived: Option<i64>,
     pub goals: i64,
@@ -238,6 +239,9 @@ pub struct Registration {
     pub member_name: String,
     pub member_avatar_updated_at: Option<String>,
     pub guests: i64,
+    /// Which spot on the pitch they pressed, if they pressed one. `None` is the
+    /// ordinary case — no preference — and the screen fills those into the gaps.
+    pub slot: Option<i64>,
     /// SQLite has no boolean, and the three states are load-bearing: `None` is
     /// "unmarked", which is not the same as "marked absent".
     pub attended: Option<bool>,
@@ -526,6 +530,7 @@ pub fn to_registration(row: &RegistrationRow) -> Registration {
         member_name: row.member_name.clone(),
         member_avatar_updated_at: row.member_avatar_updated_at.clone(),
         guests: row.guests,
+        slot: row.slot,
         // Three states: unmarked is not "marked absent".
         attended: row.attended.map(|value| value == 1),
         guests_arrived: row.guests_arrived,
@@ -598,7 +603,7 @@ pub async fn list_registrations(
         .prepare(
             "SELECT r.id, r.session_id, r.member_id, m.name AS member_name,
               m.avatar_updated_at AS member_avatar_updated_at,
-              r.guests, r.attended, r.guests_arrived, r.goals,
+              r.guests, r.slot, r.attended, r.guests_arrived, r.goals,
               r.status, r.position, r.created_at
          FROM registrations r
          JOIN members m ON m.id = r.member_id

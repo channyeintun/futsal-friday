@@ -7,6 +7,7 @@ import {
   pitchSlotCount,
   pitchSlotSize,
   pitchSpotGap,
+  placeOnPitch,
   registeredSlots,
   slotKey,
   waitingSlots,
@@ -113,17 +114,27 @@ export function Pitch({
    * cannot disagree. `counts.in` from the server says the same thing, but going
    * through it would let a stale count caption a fresh field.
    */
-  const taken = registeredSlots(registrations);
-  const headsIn = taken.length;
+  const headsIn = registeredSlots(registrations).length;
   const total = pitchSlotCount(headsIn, session.maxPlayers, registrationOpen);
   const openCount = Math.max(0, total - headsIn);
   const lines = pitchLines(total);
   const spotSize = pitchSlotSize(lines);
 
-  const spots: Spot[] = [
-    ...taken.map((slot) => ({ kind: 'taken' as const, key: slotKey(slot), slot })),
-    ...Array.from({ length: openCount }, (_, i) => ({ kind: 'open' as const, key: `open:${i}` })),
-  ];
+  /*
+   * Where everybody actually stood, not the order they arrived in.
+   *
+   * Filling the circles by registration order was fine while signing up was a
+   * button — nobody could tell. Once pressing a *particular* circle is how you
+   * sign up, it is a lie you can watch happen: you aim at the gap near your
+   * thumb and your face appears near the halfway line, because that gap came
+   * first in the array.
+   */
+  const placement = placeOnPitch(registrations, total);
+  const spots: Spot[] = placement.map((slot, index) =>
+    slot
+      ? { kind: 'taken' as const, key: slotKey(slot), slot }
+      : { kind: 'open' as const, key: `open:${index}` },
+  );
 
   /** Only when there is genuinely a free spot with your name on it. */
   const canJoin = !me && registrationOpen && openCount > 0;
@@ -172,13 +183,15 @@ export function Pitch({
     if (!me) setPhase((current) => (current === 'armed' ? 'idle' : current));
   }, [me]);
 
-  const join = async (key: string) => {
+  const join = async (key: string, slot: number | null) => {
     if (busy) return;
     setPhase('joining');
     setPendingKey(key);
     setError(null);
     try {
-      const result = await registerForSession(session.id);
+      // The spot goes with the registration, so every other phone draws them
+      // standing where they pressed rather than in the first gap it has.
+      const result = await registerForSession(session.id, 0, slot);
       toast(
         result.registration?.status === 'waitlist' ? m.toast.youreOnWaitlist : m.toast.youreIn,
       );
@@ -383,7 +396,7 @@ function renderSpot({
   onBench: boolean;
   recentlyChanged: Set<string>;
   m: ReturnType<typeof useLocale>['m'];
-  onJoin(key: string): void;
+  onJoin(key: string, slot: number | null): void;
   onArm(): void;
   onLeave(key: string): void;
 }) {
@@ -436,7 +449,7 @@ function renderSpot({
         className={className}
         style={style}
         disabled={busy}
-        onClick={() => onJoin(spot.key)}
+        onClick={() => onJoin(spot.key, onBench ? null : index)}
         // Every empty spot is the same offer, so only the first is worth
         // announcing — eight identical "Take this spot" is noise, and the
         // caption below already says how many there are.

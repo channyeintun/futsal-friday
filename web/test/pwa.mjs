@@ -151,11 +151,13 @@ try {
   const cached = await js(`caches.keys().then(k => JSON.stringify(k))`);
   check('shell cache was created', cached.includes('futsal-shell'), cached);
   check('the app shell is in the cache',
-    await js(`caches.open('futsal-shell-v1').then(c => c.match('/')).then(r => !!r)`));
+    await js(`caches.keys().then(ks => caches.open(ks.find(k => k.startsWith('futsal-shell'))))
+      .then(c => c.match('/')).then(r => !!r)`));
   // Read out of the cache, not off the network: a launch with no signal has to
   // get the splash too, and the origin would keep serving it either way.
   check('and the splash is in the copy the worker kept',
-    await js(`caches.open('futsal-shell-v1').then(c => c.match('/')).then(r => r.text()).then(t => t.includes('id="splash"'))`));
+    await js(`caches.keys().then(ks => caches.open(ks.find(k => k.startsWith('futsal-shell'))))
+      .then(c => c.match('/')).then(r => r.text()).then(t => t.includes('id="splash"'))`));
 
   console.log('\noffline');
   await send('Network.emulateNetworkConditions', {

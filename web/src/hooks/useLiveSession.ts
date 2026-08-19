@@ -77,7 +77,7 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
       onEvent: (event) => {
         switch (event.name) {
           case 'player.joined': {
-            const { memberId, memberName, memberAvatarUpdatedAt, guests, status, position, counts } =
+            const { memberId, memberName, memberAvatarUpdatedAt, guests, slot, status, position, counts } =
               event.data;
             flash(memberId);
             patch((current) => {
@@ -92,6 +92,7 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
                 memberName,
                 memberAvatarUpdatedAt,
                 guests,
+                slot,
                 // Nobody has said whether they turned up — they only just
                 // signed up. Unmarked reads as present for a player, which is
                 // the same thing the server would send back.

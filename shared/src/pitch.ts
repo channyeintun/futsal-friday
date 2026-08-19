@@ -238,3 +238,102 @@ export function pitchSlotSize(lines: readonly number[]): number {
     (PITCH_MAX_HEIGHT - (lines.length - 1) * PITCH_LINE_GAP - PITCH_PAD) / lines.length;
   return Math.max(SPOT_MIN, Math.min(SPOT_MAX, Math.floor(Math.min(byWidth, byHeight))));
 }
+
+/* ------------------------------------------------------------- placement */
+
+/** A registration as the pitch needs it, including the spot they pressed. */
+export interface PitchParty extends PitchCandidate {
+  /**
+   * The spot they pressed, if they pressed one. Null is the ordinary case and
+   * means no preference — every registration made before the pitch existed,
+   * anybody promoted off the waitlist, and any client that does not draw a
+   * field.
+   */
+  slot?: number | null;
+}
+
+/**
+ * Put everybody where they stood, and fill the rest of the field around them.
+ *
+ * Signing up used to be a button, so the circles could be filled in the order
+ * the names arrived and nobody could tell. Once pressing a *particular* spot is
+ * how you sign up, that order becomes a lie you can watch happen: you aim at
+ * the empty circle near your thumb, and your face appears somewhere near the
+ * halfway line because that gap came first in the array.
+ *
+ * So a chosen spot is honoured wherever it still exists and is free. It might
+ * not: the organizer can change the cap, which redraws the whole formation
+ * underneath everybody, and two people can press the same circle within a
+ * moment of each other. Neither is an error — the loser simply takes a gap, the
+ * same as somebody who never expressed a preference at all. A preference the
+ * screen cannot keep is dropped quietly, because the alternative is refusing a
+ * registration over where a picture goes.
+ *
+ * Guests follow whoever brought them: they fill forward from that person's
+ * spot, so a party of three reads as a party rather than as three strangers
+ * scattered across the pitch.
+ *
+ * Returns one entry per spot on the field — a body, or null for an open spot.
+ */
+export function placeOnPitch(
+  parties: readonly PitchParty[],
+  total: number,
+): (TeamSlot | null)[] {
+  const size = Math.max(0, Math.floor(total));
+  const placed: (TeamSlot | null)[] = new Array<TeamSlot | null>(size).fill(null);
+  const playing = parties.filter((party) => party.status === 'in');
+
+  const bodyOf = (party: PitchParty, guestIndex: number): TeamSlot => ({
+    memberId: party.memberId,
+    memberName: party.memberName,
+    memberAvatarUpdatedAt: party.memberAvatarUpdatedAt ?? null,
+    guestIndex,
+  });
+
+  /** The next free spot at or after `from`, wrapping once. Null when full. */
+  const freeFrom = (from: number): number | null => {
+    for (let step = 0; step < size; step++) {
+      const at = (from + step) % size;
+      if (placed[at] === null) return at;
+    }
+    return null;
+  };
+
+  // First pass: only the people who asked for somewhere, in registration order
+  // so an earlier signup wins a contested circle.
+  const settled = new Set<string>();
+  for (const party of playing) {
+    const wanted = party.slot;
+    if (wanted == null || !Number.isInteger(wanted)) continue;
+    if (wanted < 0 || wanted >= size || placed[wanted] !== null) continue;
+    placed[wanted] = bodyOf(party, 0);
+    settled.add(party.memberId);
+
+    // Their guests fill forward from them rather than from the front.
+    for (let guest = 1; guest <= Math.max(0, party.guests ?? 0); guest++) {
+      const at = freeFrom(wanted + guest);
+      if (at === null) break;
+      placed[at] = bodyOf(party, guest);
+    }
+  }
+
+  // Second pass: everybody else, into whatever is left, in registration order.
+  const remaining: TeamSlot[] = [];
+  for (const party of playing) {
+    // A settled party is settled whole — the pass above placed its guests too.
+    if (settled.has(party.memberId)) continue;
+    remaining.push(bodyOf(party, 0));
+    for (let guest = 1; guest <= Math.max(0, party.guests ?? 0); guest++) {
+      remaining.push(bodyOf(party, guest));
+    }
+  }
+
+  let cursor = 0;
+  for (const body of remaining) {
+    while (cursor < size && placed[cursor] !== null) cursor++;
+    if (cursor >= size) break;
+    placed[cursor] = body;
+  }
+
+  return placed;
+}

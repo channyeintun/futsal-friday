@@ -296,11 +296,29 @@ async function run() {
   const openBefore = await openSpots();
   const headsBefore = await playing();
 
-  // Taking a spot from the pitch itself, not from the button.
-  check('taking a spot works from the field',
-    await evalJs(`(() => { const s = document.querySelector('button.pitch-spot.is-open'); if (!s) return false; s.click(); return true; })()`));
+  /*
+   * Press the *last* empty circle, not the first.
+   *
+   * Filling the field in registration order would put the avatar in the first
+   * gap whichever circle was pressed, and every assertion here would still pass
+   * — which is exactly how that shipped unnoticed. Aiming at the far end is
+   * what makes the two orders tell different stories.
+   */
+  const pressed = await evalJs(`(() => {
+    const spots = [...document.querySelectorAll('.pitch-spot')];
+    const open = spots.filter((s) => s.classList.contains('is-open') && s.tagName === 'BUTTON');
+    const last = open[open.length - 1];
+    if (!last) return -1;
+    last.click();
+    return spots.indexOf(last);
+  })()`);
+  check('taking a spot works from the field', pressed >= 0);
   await sleep(1600);
   check('the spot is now mine', await evalJs(`!!document.querySelector('.pitch-spot.is-me')`));
+  const landed = await evalJs(`[...document.querySelectorAll('.pitch-spot')]
+    .findIndex((s) => s.classList.contains('is-me'))`);
+  check('YOU STAND WHERE YOU PRESSED, NOT WHERE THE LIST PUT YOU', landed === pressed,
+    `pressed ${pressed}, landed on ${landed}`);
   check('and one gap closed', (await openSpots()) === openBefore - 1,
     `before=${openBefore} after=${await openSpots()}`);
   check('the roster agrees', (await playing()) === headsBefore + 1);

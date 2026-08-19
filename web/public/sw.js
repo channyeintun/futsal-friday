@@ -10,7 +10,18 @@
  * a stale registration list is worse than a spinner.
  */
 
-const VERSION = 'v1';
+/*
+ * Bump this to drop every cache on the next launch.
+ *
+ * Navigations are network-first, so an ordinary reload picks a deploy up on
+ * its own. The case that does not is an installed app opened from the Home
+ * Screen with no usable network: it falls back to the cached shell, that shell
+ * names the *previous* hashed bundle, and the bundle is cache-first — so the
+ * old app keeps starting until a navigation reaches the network. Changing this
+ * string makes `activate` delete both caches, which turns "eventually" into
+ * "next time it opens".
+ */
+const VERSION = 'v2';
 const SHELL_CACHE = `futsal-shell-${VERSION}`;
 const ASSET_CACHE = `futsal-assets-${VERSION}`;
 

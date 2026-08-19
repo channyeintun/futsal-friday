@@ -12,7 +12,7 @@ import { en } from '../src/i18n/en.ts';
 import { totalArrivedHeads } from '../src/attendance.ts';
 import {
   PITCH_LINE_GAP, PITCH_MAX_HEIGHT, partyFits, pitchLines, pitchSlotCount, pitchSlotSize,
-  pitchSpotGap, registeredSlots, waitingSlots,
+  pitchSpotGap, placeOnPitch, registeredSlots, waitingSlots,
 } from '../src/pitch.ts';
 import type { TeamMatch, TeamSlot } from '../src/models.ts';
 
@@ -666,6 +666,83 @@ check('a spot never gets too small to see',
   everyCount.filter((n) => pitchLines(n).length > 0 && pitchSlotSize(pitchLines(n)) < 24), []);
 check('a roster this big does shrink the discs', pitchSlotSize(pitchLines(38)), 30);
 check('and a normal Friday does not', pitchSlotSize(pitchLines(12)), 44);
+
+
+// --- the pitch: standing where you pressed ---------------------------------
+
+const at = (placed: (TeamSlot | null)[]) =>
+  placed.map((s) => (s ? `${s.memberId}:${s.guestIndex}` : '-'));
+
+// The whole point: press the last circle and that is where you appear, rather
+// than in the first gap the array happened to have.
+check('a chosen spot is the spot you get',
+  at(placeOnPitch([
+    { memberId: 'm1', memberName: 'Aung', status: 'in' as const, slot: 7 },
+  ], 8)),
+  ['-', '-', '-', '-', '-', '-', '-', 'm1:0']);
+
+// Guests read as a party rather than as strangers scattered over the field.
+check('guests follow whoever brought them',
+  at(placeOnPitch([
+    { memberId: 'm1', memberName: 'Aung', status: 'in' as const, guests: 2, slot: 4 },
+  ], 8)),
+  ['-', '-', '-', '-', 'm1:0', 'm1:1', 'm1:2', '-']);
+
+// Two people press the same circle within a moment. Neither is an error; the
+// earlier registration keeps it and the other takes a gap.
+check('a contested spot goes to whoever asked first',
+  at(placeOnPitch([
+    { memberId: 'm1', memberName: 'Aung', status: 'in' as const, slot: 3 },
+    { memberId: 'm2', memberName: 'Kyaw', status: 'in' as const, slot: 3 },
+  ], 5)),
+  ['m2:0', '-', '-', 'm1:0', '-']);
+
+// The organizer can redraw the formation under everybody by changing the cap.
+// A preference that no longer exists is dropped, not honoured half way.
+check('a spot that no longer exists falls back to a gap',
+  at(placeOnPitch([
+    { memberId: 'm1', memberName: 'Aung', status: 'in' as const, slot: 40 },
+  ], 4)),
+  ['m1:0', '-', '-', '-']);
+
+// Everybody who signed up before the pitch existed, and anybody promoted off
+// the waitlist, has no preference at all.
+check('no preference still fills from the front',
+  at(placeOnPitch([
+    { memberId: 'm1', memberName: 'Aung', status: 'in' as const },
+    { memberId: 'm2', memberName: 'Kyaw', status: 'in' as const },
+  ], 4)),
+  ['m1:0', 'm2:0', '-', '-']);
+
+check('a chosen spot survives the people around it having none',
+  at(placeOnPitch([
+    { memberId: 'm1', memberName: 'Aung', status: 'in' as const },
+    { memberId: 'm2', memberName: 'Kyaw', status: 'in' as const, slot: 2 },
+    { memberId: 'm3', memberName: 'Min', status: 'in' as const },
+  ], 4)),
+  ['m1:0', 'm3:0', 'm2:0', '-']);
+
+check('the waitlist is still not on the field',
+  at(placeOnPitch([
+    { memberId: 'm1', memberName: 'Aung', status: 'waitlist' as const, slot: 0 },
+  ], 3)),
+  ['-', '-', '-']);
+
+// Whatever the preferences, every body that is in gets exactly one spot.
+check('nobody is lost and nobody is doubled',
+  (() => {
+    const parties = [
+      { memberId: 'm1', memberName: 'A', status: 'in' as const, guests: 2, slot: 9 },
+      { memberId: 'm2', memberName: 'B', status: 'in' as const, slot: 9 },
+      { memberId: 'm3', memberName: 'C', status: 'in' as const, guests: 1 },
+      { memberId: 'm4', memberName: 'D', status: 'in' as const, slot: 0 },
+    ];
+    const keys = placeOnPitch(parties, 12)
+      .filter((s): s is TeamSlot => s !== null)
+      .map((s) => `${s.memberId}:${s.guestIndex}`);
+    return [keys.length, new Set(keys).size];
+  })(),
+  [7, 7]);
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

@@ -64,8 +64,12 @@ export const updateSession = (id: string, input: UpdateSessionInput) =>
 export const cancelSession = (id: string) =>
   patch<{ session: Session }>(`/sessions/${id}`, { status: 'cancelled' });
 
-export const registerForSession = (id: string, guests = 0) =>
-  post<RegisterResult>(`/sessions/${id}/register`, { guests });
+/**
+ * Sign up. `slot` is the spot on the pitch that was pressed, when one was —
+ * omitted from the touchline, where there is no formation to index into.
+ */
+export const registerForSession = (id: string, guests = 0, slot?: number | null) =>
+  post<RegisterResult>(`/sessions/${id}/register`, { guests, slot: slot ?? null });
 
 /** Change how many friends you are bringing, without giving up your spot. */
 export const setSessionGuests = (id: string, guests: number) =>

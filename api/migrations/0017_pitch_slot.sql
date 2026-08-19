@@ -1,0 +1,22 @@
+-- Migration 0017 — where on the pitch somebody chose to stand.
+--
+-- The registration screen is a field of spots now, and pressing one has to put
+-- you in the spot you pressed. That is a fact about the registration, not about
+-- the order it arrived in, so it needs somewhere to live: filling the circles
+-- in signup order means the bottom-left spot you aimed at lights up somewhere
+-- else entirely, on your phone and on everybody's.
+--
+-- Nullable, and null is the ordinary state. It means "no preference" — which is
+-- what every registration made before this says, what the API still accepts
+-- from any client that does not care, and what a promotion off the waitlist
+-- produces. The pitch fills those into whatever gaps are left.
+--
+-- An index into the formation as it was drawn when the press happened, not a
+-- position on grass and not a team. The formation changes when the cap does, so
+-- the number is a preference the screen honours where it can and quietly drops
+-- where it cannot — see `placeOnPitch`.
+--
+-- Deliberately not `position`. That column orders the waitlist and is never
+-- reused, so overloading it would make "where you stand" and "when you signed
+-- up" the same fact, and promoting somebody would slide them across the pitch.
+ALTER TABLE registrations ADD COLUMN slot INTEGER;
