@@ -1746,7 +1746,19 @@ md-outlined-text-field {
   flex-wrap: nowrap;
   justify-content: space-around;
   align-items: center;
-  width: calc(52% + 36% * var(--ff-row-depth, 1));
+  /*
+   * The row tracks the touchlines, because the field is the thing being drawn.
+   *
+   * These two used to be tuned by eye against a fixed trapezoid, and they
+   * converged faster than the grass did — far rows sat well inside their own
+   * touchlines while near ones nearly touched, which is the sort of mismatch
+   * that reads as "the cards are too tight" without pointing at a cause. They
+   * are now solved from the taper in `PitchTurf`: `scale` supplies most of the
+   * convergence and this supplies the rest, so a row keeps the same margin
+   * inside the touchlines at every depth and the pitch can be widened by
+   * changing the two half-widths and nothing else.
+   */
+  width: calc(77.6% + 5.2% * var(--ff-row-depth, 1));
   /*
    * The row reserves what it actually draws.
    *
@@ -3413,4 +3425,78 @@ button.pitch-spot::before {
   color: var(--md-sys-color-on-surface);
   font: inherit;
   font-weight: 600;
+}
+
+/* ------------------------------------------------------------------- tour */
+
+/*
+ * The coach mark, wearing the app's clothes.
+ *
+ * driver.js ships a white card with a blue link in it, which on a dark pitch
+ * under a dark scrim reads as a browser dialog that has wandered in. These are
+ * the same tokens the loud button uses, so it belongs to the same app in both
+ * themes — and because the popover is mounted on `document.body`, outside the
+ * tree, the tokens have to be reachable from `:root` rather than inherited.
+ */
+.driver-popover.ff-tour {
+  max-width: 280px;
+  padding: 14px 16px 12px;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 14px;
+  background: var(--ff-cta-fill);
+  color: var(--ff-cta-label);
+  box-shadow:
+    0 18px 44px rgb(0 0 0 / 0.5),
+    0 0 22px var(--ff-cta-glow);
+}
+
+.driver-popover.ff-tour .driver-popover-title {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--ff-cta-label);
+}
+
+/* Burmese takes no letter-spacing and needs the room under the baseline. */
+.driver-popover.ff-tour:lang(my) .driver-popover-title,
+.driver-popover.ff-tour:lang(my) .driver-popover-description {
+  letter-spacing: normal;
+  line-height: 1.9;
+}
+
+.driver-popover.ff-tour .driver-popover-description {
+  margin-top: 4px;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: rgb(244 244 248 / 0.78);
+}
+
+/* The arrow is a bordered triangle in driver's stylesheet; it only ever needs
+   to match whichever side the popover ended up on. */
+.driver-popover.ff-tour .driver-popover-arrow-side-top { border-top-color: var(--ff-cta-fill); }
+.driver-popover.ff-tour .driver-popover-arrow-side-bottom { border-bottom-color: var(--ff-cta-fill); }
+.driver-popover.ff-tour .driver-popover-arrow-side-left { border-left-color: var(--ff-cta-fill); }
+.driver-popover.ff-tour .driver-popover-arrow-side-right { border-right-color: var(--ff-cta-fill); }
+
+.driver-popover.ff-tour .driver-popover-footer {
+  margin-top: 12px;
+}
+
+.driver-popover.ff-tour .driver-popover-footer button {
+  padding: 7px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ff-cyan);
+  color: #05201d;
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-shadow: none;
+}
+
+/* The stage is the thing being taught; it should look lit, not merely uncovered. */
+.driver-active-element {
+  outline: 2px solid var(--ff-cyan);
+  outline-offset: 3px;
+  border-radius: 12px;
 }

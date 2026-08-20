@@ -138,6 +138,60 @@ export interface Sound {
   setEnabled(on: boolean): void;
 }
 
+/** One thing to point at, and what to say about it. */
+export interface TourStep {
+  /**
+   * Selector for the element to point at. A step whose element is not on
+   * screen is dropped rather than pointed at from nowhere — the pitch is
+   * redrawn as people come and go, so a spot that was there when the tour was
+   * decided on may not be there when it opens.
+   */
+  target: string;
+  title: string;
+  body: string;
+}
+
+/**
+ * Showing somebody where to press, once.
+ *
+ * A capability rather than a library call in a component, on the seam's usual
+ * rule — this one reaches past React into the document, measures an element it
+ * does not own and paints over the whole page, which is as platform as it gets.
+ *
+ * It is deliberately small: point at things, then stop. There is no notion of a
+ * tour that resumes, no progress bar and no back button, because the only thing
+ * this app has to teach is which thing to press, and a person who already knows
+ * should be able to get rid of it in one press.
+ */
+export interface Tour {
+  /**
+   * Point at each step in turn. Resolves as soon as it is on screen — true if
+   * it opened, false if it could not.
+   *
+   * Deliberately not "resolves when it closes". A caller showing something once
+   * needs to know it was shown, and every way a tour ends is the same answer to
+   * that; waiting for the end would only add ways to lose the fact. False is
+   * the real distinction: a lesson nobody saw, because the spot it was about
+   * had just been taken or because the chunk would not load offline, has not
+   * been taught and must not be written off as taught.
+   *
+   * Never throws — see above for why every failure is a `false` instead.
+   */
+  show(steps: readonly TourStep[], options: TourOptions): Promise<boolean>;
+  /** Close whatever is open. Safe when nothing is. */
+  stop(): void;
+}
+
+export interface TourOptions {
+  /** Label on the button that ends it. */
+  dismiss: string;
+  /**
+   * The language of the copy, so Burmese gets the line-height and the
+   * no-letter-spacing rules the rest of the app gives it.
+   */
+  lang: string;
+}
+
 /** The two things worth feeling: taking a spot, and giving one up. */
 export type HapticName = 'in' | 'out';
 
@@ -204,6 +258,7 @@ export interface Platform {
   visibility: Visibility;
   sound: Sound;
   haptics: Haptics;
+  tour: Tour;
   notifications: Notifications;
   /**
    * Start listening for presses, once, from the entry point. Returns the

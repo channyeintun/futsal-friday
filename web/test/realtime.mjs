@@ -74,7 +74,12 @@ async function launch(port) {
   // outranks the server value, so the run does not depend on whose account it
   // happens to sign in as.
   await send('Page.addScriptToEvaluateOnNewDocument', {
-    source: `try { localStorage.setItem('futsal:locale', 'en'); } catch {}`,
+    source: `try { localStorage.setItem('futsal:locale', 'en'); } catch {}
+      /* The pitch teaches itself once per device. Every suite but the
+         tour's own starts having already been taught, so a coach mark
+         is never over the control the next assertion is about to press. */
+      try { localStorage.setItem('futsal:tour:tap-in', 'seen');
+            localStorage.setItem('futsal:tour:tap-out', 'seen'); } catch {}`,
   });
 
   const js = async (expr) => {

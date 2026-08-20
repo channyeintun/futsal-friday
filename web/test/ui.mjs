@@ -126,7 +126,12 @@ async function run() {
   // before the app boots. A device choice outranks the member's stored
   // preference, which is exactly the precedence the app documents.
   await send('Page.addScriptToEvaluateOnNewDocument', {
-    source: `try { localStorage.setItem('futsal:locale', 'en'); } catch {}`,
+    source: `try { localStorage.setItem('futsal:locale', 'en'); } catch {}
+      /* The pitch teaches itself once per device. Every suite but the
+         tour's own starts having already been taught, so a coach mark
+         is never over the control the next assertion is about to press. */
+      try { localStorage.setItem('futsal:tour:tap-in', 'seen');
+            localStorage.setItem('futsal:tour:tap-out', 'seen'); } catch {}`,
   });
 
   const evalJs = async (expression) => {
@@ -1161,6 +1166,69 @@ async function run() {
   const connSeen = await evalJs('JSON.stringify(window.__connSeen)');
   check('NO CONNECTING FLASH WHEN NAVIGATING BACK HOME',
     !/Connecting/i.test(connSeen), connSeen);
+
+  console.log('\nthe pitch teaches itself, once');
+  /*
+   * The whole contract in one pass: the right lesson for where you stand, on
+   * the right card, and gone for good once it has been read.
+   *
+   * The suite seeds both marks as already seen so that no other assertion is
+   * pressing a control through a scrim. This is the one place that clears them.
+   */
+  await goToTab('Session', 'Playing');
+  await sleep(500);
+  // Start from off the pitch, whatever the earlier tests left behind.
+  if (await evalJs(`!!document.querySelector('.pitch-spot.is-me')`)) {
+    await evalJs(`document.querySelector('.pitch-spot.is-me')?.click()`);
+    await sleep(300);
+    await evalJs(`document.querySelector('.pitch-spot.is-me')?.click()`);
+    await waitFor(`!document.querySelector('.pitch-spot.is-me')`, 'off the pitch to start');
+    await sleep(600);
+  }
+  await evalJs(`localStorage.removeItem('futsal:tour:tap-in');
+    localStorage.removeItem('futsal:tour:tap-out')`);
+  await goToTab('History', 'History');
+  await sleep(500);
+  await goToTab('Session', 'Playing');
+  await waitFor(`!!document.querySelector('.driver-popover.ff-tour')`, 'the coach mark opens');
+  check('it teaches taking a spot while you have none',
+    await evalJs(`/Take a spot/.test(document.querySelector('.ff-tour .driver-popover-title')?.textContent ?? '')`),
+    await evalJs(`document.querySelector('.ff-tour .driver-popover-title')?.textContent`));
+  check('and points at an empty spot rather than at the pitch',
+    await evalJs(`document.querySelector('.driver-active-element')?.matches('.pitch-spot.is-open') === true`),
+    await evalJs(`document.querySelector('.driver-active-element')?.className`));
+  check('the dismiss button carries the app’s own label',
+    await evalJs(`/Got it/.test(document.querySelector('.ff-tour .driver-popover-next-btn')?.textContent ?? '')`),
+    await evalJs(`document.querySelector('.ff-tour .driver-popover-next-btn')?.textContent`));
+  await shoot('18-tour-tap-in');
+
+  await evalJs(`document.querySelector('.ff-tour .driver-popover-next-btn')?.click()`);
+  await waitFor(`!document.querySelector('.driver-popover')`, 'it closes on Got it');
+  check('being shown is what marks it taught',
+    await evalJs(`localStorage.getItem('futsal:tour:tap-in') === 'seen'`),
+    await evalJs(`localStorage.getItem('futsal:tour:tap-in')`));
+
+  await goToTab('History', 'History');
+  await sleep(500);
+  await goToTab('Session', 'Playing');
+  await sleep(1600);
+  check('IT DOES NOT COME BACK', await evalJs(`!document.querySelector('.driver-popover')`),
+    await evalJs(`document.querySelector('.ff-tour .driver-popover-title')?.textContent ?? 'gone'`));
+
+  // Taking a spot is what makes giving one up worth explaining, so that is
+  // when the other half is due.
+  await evalJs(`document.querySelector('button.pitch-spot.is-open')?.click()`);
+  await waitFor(`!!document.querySelector('.pitch-spot.is-me')`, 'took a spot');
+  await waitFor(`!!document.querySelector('.driver-popover.ff-tour')`, 'the second lesson opens');
+  check('it then teaches giving the spot up',
+    await evalJs(`/on the pitch/.test(document.querySelector('.ff-tour .driver-popover-title')?.textContent ?? '')`),
+    await evalJs(`document.querySelector('.ff-tour .driver-popover-title')?.textContent`));
+  check('pointing at your own card, not at an empty one',
+    await evalJs(`document.querySelector('.driver-active-element')?.matches('.pitch-spot.is-me') === true`),
+    await evalJs(`document.querySelector('.driver-active-element')?.className`));
+  await shoot('19-tour-tap-out');
+  await evalJs(`document.querySelector('.ff-tour .driver-popover-next-btn')?.click()`);
+  await waitFor(`!document.querySelector('.driver-popover')`, 'and closes');
 
   // Console errors, excluding noise we do not control.
   const errors = events

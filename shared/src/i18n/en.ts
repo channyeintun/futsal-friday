@@ -278,8 +278,23 @@ export const en = {
   /* ------------------------------------------------------------- pitch */
 
   pitch: {
-    heading: 'The pitch',
     label: 'The pitch — press an empty spot to take it',
+    /*
+     * The two lessons the pitch has to teach, and only those.
+     *
+     * Tapping in is guessable from a field full of empty spots; giving a spot
+     * up is not, because it asks twice on purpose and a single press that
+     * appears to do nothing reads as broken rather than as careful.
+     */
+    tour: {
+      tapInTitle: 'Take a spot',
+      tapInBody:
+        'Press any empty spot to get on the pitch. You go straight into the playing list.',
+      tapOutTitle: "You're on the pitch",
+      tapOutBody:
+        'Changed your mind? Press your own card once, then again to give the spot up.',
+      gotIt: 'Got it',
+    },
     takeSpot: 'Take this spot',
     spotsLeft: (left: number) => (left === 1 ? '1 spot left' : `${left} spots left`),
     full: 'The pitch is full',

@@ -15,6 +15,7 @@ import {
 } from '@futsal/shared';
 import { type CSSProperties, type ReactNode, useEffect, useState } from 'react';
 import { registerForSession, withdrawFromSession } from '../api/sessions.js';
+import { platform } from '../platform/index.js';
 import { useApp } from '../state/app.js';
 import { useLocale } from '../state/locale.js';
 import { Avatar } from './Avatar.js';
@@ -92,7 +93,7 @@ export function Pitch({
   onChanged(): void;
 }) {
   const { identity, toast } = useApp();
-  const { m } = useLocale();
+  const { m, locale } = useLocale();
   const { session, registrations, registrationOpen, me } = detail;
 
   /** `armed` is your own spot having been pressed once and asking again. */
@@ -190,6 +191,57 @@ export function Pitch({
     const timer = window.setTimeout(() => setDealing(false), 900);
     return () => window.clearTimeout(timer);
   }, []);
+
+  /*
+   * The two lessons the pitch has to teach, each once, when it is the lesson.
+   *
+   * Not a tour of the app. There is exactly one thing here that a person has to
+   * be told rather than shown — that giving a spot up asks twice — and one that
+   * is worth pointing at the first time because the field replaced a button
+   * that used to say what it did.
+   *
+   * Which one is due follows from whether you are on the pitch, so nobody is
+   * taught to leave before they have arrived, and taking your spot rolls
+   * straight into the only other thing there is to know. Both are marked seen
+   * only once they have actually opened — a lesson nobody saw is not taught,
+   * and the spot it was about may have gone in the moment before it ran.
+   *
+   * Everyone who can see this screen is signed in and in the group already;
+   * `App` will not render anything else until both are true. So there is no
+   * check for it here — a second one would only be able to disagree.
+   */
+  const onPitch = me !== null;
+  useEffect(() => {
+    if (!registrationOpen || dealing) return;
+    const lesson = onPitch
+      ? { key: 'tour:tap-out', target: '.pitch-spot.is-me', title: m.pitch.tour.tapOutTitle, body: m.pitch.tour.tapOutBody }
+      : { key: 'tour:tap-in', target: '.pitch-spot.is-open', title: m.pitch.tour.tapInTitle, body: m.pitch.tour.tapInBody };
+    if (platform.storage.get(lesson.key) === 'seen') return;
+
+    // A beat after the deal settles, so it points at a field that has stopped
+    // moving rather than at a card still sliding into place.
+    const timer = window.setTimeout(() => {
+      void platform.tour
+        .show([{ target: lesson.target, title: lesson.title, body: lesson.body }], {
+          dismiss: m.pitch.tour.gotIt,
+          lang: locale,
+        })
+        // On screen is taught. Whether it was read, dismissed or answered by
+        // doing the thing it asked for are all the same lesson, and a tour that
+        // repeated because somebody acted on it immediately would be a strange
+        // one.
+        .then((shown) => {
+          if (shown) platform.storage.set(lesson.key, 'seen');
+        });
+    }, 400);
+
+    return () => {
+      window.clearTimeout(timer);
+      // Taking a spot swaps which lesson is due, and the one on screen is
+      // pointing at a card that is no longer the right card.
+      platform.tour.stop();
+    };
+  }, [registrationOpen, dealing, onPitch, m, locale]);
 
   // The arm lapses on its own, so a pocket press cannot leave a live confirm
   // sitting there — but not while the keyboard is still on it.
@@ -291,7 +343,6 @@ export function Pitch({
 
   return (
     <div className="card pitch-card">
-      <h2 className="card-title">{m.pitch.heading}</h2>
       {error ? <ErrorBanner>{error}</ErrorBanner> : null}
 
       <div

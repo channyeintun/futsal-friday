@@ -673,6 +673,94 @@ const haptics: Platform['haptics'] = {
   buzz,
 };
 
+/* ------------------------------------------------------------------- tour */
+
+/**
+ * The one running tour, so a second call cannot leave the first painted over
+ * the page with nothing left holding a handle to it.
+ */
+let openTour: { destroy(): void } | null = null;
+
+/**
+ * Loaded on demand, and never for most sessions.
+ *
+ * This runs at most twice in a member's life and then never again, so putting
+ * it in the main bundle would cost every launch for something almost nobody is
+ * about to see. The import failing — offline, on the very first run, which is
+ * exactly when a tour would want to show — is a tour that does not happen, not
+ * an error: see `Tour.show`.
+ */
+async function loadDriver() {
+  const [{ driver }] = await Promise.all([import('driver.js'), import('driver.js/dist/driver.css')]);
+  return driver;
+}
+
+const tour: Platform['tour'] = {
+  async show(steps, options) {
+    tour.stop();
+    /*
+     * Decided against the document, not against the props that asked for it.
+     *
+     * A caller knows it wants to point at "an empty spot"; only the document
+     * knows whether there is one right now. Somebody else taking the last spot
+     * between the effect running and the tour opening is an ordinary race on a
+     * live screen, and dropping the step is the whole handling it needs.
+     */
+    const live = steps.filter((step) => document.querySelector(step.target) !== null);
+    if (live.length === 0) return false;
+
+    let driver: Awaited<ReturnType<typeof loadDriver>>;
+    try {
+      driver = await loadDriver();
+    } catch {
+      return false;
+    }
+
+    const instance = driver({
+      // The app's own motion preference is honoured by driver's stylesheet,
+      // but the stage slide between steps is ours to switch off.
+      animate: !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
+      overlayColor: '#05070c',
+      overlayOpacity: 0.72,
+      stagePadding: 6,
+      stageRadius: 12,
+      popoverClass: 'ff-tour',
+      // One press to be rid of it, and no back button: there is nothing to go
+      // back to that is not already on the screen behind it.
+      showButtons: ['next'],
+      nextBtnText: options.dismiss,
+      doneBtnText: options.dismiss,
+      showProgress: false,
+      steps: live.map((step) => ({
+        element: step.target,
+        popover: { title: step.title, description: step.body },
+      })),
+      onDestroyed: () => {
+        openTour = null;
+      },
+    });
+    openTour = instance;
+    instance.drive();
+
+    /*
+     * The popover carries the copy, so it carries the language.
+     *
+     * Everything else in the app gets `:lang(my)` from an ancestor, but driver
+     * mounts its popover on `document.body` — outside the tree that says what
+     * language this is — and Burmese there would be laid out with Latin's
+     * line-height and letter-spacing.
+     */
+    document.querySelector('.ff-tour')?.setAttribute('lang', options.lang);
+    return true;
+  },
+
+  stop() {
+    const instance = openTour;
+    openTour = null;
+    instance?.destroy();
+  },
+};
+
 /* ----------------------------------------------------------- notifications */
 
 /**
@@ -891,6 +979,7 @@ export const webPlatform: Platform = {
   visibility,
   sound,
   haptics,
+  tour,
   installPressFeedback,
   openExternal(url) {
     window.open(url, '_blank', 'noopener,noreferrer');
