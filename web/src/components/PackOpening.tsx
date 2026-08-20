@@ -1,5 +1,6 @@
 import { type TeamDraw, TEAM_LETTERS, slotKey } from '@futsal/shared';
 import { type CSSProperties, useEffect, useRef, useState } from 'react';
+import { clockIsSynced, serverNow } from '../api/clock.js';
 import { platform } from '../platform/index.js';
 import { useApp } from '../state/app.js';
 import { useLocale } from '../state/locale.js';
@@ -51,25 +52,72 @@ export function PackOpening({
     team.map((slot) => ({ slot, team: index })),
   );
 
+  /*
+   * Every device turns the same card at the same instant.
+   *
+   * Not "start counting when the draw arrives", which was the first version and
+   * which cannot be in sync by construction. Whoever pressed shuffle learns the
+   * result from their own request coming back; everybody else waits for the
+   * broadcast, which is a further trip through Redis and down an event stream.
+   * That head start alone was a few hundred milliseconds, and the jitter
+   * between one subscriber and the next added more on top.
+   *
+   * So the reveal is a function of the clock rather than of arrival. `drawnAt`
+   * is a server timestamp that every device receives identically, `serverNow`
+   * is that same clock as measured locally, and the card index is simply how
+   * far into the reveal that pair says we are. A phone that hears about the
+   * draw late joins the reveal already in progress instead of running its own
+   * copy of it — which is what being in sync actually means, and is also the
+   * honest answer, because it cannot go back in time.
+   *
+   * Recomputed on every tick rather than incremented, so a tab that was
+   * throttled while backgrounded lands on the right card instead of finishing
+   * late by however long it was starved.
+   */
   useEffect(() => {
     if (reduced) return;
-    let index = 0;
+
+    const startedAt = Date.parse(draw.drawnAt);
+    const positionNow = () =>
+      clockIsSynced() && Number.isFinite(startedAt)
+        ? Math.floor((serverNow() - startedAt) / TURN_MS)
+        : null;
+
+    // Without a usable clock this behaves the way it used to: its own reveal,
+    // from the beginning. Better a private ceremony than none.
+    let fallback = 0;
+    let announced = positionNow() ?? 0;
+    setTurned(Math.max(0, Math.min(announced, cards.length)));
+
     const timer = window.setInterval(() => {
-      index += 1;
-      setTurned(index);
-      // The clip is the turn, so it fires with the card rather than after it.
+      fallback += 1;
+      const next = Math.min(positionNow() ?? fallback, cards.length);
+      if (next <= announced) return;
+
+      /*
+       * One clip and at most one buzz per tick, however many cards the tick
+       * covered.
+       *
+       * A device joining late, or one coming back from being throttled, can
+       * cross several cards at once. Playing a clip for each would be a burst
+       * of clicks that says nothing, and the retrigger floor in `platform`
+       * would eat most of them anyway.
+       */
+      const crossed = cards.slice(Math.max(0, announced), next);
+      announced = next;
+      setTurned(next);
       platform.sound.play('press');
-      // Only your own, and only once. Twelve buzzes is a phone malfunctioning.
-      if (cards[index - 1]?.slot.memberId === identity.memberId) {
+      if (crossed.some((card) => card.slot.memberId === identity.memberId)) {
         platform.haptics.buzz('in');
       }
-      if (index >= cards.length) window.clearInterval(timer);
-    }, TURN_MS);
+      if (next >= cards.length) window.clearInterval(timer);
+    }, TICK_MS);
+
     return () => window.clearInterval(timer);
-    // Deliberately keyed to the draw and nothing else: re-running this on a
-    // re-render would restart the reveal from the first card.
+    // Keyed to the draw alone: re-running this on a re-render would restart the
+    // reveal, and `cards` is rebuilt on every one of them.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draw.drawnAt]);
+  }, [draw.drawnAt, reduced]);
 
   /*
    * A hard ceiling, whatever else happens.
@@ -161,6 +209,17 @@ export function PackOpening({
  * holding a ball will stand still for.
  */
 const TURN_MS = 340;
+
+/**
+ * How often the clock is consulted.
+ *
+ * Finer than a turn, because the tick and the turn are no longer the same
+ * thing: the reveal advances when the shared clock says it should, and this
+ * only decides how promptly that is noticed. A quarter of a turn keeps the
+ * worst-case lateness under a tenth of a second while costing four timer
+ * wake-ups a second for the few seconds this is on screen.
+ */
+const TICK_MS = 80;
 
 /** Six across a narrow phone, with the gaps. */
 const PACK_CARD = 52;

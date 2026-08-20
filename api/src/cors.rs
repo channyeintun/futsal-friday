@@ -51,6 +51,23 @@ impl Cors {
         headers.set("Vary", &self.vary)?;
         // `credentials: true` is unconditional — it does not wait for a match.
         headers.set("Access-Control-Allow-Credentials", "true")?;
+        /*
+         * The server's own clock, in milliseconds, on every response.
+         *
+         * Two phones can disagree about the time by seconds, which is fatal to
+         * anything the group is supposed to see simultaneously: the team draw
+         * carries a server timestamp, and a client that schedules against it
+         * using its own `Date.now()` is off by whatever its clock is off by.
+         * This lets each client measure that difference and correct for it.
+         *
+         * Not the standard `Date` header, which would otherwise do: it has
+         * one-second granularity, and one second is far larger than the skew
+         * being corrected. It also has to be named in `Expose-Headers` either
+         * way, since the API and the app are different origins in production
+         * and `Date` is not on the CORS safelist.
+         */
+        headers.set("X-Server-Now", &crate::js::now_ms().to_string())?;
+        headers.set("Access-Control-Expose-Headers", "X-Server-Now")?;
         Ok(())
     }
 

@@ -1,4 +1,5 @@
 import { platform } from '../platform/index.js';
+import { noteServerTime } from './clock.js';
 
 /**
  * The data layer.
@@ -74,6 +75,9 @@ export async function request<T>(
   if (options.contentType) headers['Content-Type'] = options.contentType;
 
   let response: Response;
+  // Bracketing the request so the clock estimate knows how long it took — the
+  // round trip is what bounds how much a server stamp can be trusted.
+  const sentAt = Date.now();
   try {
     response = await fetch(`${platform.apiBaseUrl}${path}`, {
       method,
@@ -95,6 +99,10 @@ export async function request<T>(
       ? new ApiError(0, 'unreachable', 'Could not reach the server — please try again')
       : new ApiError(0, 'offline', 'No connection — check your network');
   }
+
+  // Before the body is read: `text()` can take a while on a slow connection and
+  // would inflate the round trip this sample is judged by.
+  noteServerTime(response.headers.get('x-server-now'), sentAt, Date.now());
 
   if (response.status === 204) return undefined as T;
 
