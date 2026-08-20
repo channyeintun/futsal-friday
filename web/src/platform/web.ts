@@ -734,6 +734,29 @@ const sound: Platform['sound'] = {
   },
 };
 
+/* ----------------------------------------------------------------- share */
+
+const share: Platform['share'] = {
+  canShareFile(file) {
+    return typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] });
+  },
+  async file(file, text) {
+    try {
+      await navigator.share({ files: [file], ...(text ? { text } : {}) });
+      return true;
+    } catch {
+      /*
+       * Cancelling rejects, and so does a webview that advertised the API and
+       * then declined. Neither is worth telling anybody about: the person
+       * either changed their mind or is looking at a sheet that did not open,
+       * and a toast saying "could not share" on a deliberate cancel is the app
+       * arguing with them.
+       */
+      return false;
+    }
+  },
+};
+
 /* --------------------------------------------------------------- haptics */
 
 const HAPTICS_KEY = 'haptics';
@@ -1125,6 +1148,7 @@ export const webPlatform: Platform = {
   sound,
   haptics,
   display,
+  share,
   tour,
   installPressFeedback,
   openExternal(url) {

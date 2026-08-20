@@ -273,6 +273,24 @@ export interface Display {
   setPitchPerspective(on: boolean): void;
 }
 
+/**
+ * Handing a file to whatever the device shares with.
+ *
+ * Separate from `clipboard` because they fail in different places and the
+ * caller has to know which: a chat webview will often refuse the clipboard and
+ * still share, and a desktop browser is frequently the other way round.
+ */
+export interface Share {
+  /** Whether this device can share a file at all, asked before offering to. */
+  canShareFile(file: File): boolean;
+  /**
+   * Resolves false when the device refused or the person changed their mind.
+   * Cancelling is not an error and must not be reported as one — it is the
+   * commonest outcome of opening a share sheet.
+   */
+  file(file: File, text?: string): Promise<boolean>;
+}
+
 export interface Platform {
   storage: KeyValueStorage;
   clipboard: Clipboard;
@@ -282,6 +300,7 @@ export interface Platform {
   sound: Sound;
   haptics: Haptics;
   display: Display;
+  share: Share;
   tour: Tour;
   notifications: Notifications;
   /**

@@ -2,12 +2,14 @@ import type { MemberProfile } from '@futsal/shared';
 import { formatVnd } from '@futsal/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useAvatar } from '../hooks/queries.js';
 import { removeMyAvatar, uploadMyAvatar } from '../api/members.js';
 import { platform } from '../platform/index.js';
 import { useApp } from '../state/app.js';
 import { useLocale } from '../state/locale.js';
 import { Avatar } from './Avatar.js';
 import { ItemCard } from './ItemCard.js';
+import { cardToPng } from './cardImage.js';
 import { Icon } from './Icon.js';
 import { Button, Dialog, ErrorBanner } from './ui.js';
 
@@ -27,6 +29,52 @@ export function ProfileCard({ profile }: { profile: MemberProfile }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  /*
+   * The picture, out of the cache the card on screen is already drawing from.
+   *
+   * An SVG rasterised through an `<img>` cannot fetch anything, so the bytes
+   * have to be in hand before the card is drawn rather than referenced by URL.
+   * This is the same query the `Avatar` above uses, so it is a cache read and
+   * not a second request.
+   */
+  const { data: portrait } = useAvatar(profile.member.id, profile.member.avatarUpdatedAt);
+
+  const stats = [
+    { label: m.board.codeStreak, value: profile.streak.current },
+    { label: m.board.codeBest, value: profile.streak.best },
+    { label: m.board.codeGoals, value: profile.goals },
+    { label: m.board.codeMvp, value: profile.mvps },
+    { label: m.board.codeAttendance, value: attendance(profile) },
+    { label: m.board.codeTotal, value: profile.streak.total },
+  ];
+
+  const shareCard = async () => {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      const png = await cardToPng({
+        name: profile.member.name,
+        rating: profile.streak.played,
+        code: m.board.codeApps,
+        metal: 'steel',
+        stats,
+        portrait: portrait ?? null,
+      });
+      if (!png) {
+        toast(m.profile.couldNotShare);
+        return;
+      }
+      const file = new File([png], `${profile.member.name}.png`, { type: 'image/png' });
+      if (!platform.share.canShareFile(file)) {
+        toast(m.profile.couldNotShare);
+        return;
+      }
+      await platform.share.file(file, m.profile.cardCaption(profile.member.name));
+    } finally {
+      setSharing(false);
+    }
+  };
 
   // Both paths end the same way: the row moved, so anything holding it is
   // stale. Wider than it looks like it needs to be, deliberately — every screen
@@ -100,6 +148,7 @@ export function ProfileCard({ profile }: { profile: MemberProfile }) {
         needs no formula — the rest are the six below it.
       */}
       <div className="item-hero">
+        
         <ItemCard
           width={HERO_WIDTH}
           metal="steel"
@@ -107,14 +156,7 @@ export function ProfileCard({ profile }: { profile: MemberProfile }) {
           code={m.board.codeApps}
           name={profile.member.name}
           isMe={isMe}
-          stats={[
-            { label: m.board.codeStreak, value: profile.streak.current },
-            { label: m.board.codeBest, value: profile.streak.best },
-            { label: m.board.codeGoals, value: profile.goals },
-            { label: m.board.codeMvp, value: profile.mvps },
-            { label: m.board.codeAttendance, value: attendance(profile) },
-            { label: m.board.codeTotal, value: profile.streak.total },
-          ]}
+          stats={stats}
           portrait={
             <Avatar
               memberId={profile.member.id}
@@ -126,7 +168,17 @@ export function ProfileCard({ profile }: { profile: MemberProfile }) {
             />
           }
         />
-      </div>
+        </div>
+
+      {/* Only where the device can actually take a file. A button that opens
+          nothing is worse than no button, and desktop browsers routinely
+          advertise `share` while refusing files. */}
+      {platform.share.canShareFile(PROBE) ? (
+        <Button variant="tonal" onClick={shareCard} disabled={sharing}>
+          <Icon name="share" size={18} slot="icon" />
+          {sharing ? m.profile.sharingCard : m.profile.shareCard}
+        </Button>
+      ) : null}
 
       {/* Strictly two things on this row. Anything else — the remove action,
           an error — goes below, or it squeezes the name into a wrap. */}
@@ -251,3 +303,13 @@ function attendance(profile: MemberProfile): number {
     ? 0
     : Math.round((profile.streak.played / profile.streak.total) * 100);
 }
+
+/**
+ * A stand-in file, for asking whether this device shares files at all.
+ *
+ * `canShare` wants a real file to answer, and the answer is about the *type*
+ * rather than about the bytes — so a one-pixel PNG settles it without spending
+ * a render drawing the actual card just to find out the button should not be
+ * there.
+ */
+const PROBE = new File([new Uint8Array()], 'card.png', { type: 'image/png' });

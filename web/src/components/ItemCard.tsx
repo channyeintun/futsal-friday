@@ -58,7 +58,7 @@ export const ITEM_CARD_RATIO = 127 / 100;
  * crest (4 units, cresting 0.3 below the centre spike), and the flat shoulder
  * (4.2 units, which is what makes it read as a card rather than a shield).
  */
-const OUTLINE =
+export const OUTLINE =
   'M 50 0 ' +
   'C 51.4 1.6, 53.6 3.2, 55.9 4.3 L 58.2 4.3 ' +
   'C 60.2 3.4, 61.2 1.6, 62.5 0.3 L 66.5 0.3 ' +
@@ -92,6 +92,27 @@ export function tierFor(width: number): ItemTier {
   if (width >= 180) return 'full';
   return width >= 80 ? 'podium' : 'pitch';
 }
+
+/**
+ * Where the highlight sits down the rail.
+ *
+ * Nine stops rather than two, because a real rail does not ramp — it
+ * oscillates: bright at the shoulder, falling to a trough through the middle,
+ * brightening again into the point. Two stops of the same two colours read as
+ * grey plastic, which is how the first attempt at these cards looked.
+ *
+ * Exported with the outline because the shareable PNG is drawn from the same
+ * numbers. Two copies of a nine-stop ramp would drift the first time one moved.
+ */
+export const RAMP_STOPS = [0, 0.1, 0.22, 0.36, 0.5, 0.66, 0.78, 0.9, 1] as const;
+
+export const METAL_RAMPS: Record<ItemMetal, readonly string[]> = {
+  gold: ['#e8cf8a', '#f7e6ae', '#e0c274', '#c39a3c', '#a87e21', '#b98b2b', '#d9b45f', '#f2dfa2', '#fbf0c8'],
+  silver: ['#dfe4ea', '#f2f5f9', '#ccd3dd', '#a6aeba', '#8f96a4', '#99a1af', '#bcc4d0', '#e4e9f0', '#f4f7fb'],
+  bronze: ['#e2b48c', '#f2cfae', '#d09b6c', '#a97246', '#8d5b34', '#9c6740', '#c08a5c', '#e7c19c', '#f5ddc0'],
+  steel: ['#cfe4f6', '#d9eefc', '#b7d2e6', '#86aecb', '#6a9bb8', '#6497b1', '#8ab4cf', '#c6dbef', '#e6f2fb'],
+  warm: ['#ffd9d1', '#ffe6e0', '#f0b3a6', '#d98470', '#c25a48', '#cd6a56', '#e79c8a', '#ffd2cb', '#ffeae5'],
+};
 
 const METALS: Record<ItemMetal, string> = {
   gold: 'ff-ic-gold',
@@ -239,17 +260,9 @@ export function ItemCardDefs() {
           colours reads as grey plastic, which is exactly how the first attempt
           at these cards looked.
         */}
-        {(
-          [
-            ['ff-ic-gold', ['#e8cf8a', '#f7e6ae', '#e0c274', '#c39a3c', '#a87e21', '#b98b2b', '#d9b45f', '#f2dfa2', '#fbf0c8']],
-            ['ff-ic-silver', ['#dfe4ea', '#f2f5f9', '#ccd3dd', '#a6aeba', '#8f96a4', '#99a1af', '#bcc4d0', '#e4e9f0', '#f4f7fb']],
-            ['ff-ic-bronze', ['#e2b48c', '#f2cfae', '#d09b6c', '#a97246', '#8d5b34', '#9c6740', '#c08a5c', '#e7c19c', '#f5ddc0']],
-            ['ff-ic-steel', ['#cfe4f6', '#d9eefc', '#b7d2e6', '#86aecb', '#6a9bb8', '#6497b1', '#8ab4cf', '#c6dbef', '#e6f2fb']],
-            ['ff-ic-warm', ['#ffd9d1', '#ffe6e0', '#f0b3a6', '#d98470', '#c25a48', '#cd6a56', '#e79c8a', '#ffd2cb', '#ffeae5']],
-          ] as const
-        ).map(([id, ramp]) => (
-          <linearGradient key={id} id={id} x1="0" y1="0" x2="0.35" y2="1">
-            {[0, 0.1, 0.22, 0.36, 0.5, 0.66, 0.78, 0.9, 1].map((offset, index) => (
+        {(Object.entries(METAL_RAMPS) as [ItemMetal, readonly string[]][]).map(([metal, ramp]) => (
+          <linearGradient key={metal} id={METALS[metal]} x1="0" y1="0" x2="0.35" y2="1">
+            {RAMP_STOPS.map((offset, index) => (
               <stop key={offset} offset={offset} stopColor={ramp[index]} />
             ))}
           </linearGradient>
