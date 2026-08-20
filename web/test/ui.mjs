@@ -28,6 +28,17 @@ const chrome = spawn(CHROME, [
   '--no-default-browser-check',
   '--disable-gpu',
   '--hide-scrollbars',
+  /*
+   * Let an audio context actually start.
+   *
+   * Chrome will not run one until a real gesture has happened, and a synthetic
+   * `click()` over CDP is not one — so every context here stayed suspended.
+   * That went unnoticed for as long as the app started its clips regardless:
+   * the stub recorded a clip nobody could have heard, and the suite agreed.
+   * With the app no longer playing into a stopped context, the harness has to
+   * offer a context that can run, or it is asserting on silence.
+   */
+  '--autoplay-policy=no-user-gesture-required',
   'about:blank',
 ], { stdio: 'ignore' });
 
@@ -111,10 +122,19 @@ async function run() {
       /* Which clip the app actually started, identified by its length — the
          three are 0.36s, 0.75s and 0.63s, so the buffer names itself. */
       window.__clips = [];
+      /* Also the context it started on, and whether that context was actually
+         running. Starting a source on a stopped context is accepted and never
+         heard, so "a clip was started" is not the same claim as "a clip was
+         audible" — exactly the difference this app got wrong on iOS. */
+      window.__silent = [];
+      window.__ctx = null;
       const __start = AudioBufferSourceNode.prototype.start;
       AudioBufferSourceNode.prototype.start = function (...a) {
         const d = this.buffer ? +this.buffer.duration.toFixed(2) : -1;
-        window.__clips.push({ 0.36: 'press', 0.75: 'tapOut', 0.63: 'modalOpen' }[d] || ('unknown:' + d));
+        const name = { 0.36: 'press', 0.75: 'tapOut', 0.63: 'modalOpen' }[d] || ('unknown:' + d);
+        window.__clips.push(name);
+        window.__ctx = this.context;
+        if (this.context.state !== 'running') window.__silent.push(name + '@' + this.context.state);
         return __start.apply(this, a);
       };`,
   });
@@ -493,6 +513,82 @@ async function run() {
   await evalJs(`localStorage.removeItem('futsal:haptics'); true`);
   await leaveFromPitch();
   await sleep(1600);
+
+  /*
+   * Coming back from the background, which is where this quietly broke.
+   *
+   * A phone suspends the audio clock the moment the app leaves the screen —
+   * WebKit calls it `interrupted`, everything else `suspended` — and nothing
+   * starts it again on its own. A source started on a stopped context throws
+   * nothing, logs nothing and is never heard, so the app went permanently
+   * silent after one trip to the home screen and looked entirely healthy doing
+   * it. The real state cannot be produced in this browser, but the shape can:
+   * stop the clock and check that a press starts it before it plays.
+   */
+  console.log('\nsound survives the app going away');
+  /*
+   * Pressing the tab you are already on: a real press, and the only one in the
+   * app that is guaranteed to change nothing. It is a plain `<button>`, so the
+   * document listener answers it exactly as it answers any other.
+   */
+  const pressSomething = () =>
+    evalJs(`(() => { const b = document.querySelector('.bottom-nav button'); if (!b) return false;
+      b.click(); return true; })()`);
+
+  await evalJs(`window.__clips.length = 0; window.__silent.length = 0; true`);
+  check('a press makes a noise to begin with', await pressSomething());
+  await sleep(900);
+  check('and the app has an audio clock', await evalJs(`!!window.__ctx`));
+
+  const stopped = await evalJs(`(async () => {
+    if (!window.__ctx) return 'no context';
+    await window.__ctx.suspend();
+    return window.__ctx.state;
+  })()`);
+  check('the clock can be stopped, the way backgrounding stops it',
+    stopped === 'suspended', stopped);
+
+  await evalJs(`window.__clips.length = 0; window.__silent.length = 0; true`);
+  await pressSomething();
+  await sleep(1400);
+  check('A PRESS AFTER THE APP COMES BACK IS STILL HEARD',
+    (await evalJs(`window.__clips.length`)) > 0,
+    `clips=${await evalJs(`JSON.stringify(window.__clips)`)}`);
+  check('AND IT IS NOT STARTED ON A STOPPED CLOCK',
+    (await evalJs(`JSON.stringify(window.__silent)`)) === '[]',
+    await evalJs(`JSON.stringify(window.__silent)`));
+  check('the clock is running again afterwards',
+    (await evalJs(`window.__ctx && window.__ctx.state`)) === 'running',
+    await evalJs(`window.__ctx && window.__ctx.state`));
+
+  /*
+   * And the harder case: a clock that is not stopped but gone.
+   *
+   * Locking the screen, or leaving a tab long enough for the browser to freeze
+   * it, can close the context rather than merely interrupt it. `resume()` on a
+   * closed context never comes back, so an app that only ever asks it to resume
+   * is silent from then until it is reloaded — which is why this happened in an
+   * ordinary browser tab and not only in the installed app. The only way out is
+   * to build another one, and the decoded clips carry over because an
+   * AudioBuffer belongs to no context in particular.
+   */
+  await evalJs(`window.__clips.length = 0; window.__silent.length = 0; true`);
+  const closedState = await evalJs(
+    `(async () => { await window.__ctx.close(); return window.__ctx.state; })()`);
+  check('a clock can also be closed outright, the way a locked screen closes it',
+    closedState === 'closed', closedState);
+
+  await pressSomething();
+  await sleep(1600);
+  check('A PRESS AFTER THAT IS HEARD TOO, ON A CLOCK THAT HAD TO BE REBUILT',
+    (await evalJs(`window.__clips.length`)) > 0,
+    `clips=${await evalJs(`JSON.stringify(window.__clips)`)}`);
+  check('and that one is running as well',
+    (await evalJs(`window.__ctx && window.__ctx.state`)) === 'running',
+    await evalJs(`window.__ctx && window.__ctx.state`));
+  check('nothing was played into a dead one',
+    (await evalJs(`JSON.stringify(window.__silent)`)) === '[]',
+    await evalJs(`JSON.stringify(window.__silent)`));
 
   /*
    * A panel arriving has its own sound, layered over the press that opened it.

@@ -355,6 +355,24 @@ function audioCtor(): typeof AudioContext | undefined {
   );
 }
 
+/*
+ * Safari has a third state, and it is the one that matters on a phone.
+ *
+ * The spec says a context is `suspended`, `running` or `closed`. WebKit adds
+ * `interrupted`, which is what a context becomes when the app goes to the
+ * background, another app takes the audio session, or a call arrives. It is not
+ * `suspended`, so a check for that string walks straight past it — which is why
+ * leaving this app and coming back a few minutes later left every button
+ * silent, permanently, until it was force-quit.
+ *
+ * Nothing throws and nothing logs when this happens: `start()` on a context
+ * that is not running is accepted and simply never heard, because the clock
+ * those sources are scheduled against is not moving.
+ */
+function isRunning(context: AudioContext): boolean {
+  return (context.state as AudioContextState | 'interrupted') === 'running';
+}
+
 function soundSupported(): boolean {
   return !audioRefused && audioCtor() !== undefined;
 }
@@ -393,18 +411,26 @@ function fetchClips(): void {
  */
 function wakeAudio(): AudioContext | null {
   if (audio) {
-    // Backgrounding a tab suspends the context; coming back has to ask again.
-    if (audio.state === 'suspended') void audio.resume();
+    // Backgrounded, interrupted by a call, or suspended by the tab going away
+    // — all of them stop the clock, and none of them un-stop it by themselves.
+    if (!isRunning(audio)) void resumeAudio(audio);
     return audio;
   }
   if (audioRefused) return null;
+  const built = buildAudio();
+  if (!built) return null;
+  // Warm both clips now rather than at the first press, for the same reason
+  // the context is built here.
+  for (const name of CLIP_NAMES) void clipBuffer(name);
+  return built;
+}
 
+function buildAudio(): AudioContext | null {
   const Ctor = audioCtor();
   if (!Ctor) {
     audioRefused = true;
     return null;
   }
-
   try {
     audio = new Ctor();
   } catch {
@@ -415,10 +441,56 @@ function wakeAudio(): AudioContext | null {
   level = audio.createGain();
   level.gain.value = CLIP_GAIN;
   level.connect(audio.destination);
-  // Warm both clips now rather than at the first press, for the same reason
-  // the context is built here.
-  for (const name of CLIP_NAMES) void clipBuffer(name);
   return audio;
+}
+
+/**
+ * Get the clock moving again, and build a new one if it will not move.
+ *
+ * `resume()` is usually enough — but a context that has been interrupted for
+ * long enough can come back resolved-and-still-not-running, and no amount of
+ * asking will change its mind. A context in that state is scrap: the only way
+ * back is a new one. The decoded clips carry over, because an `AudioBuffer`
+ * belongs to no context in particular.
+ *
+ * Returns whether there is now something that can actually be heard.
+ */
+async function resumeAudio(context: AudioContext): Promise<boolean> {
+  try {
+    await context.resume();
+  } catch {
+    /* Refused. The rebuild below is the remaining option. */
+  }
+  // Something else may have replaced it while that was in flight.
+  if (audio !== context) return audio !== null && isRunning(audio);
+  if (isRunning(context)) return true;
+
+  audio = null;
+  level = null;
+  /*
+   * Closing the scrap one, carefully.
+   *
+   * The usual way to get here is a context the browser already closed for us,
+   * and closing a closed context is an error — a rejected promise rather than a
+   * throw, so a bare `try` around it catches nothing and the rejection surfaces
+   * as an unhandled one in the console. Both guards, because a webview may do
+   * either.
+   */
+  if ((context.state as AudioContextState | 'interrupted') !== 'closed') {
+    try {
+      void context.close().catch(() => {});
+    } catch {
+      /* Already gone. */
+    }
+  }
+  const fresh = buildAudio();
+  if (!fresh) return false;
+  try {
+    await fresh.resume();
+  } catch {
+    /* A fresh context that will not start is out of options. */
+  }
+  return isRunning(fresh);
 }
 
 async function clipBuffer(name: SoundName): Promise<AudioBuffer | null> {
@@ -461,15 +533,45 @@ function playSound(name: SoundName): void {
   const context = wakeAudio();
   if (!context) return;
 
-  const ready = clipBuffers.get(name);
-  if (ready) {
-    startClip(context, ready);
+  /*
+   * Read `audio` again rather than closing over `context`.
+   *
+   * Waking a dead context can replace it, and a source built on the old one is
+   * connected to a graph nobody is listening to. This always starts the clip on
+   * whichever context is current by the time it runs.
+   */
+  const start = () => {
+    const live = audio;
+    if (!live || !isRunning(live)) return;
+    const ready = clipBuffers.get(name);
+    if (ready) {
+      startClip(live, ready);
+      return;
+    }
+    // Only reached before the warm-up above has landed, and only by however
+    // long a decode takes — a few milliseconds for a third of a second of mono.
+    void clipBuffer(name).then((buffer) => {
+      if (buffer && audio && isRunning(audio)) startClip(audio, buffer);
+    });
+  };
+
+  if (isRunning(context)) {
+    start();
     return;
   }
-  // Only reached before the warm-up above has landed, and only by however long
-  // a decode takes — a few milliseconds for a third of a second of mono.
-  void clipBuffer(name).then((buffer) => {
-    if (buffer) startClip(context, buffer);
+
+  /*
+   * Not running, so waking it has to finish before the clip starts.
+   *
+   * Starting a source on a stopped context is accepted and silently never
+   * heard — the schedule it is placed on is not advancing — so firing the clip
+   * alongside `resume()` rather than after it loses the press that asked for
+   * it. That is a millisecond or two on a press that has already been answered
+   * on screen, and it is the difference between the first press back from the
+   * background being silent and being the one that fixes everything.
+   */
+  void resumeAudio(context).then((ok) => {
+    if (ok) start();
   });
 }
 
@@ -554,13 +656,33 @@ function hapticFor(target: Element, control: Element): HapticName | null {
 function installPressFeedback(): () => void {
   fetchClips();
 
-  // The hardware wakes on the first interaction of any kind — a scroll, a tap
-  // on a card — rather than on the first button, so the first button is not
-  // the one that misses. Unsubscribes itself: it only needs to happen once.
-  let stopPriming = () => {};
-  stopPriming = visibility.onInteraction(() => {
+  /*
+   * The hardware wakes on the first interaction of any kind — a scroll, a tap
+   * on a card — rather than on the first button, so the first button is not the
+   * one that misses.
+   *
+   * It used to unsubscribe itself on the grounds that it only had to happen
+   * once. That was the bug: a context is interrupted every time the app goes to
+   * the background, so waking it is not a thing that happens once but a thing
+   * that happens after every interruption. It stays subscribed, and costs a
+   * string comparison on a gesture somebody was making anyway.
+   */
+  const stopPriming = visibility.onInteraction(() => {
     wakeAudio();
-    stopPriming();
+  });
+
+  /*
+   * And again on the way back in, before anything is pressed.
+   *
+   * Not a substitute for the line above: WebKit will only start a context from
+   * inside a real gesture, and coming back to an app is not one, so this can be
+   * refused. It costs nothing when it is, and when it works — which is most of
+   * the time, for a context that was running before it was interrupted — the
+   * first press back is answered instead of being the one that pays for the
+   * wake-up.
+   */
+  const stopWatchingVisibility = visibility.subscribe((visible) => {
+    if (visible) wakeAudio();
   });
 
   /*
@@ -594,6 +716,7 @@ function installPressFeedback(): () => void {
   document.addEventListener('click', onClick, { capture: true });
   return () => {
     stopPriming();
+    stopWatchingVisibility();
     document.removeEventListener('click', onClick, { capture: true });
   };
 }
