@@ -43,6 +43,7 @@ export function AdminPage() {
         <ClockCard />
         <SoundCard />
         <HapticsCard />
+        <PitchViewCard />
         <MyDeviceCard />
         <ReminderSettings />
         <div className="card">
@@ -72,6 +73,7 @@ export function AdminPage() {
       <ClockCard />
       <SoundCard />
       <HapticsCard />
+      <PitchViewCard />
       <MyDeviceCard />
       <ReminderSettings />
       {/* Above the roster: sharing one link is the normal way to onboard, and
@@ -395,6 +397,43 @@ function SoundCard() {
             onClick={() => {
               if (choice === on) return;
               platform.sound.setEnabled(choice);
+              setOn(choice);
+            }}
+          >
+            {choice ? m.admin.soundOn : m.admin.soundOff}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------- the pitch */
+
+/**
+ * How the field is drawn, which is taste rather than capability.
+ *
+ * Unlike sound and vibration there is nothing to feature-detect: every browser
+ * can draw both, so this switch is always offered. It reads as a preference
+ * about a picture, which is what it is — the pitch behaves identically either
+ * way, and nothing the server holds changes.
+ */
+function PitchViewCard() {
+  const m = useMessages();
+  const [on, setOn] = useState(platform.display.pitchPerspective());
+
+  return (
+    <div className="card">
+      <h2 className="card-title">{m.admin.perspective}</h2>
+      <p className="card-sub">{m.admin.perspectiveBody}</p>
+      <div className="row wrap" style={{ gap: 8 }}>
+        {([true, false] as const).map((choice) => (
+          <Button
+            key={String(choice)}
+            variant={choice === on ? 'filled' : 'outlined'}
+            onClick={() => {
+              if (choice === on) return;
+              platform.display.setPitchPerspective(choice);
               setOn(choice);
             }}
           >

@@ -1346,6 +1346,73 @@ async function run() {
     await evalJs(`['tap-in','tap-out','move'].every((k) => localStorage.getItem('futsal:tour:' + k) === 'seen')`),
     await evalJs(`['tap-in','tap-out','move'].map((k) => k + '=' + localStorage.getItem('futsal:tour:' + k)).join(' ')`));
 
+  console.log('\nthe pitch can be drawn flat');
+  /*
+   * The taper is a preference, and this is the whole of what it changes.
+   *
+   * Driven through the switch on the settings screen rather than by writing the
+   * key, because the card is half of what could be broken: a preference nothing
+   * can reach is the same as no preference. The field itself is read off the
+   * drawing — the far goal line against the near one — since that is the shape
+   * somebody is actually asking about, not the name of a class.
+   */
+  const goalLines = () => evalJs(`(() => {
+    const d = document.querySelector('.pitch-grass')?.getAttribute('d') ?? '';
+    const n = d.match(/-?\\d+(\\.\\d+)?/g)?.map(Number) ?? [];
+    // M x0 y0 H x1 L x2 y2 H x3 Z is six numbers: x0 y0 x1 x2 y2 x3.
+    // The far goal line runs x0..x1 and the near one x3..x2.
+    return n.length < 6 ? null : JSON.stringify({ far: +(n[2] - n[0]).toFixed(1), near: +(n[3] - n[5]).toFixed(1) });
+  })()`);
+
+  await goToTab('Session', 'Playing');
+  await waitFor(`!!document.querySelector('.pitch-grass')`, 'the pitch is drawn');
+  const tapered = JSON.parse(await goalLines());
+  check('by default the far goal line is the shorter one',
+    tapered.far < tapered.near, `far ${tapered.far}, near ${tapered.near}`);
+
+  const setPerspective = (label) => evalJs(`(() => {
+    const want = ${JSON.stringify(label)};
+    const card = [...document.querySelectorAll('.card')]
+      .find((c) => c.querySelector('.card-title')?.textContent?.includes('Pitch in perspective'));
+    if (!card) return 'no card';
+    const button = [...card.querySelectorAll('md-filled-button, md-outlined-button')]
+      .find((b) => (b.textContent ?? '').trim() === want);
+    if (!button) return 'no button';
+    button.click();
+    return 'ok';
+  })()`);
+
+  await goToTab('Setup', 'Pitch in perspective');
+  const switched = await setPerspective('Off');
+  check('the switch is on the settings screen', switched === 'ok', switched);
+  await goToTab('Session', 'Playing');
+  await waitFor(`!!document.querySelector('.pitch-grass')`, 'back on the pitch');
+  const flat = JSON.parse(await goalLines());
+  check('SWITCHED OFF, BOTH GOAL LINES ARE THE SAME LENGTH', flat.far === flat.near,
+    `far ${flat.far}, near ${flat.near}`);
+  check('and it is the near width that both ends take', flat.near === tapered.near,
+    `flat ${flat.near}, tapered near ${tapered.near}`);
+  check('THE ROWS STOP CONVERGING WITH IT',
+    await evalJs(`[...document.querySelectorAll('.pitch-line-row')]
+      .every((r) => getComputedStyle(r).getPropertyValue('--ff-row-scale').trim() === '1.000')`),
+    await evalJs(`[...document.querySelectorAll('.pitch-line-row')]
+      .map((r) => getComputedStyle(r).getPropertyValue('--ff-row-scale').trim()).join(' ')`));
+  // A circle on a flat field is a circle, which the stretched viewBox does not
+  // give for free — the drawing measures itself to get this right.
+  check('and the centre circle comes out round',
+    await evalJs(`(() => { const b = document.querySelector('ellipse.pitch-line').getBoundingClientRect();
+      return Math.abs(b.width - b.height) <= 2; })()`),
+    await evalJs(`(() => { const b = document.querySelector('ellipse.pitch-line').getBoundingClientRect();
+      return Math.round(b.width) + ' x ' + Math.round(b.height); })()`));
+
+  await goToTab('Setup', 'Pitch in perspective');
+  await setPerspective('On');
+  await goToTab('Session', 'Playing');
+  await waitFor(`!!document.querySelector('.pitch-grass')`, 'and back again');
+  check('switching it back restores the taper',
+    JSON.stringify(JSON.parse(await goalLines())) === JSON.stringify(tapered),
+    await goalLines());
+
   // Console errors, excluding noise we do not control.
   const errors = events
     .filter((e) => e.method === 'Runtime.exceptionThrown' || (e.method === 'Log.entryAdded' && e.params.entry.level === 'error'))

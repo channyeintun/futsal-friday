@@ -661,6 +661,26 @@ function buzz(name: HapticName): void {
   }
 }
 
+/* --------------------------------------------------------------- display */
+
+const PERSPECTIVE_KEY = 'pitch-perspective';
+
+/*
+ * On unless this device has said otherwise, like every other preference here.
+ *
+ * Stored as the negative — '0' means off — so that a member who has never
+ * touched the switch, and a member whose storage has been cleared, both get the
+ * drawing the screen was designed around rather than a fallback.
+ */
+const display: Platform['display'] = {
+  pitchPerspective: () => storage.get(PERSPECTIVE_KEY) !== '0',
+  setPitchPerspective(on) {
+    storage.set(PERSPECTIVE_KEY, on ? '1' : '0');
+  },
+};
+
+/* --------------------------------------------------------------- haptics */
+
 const haptics: Platform['haptics'] = {
   supported: hapticsSupported,
   enabled: hapticsEnabled,
@@ -979,6 +999,7 @@ export const webPlatform: Platform = {
   visibility,
   sound,
   haptics,
+  display,
   tour,
   installPressFeedback,
   openExternal(url) {

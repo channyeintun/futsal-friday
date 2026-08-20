@@ -129,6 +129,15 @@ export function Pitch({
    * app is marked — the flash — and the field itself stays still.
    */
   const [dealing, setDealing] = useState(true);
+  /*
+   * Whether the field recedes, which this device decides and nothing else does.
+   *
+   * Read on every render rather than held in state: it is a synchronous look at
+   * one key, the switch lives on another screen, and reading it fresh is what
+   * makes coming back from that screen show the change without a word of
+   * plumbing between the two.
+   */
+  const perspective = platform.display.pitchPerspective();
 
   const busy = phase === 'joining' || phase === 'leaving' || phase === 'moving';
 
@@ -437,7 +446,7 @@ export function Pitch({
           see `.pitch-spot` — so the ground recedes and the players do not.
         */}
         <div className="pitch-field">
-          <PitchTurf />
+          <PitchTurf flat={!perspective} />
           <div className={`pitch-rows${dealing ? ' is-dealing' : ''}`}>
             {lines.map((width, line) => {
               const from = lines.slice(0, line).reduce((a, b) => a + b, 0);
@@ -450,7 +459,17 @@ export function Pitch({
                  tilted. Scaling a flat row instead gives the same convergence
                  with cards that stay square to the screen.
               */
-              const depth = lines.length > 1 ? line / (lines.length - 1) : 1;
+              /*
+                 Flat means every row is the near row.
+       
+                 Not "no depth": the rows are laid out as a fraction of the same
+                 taper the turf is drawn from, so a depth of 1 everywhere is
+                 exactly the width and scale the nearest row already had, and it
+                 lines up with a field whose far end is now that wide too. A
+                 depth of 0 would agree just as well and draw everything at the
+                 far end's size, which is smaller for no reason.
+              */
+              const depth = !perspective ? 1 : lines.length > 1 ? line / (lines.length - 1) : 1;
               return (
                 <div
                   className="pitch-line-row"

@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react';
+
 /**
  * The field, drawn in perspective.
  *
@@ -10,6 +12,11 @@
  *
  * Drawing the recession into the geometry instead keeps every card square to
  * the screen and keeps one number — the box height — describing both layers.
+ *
+ * It also made the recession switchable for free, which a CSS rotation could
+ * not have been: with the plane already a function of depth, drawing the field
+ * flat is the same drawing with the far end as wide as the near one. Nothing
+ * else in this file knows which of the two it is producing — see `flat`.
  *
  * Inline SVG for the same reason as `Icon`: an external file cannot read
  * `--md-sys-color-*`, and no `var()` appears in a presentation attribute here
@@ -31,6 +38,18 @@
 const FAR_HALF = 104;
 const NEAR_HALF = 146;
 
+/*
+ * Flat is the same field with the taper taken out, not a different drawing.
+ *
+ * Both ends at the near width rather than at the far one: a flat pitch that
+ * shrank to the far end would waste the card's width and look like the same
+ * pitch further away, which is the opposite of what switching this off is for.
+ */
+const halves = (flat: boolean) => ({
+  far: flat ? NEAR_HALF : FAR_HALF,
+  near: NEAR_HALF,
+});
+
 /** Where the goal lines sit in the viewBox, and the centre of the field. */
 const FAR_Y = 8;
 const NEAR_Y = 392;
@@ -46,8 +65,9 @@ const MID_X = 150;
  *
  * `depth` runs 0 (far goal line) to 1 (near one).
  */
-const x = (across: number, depth: number) => {
-  const half = FAR_HALF + (NEAR_HALF - FAR_HALF) * depth;
+const x = (across: number, depth: number, flat: boolean) => {
+  const { far, near } = halves(flat);
+  const half = far + (near - far) * depth;
   return Number((MID_X + across * half).toFixed(2));
 };
 
@@ -55,7 +75,8 @@ const x = (across: number, depth: number) => {
 const y = (depth: number) => Number((FAR_Y + (NEAR_Y - FAR_Y) * depth).toFixed(2));
 
 /** The touchlines and both goal lines, as one closed shape. */
-const EDGE = `M${x(-1, 0)} ${FAR_Y} H${x(1, 0)} L${x(1, 1)} ${NEAR_Y} H${x(-1, 1)} Z`;
+const edge = (flat: boolean) =>
+  `M${x(-1, 0, flat)} ${FAR_Y} H${x(1, 0, flat)} L${x(1, 1, flat)} ${NEAR_Y} H${x(-1, 1, flat)} Z`;
 
 /*
  * Mown stripes, running goal to goal and converging with the field.
@@ -66,13 +87,17 @@ const EDGE = `M${x(-1, 0)} ${FAR_Y} H${x(1, 0)} L${x(1, 1)} ${NEAR_Y} H${x(-1, 1
  * of the same trapezoid, so they meet the touchlines exactly.
  */
 const BANDS = 8;
-const MOW = Array.from({ length: BANDS }, (_, band) => band)
-  .filter((band) => band % 2 === 1)
-  .map((band) => {
-    const left = -1 + (2 / BANDS) * band;
-    const right = left + 2 / BANDS;
-    return `M${x(left, 0)} ${FAR_Y} H${x(right, 0)} L${x(right, 1)} ${NEAR_Y} H${x(left, 1)} Z`;
-  });
+const mow = (flat: boolean) =>
+  Array.from({ length: BANDS }, (_, band) => band)
+    .filter((band) => band % 2 === 1)
+    .map((band) => {
+      const left = -1 + (2 / BANDS) * band;
+      const right = left + 2 / BANDS;
+      return (
+        `M${x(left, 0, flat)} ${FAR_Y} H${x(right, 0, flat)} ` +
+        `L${x(right, 1, flat)} ${NEAR_Y} H${x(left, 1, flat)} Z`
+      );
+    });
 
 /*
  * How wide each marking is in field widths, measured off the drawing this
@@ -92,16 +117,106 @@ const FAR_NET = 0.1463;
 const NEAR_NET = 0.1268;
 const CENTRE_CIRCLE = 0.4643;
 
+/*
+ * The round markings, one set of numbers per mode.
+ *
+ * Perspective keeps the hand-drawn figures verbatim — 26, 30, 34, and two
+ * penalty spots that are not symmetric about the halfway line — for the same
+ * reason the two D widths above are not made consistent: they were tuned by eye
+ * and this is a switch for the taper, not licence to redraw a field somebody
+ * already looked at.
+ *
+ * Flat derives its radii instead, because there is nothing to preserve there:
+ * with the taper gone the markings should be round, and round means a fixed
+ * fraction of their own width. `preserveAspectRatio="none"` stretches this
+ * viewBox to fill the card, so equal radii would still draw an oval; the
+ * fraction is measured off the card as it actually renders. Its spots are
+ * symmetric, because on a flat field there is no reason for them not to be.
+ */
+const MARKS = {
+  perspective: { centreRy: 26, farDRy: 30, nearDRy: 34, farSpot: 52, nearSpot: 342 },
+};
+
+/*
+ * What a circle's vertical radius has to be, as a fraction of its horizontal
+ * one, to come back out round — measured, because it cannot be a constant.
+ *
+ * `preserveAspectRatio="none"` maps 300 viewBox units onto the card's width and
+ * 400 onto its height, so the two axes are scaled by different amounts and a
+ * circle drawn with equal radii renders as an oval. The correction is the ratio
+ * between those scales, and the card's shape is not fixed: it is as wide as the
+ * screen allows and as tall as the formation needs, so a twelve-a-side pitch is
+ * a different shape from a six-a-side one on the same phone.
+ *
+ * This is the starting guess for the first paint only; the real figure arrives
+ * from the element itself a frame later.
+ */
+const FLAT_SQUASH = 1.14;
+/** Six metres from the goal line, as a depth rather than another y. */
+const FLAT_SPOT = 0.1146;
+
 /** Five posts across each goal mouth, spaced in field widths like everything else. */
-const net = (goal: number, depth: number, from: number, to: number) =>
+const net = (goal: number, depth: number, from: number, to: number, flat: boolean) =>
   Array.from({ length: 5 }, (_, post) => {
     const across = -goal + (goal * 2 * post) / 4;
-    return `M${x(across, depth)} ${from} V${to}`;
+    return `M${x(across, depth, flat)} ${from} V${to}`;
   }).join(' ');
 
-export function PitchTurf() {
+export function PitchTurf({ flat = false }: { flat?: boolean }) {
+  const ref = useRef<SVGSVGElement>(null);
+  const [squash, setSquash] = useState(FLAT_SQUASH);
+
+  /*
+   * Ask the element what shape it turned out to be.
+   *
+   * Only while flat: in perspective the round markings are hand-tuned figures
+   * that must not move, and measuring would be a licence to move them.
+   */
+  useEffect(() => {
+    const element = ref.current;
+    if (!flat || !element) return;
+    const measure = () => {
+      const box = element.getBoundingClientRect();
+      if (box.width > 0 && box.height > 0) setSquash((400 * box.width) / (300 * box.height));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [flat]);
+
+  const EDGE = edge(flat);
+  const at = (across: number, depth: number) => x(across, depth, flat);
+  /*
+   * How far the round markings are squashed.
+   *
+   * In perspective they are ellipses because a circle on a receding plane is
+   * not a circle on the screen. Flat, they should be circles — but the viewBox
+   * is stretched to the card with `preserveAspectRatio="none"`, so equal radii
+   * here would still draw an oval. `FLAT_SQUASH` is the ratio that comes back
+   * out round at the size this card actually renders; it is a measured number,
+   * like the two half-widths above.
+   */
+  const round = (value: number) => Number(value.toFixed(2));
+  // Subtracting two rounded numbers is not a rounded number — `0.4643 * 125`
+  // came back out of the arithmetic as 67.78999999999999 and went into the
+  // attribute that way.
+  const centreRx = round(at(CENTRE_CIRCLE, 0.5) - MID_X);
+  const farDRx = round(at(FAR_D, 0) - MID_X);
+  const nearDRx = round(at(NEAR_D, 1) - MID_X);
+  const marks = flat
+    ? {
+        centreRy: round(centreRx * squash),
+        farDRy: round(farDRx * squash),
+        nearDRy: round(nearDRx * squash),
+        farSpot: y(FLAT_SPOT),
+        nearSpot: y(1 - FLAT_SPOT),
+      }
+    : MARKS.perspective;
+
   return (
     <svg
+      ref={ref}
       className="pitch-turf"
       viewBox="0 0 300 400"
       preserveAspectRatio="none"
@@ -127,12 +242,12 @@ export function PitchTurf() {
         </clipPath>
       </defs>
 
-      {/* The far edge is narrower than the near one; every marking below is
-          drawn to that same taper so the field reads as one plane. */}
+      {/* Every marking below is drawn to the same taper — none at all, when
+          this device has asked for a flat field — so it reads as one plane. */}
       <path className="pitch-grass" d={EDGE} />
 
       <g clipPath="url(#ff-pitch-edge)">
-        {MOW.map((stripe) => (
+        {mow(flat).map((stripe) => (
           <path className="pitch-mow" d={stripe} key={stripe} />
         ))}
       </g>
@@ -149,19 +264,18 @@ export function PitchTurf() {
 
       <path className="pitch-line" d={EDGE} vectorEffect="non-scaling-stroke" />
 
-      {/* Halfway, and the centre circle as an ellipse — a circle on a receding
-          plane is not a circle on the screen. */}
+      {/* Halfway, and the centre circle. */}
       <path
         className="pitch-line"
-        d={`M${x(-1, 0.5)} ${y(0.5)} H${x(1, 0.5)}`}
+        d={`M${at(-1, 0.5)} ${y(0.5)} H${at(1, 0.5)}`}
         vectorEffect="non-scaling-stroke"
       />
       <ellipse
         className="pitch-line"
         cx={MID_X}
         cy={y(0.5)}
-        rx={x(CENTRE_CIRCLE, 0.5) - MID_X}
-        ry="26"
+        rx={centreRx}
+        ry={marks.centreRy}
         vectorEffect="non-scaling-stroke"
       />
       <circle className="pitch-mark" cx={MID_X} cy={y(0.5)} r="2.5" />
@@ -170,31 +284,31 @@ export function PitchTurf() {
           This single shape is what stops the drawing reading as soccer. */}
       <path
         className="pitch-line"
-        d={`M${x(-FAR_D, 0)} ${FAR_Y} A${x(FAR_D, 0) - MID_X} 30 0 0 0 ${x(FAR_D, 0)} ${FAR_Y}`}
+        d={`M${at(-FAR_D, 0)} ${FAR_Y} A${farDRx} ${marks.farDRy} 0 0 0 ${at(FAR_D, 0)} ${FAR_Y}`}
         vectorEffect="non-scaling-stroke"
       />
       <path
         className="pitch-line"
-        d={`M${x(-NEAR_D, 1)} ${NEAR_Y} A${x(NEAR_D, 1) - MID_X} 34 0 0 1 ${x(NEAR_D, 1)} ${NEAR_Y}`}
+        d={`M${at(-NEAR_D, 1)} ${NEAR_Y} A${nearDRx} ${marks.nearDRy} 0 0 1 ${at(NEAR_D, 1)} ${NEAR_Y}`}
         vectorEffect="non-scaling-stroke"
       />
-      <circle className="pitch-mark" cx={MID_X} cy="52" r="2" />
-      <circle className="pitch-mark" cx={MID_X} cy="342" r="2" />
+      <circle className="pitch-mark" cx={MID_X} cy={marks.farSpot} r="2" />
+      <circle className="pitch-mark" cx={MID_X} cy={marks.nearSpot} r="2" />
 
       {/* Goals, on the goal lines, narrowing with the field. */}
       <path
         className="pitch-goal"
-        d={`M${x(-FAR_GOAL, 0)} ${FAR_Y} H${x(FAR_GOAL, 0)}`}
+        d={`M${at(-FAR_GOAL, 0)} ${FAR_Y} H${at(FAR_GOAL, 0)}`}
         vectorEffect="non-scaling-stroke"
       />
       <path
         className="pitch-goal"
-        d={`M${x(-NEAR_GOAL, 1)} ${NEAR_Y} H${x(NEAR_GOAL, 1)}`}
+        d={`M${at(-NEAR_GOAL, 1)} ${NEAR_Y} H${at(NEAR_GOAL, 1)}`}
         vectorEffect="non-scaling-stroke"
       />
       <path
         className="pitch-net"
-        d={`${net(FAR_NET, 0, FAR_Y, 2)} ${net(NEAR_NET, 1, NEAR_Y, 399)}`}
+        d={`${net(FAR_NET, 0, FAR_Y, 2, flat)} ${net(NEAR_NET, 1, NEAR_Y, 399, flat)}`}
       />
     </svg>
   );

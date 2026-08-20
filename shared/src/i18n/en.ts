@@ -581,6 +581,9 @@ export const en = {
     haptics: 'Vibration',
     hapticsBody:
       'A buzz when you take a spot and when you give one up. Nothing else in the app vibrates, and a phone on silent may not vibrate at all.',
+    perspective: 'Pitch in perspective',
+    perspectiveBody:
+      'The field is drawn tilted away from you, the way a game screen shows it. Turn it off to look straight down at a flat pitch instead.',
   },
 
   editor: {

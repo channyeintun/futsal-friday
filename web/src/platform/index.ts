@@ -250,6 +250,21 @@ export interface PushSubscriptionJson {
   keys: { p256dh: string; auth: string };
 }
 
+/**
+ * How the pitch is drawn, which is a taste rather than a capability.
+ *
+ * It lives beside `sound` and `haptics` because it is the same kind of thing:
+ * a preference this device holds, remembered across visits, that nothing on the
+ * server has an opinion about. A member who finds the receding field harder to
+ * read — or simply does not like it — switches it off here and every screen
+ * that draws a pitch honours it.
+ */
+export interface Display {
+  /** True by default: the field recedes, the way the game screens draw it. */
+  pitchPerspective(): boolean;
+  setPitchPerspective(on: boolean): void;
+}
+
 export interface Platform {
   storage: KeyValueStorage;
   clipboard: Clipboard;
@@ -258,6 +273,7 @@ export interface Platform {
   visibility: Visibility;
   sound: Sound;
   haptics: Haptics;
+  display: Display;
   tour: Tour;
   notifications: Notifications;
   /**
