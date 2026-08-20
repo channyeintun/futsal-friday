@@ -293,9 +293,12 @@ export const en = {
       tapOutTitle: "You're on the pitch",
       tapOutBody:
         'Changed your mind? Press your own card once, then again to give the spot up.',
+      moveTitle: 'Fancy a different spot?',
+      moveBody: 'Tap any empty spot and you will move there. Your place in the game is safe.',
       gotIt: 'Got it',
     },
     takeSpot: 'Take this spot',
+    moveHere: 'Move to this spot',
     spotsLeft: (left: number) => (left === 1 ? '1 spot left' : `${left} spots left`),
     full: 'The pitch is full',
     fullBody: 'Tap in anyway — you go on the waitlist, and people always drop out.',
@@ -307,6 +310,7 @@ export const en = {
     guestSpot: (name: string) => `${name}'s guest`,
     yourGuest: 'Your guest',
     joining: 'Taking your spot…',
+    moving: 'Moving…',
     leaving: 'Giving up your spot…',
     partyTooBig: (party: number, room: number) =>
       `A party of ${party} needs ${party} spots. There are ${room}.`,
@@ -426,6 +430,7 @@ export const en = {
 
   toast: {
     youreIn: "You're in",
+    youMoved: 'Moved',
     youreOnWaitlist: "You're on the waitlist",
     youreOut: "You're out",
     youreOutPromoted: (name: string) => `You're out — ${name} moves up`,

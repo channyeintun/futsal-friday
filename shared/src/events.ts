@@ -73,6 +73,28 @@ export const playerLeftSchema = z.object({
 });
 
 /**
+ * Somebody already on the pitch picked a different circle.
+ *
+ * Deliberately not a `session.updated`: nobody joined, nobody left, the counts
+ * are identical and the cap is untouched. The only thing that changed is where
+ * one card is drawn, so this carries exactly that and every other phone slides
+ * it across without a request.
+ *
+ * It is also why moving is not modelled as a withdraw-and-rejoin. That would be
+ * true to the letter — you end up registered at a new spot — but it would burn
+ * your place in the queue, promote somebody off the waitlist into the gap you
+ * left, and put you behind them. A move must not be able to cost you the game.
+ */
+export const playerMovedSchema = z.object({
+  sessionId: idSchema,
+  memberId: idSchema,
+  memberName: z.string(),
+  /** Where they went. Never null: giving a spot up is `player.left`. */
+  slot: z.number().int().min(0),
+  at: isoSchema,
+});
+
+/**
  * Somebody said who turned up.
  *
  * Carries the resulting head count so the settle screen can update the
@@ -200,6 +222,7 @@ export const realtimeSchema = {
   player: {
     joined: playerJoinedSchema,
     left: playerLeftSchema,
+    moved: playerMovedSchema,
     attendance: playerAttendanceSchema,
   },
   payment: {
@@ -229,6 +252,7 @@ export type RealtimeSchema = typeof realtimeSchema;
 export interface EventPayloadMap {
   'player.joined': z.infer<typeof playerJoinedSchema>;
   'player.left': z.infer<typeof playerLeftSchema>;
+  'player.moved': z.infer<typeof playerMovedSchema>;
   'player.attendance': z.infer<typeof playerAttendanceSchema>;
   'payment.claimed': z.infer<typeof paymentClaimedSchema>;
   'payment.confirmed': z.infer<typeof paymentConfirmedSchema>;
@@ -246,6 +270,7 @@ export type EventPayload<K extends EventName> = EventPayloadMap[K];
 export const EVENT_NAMES = [
   'player.joined',
   'player.left',
+  'player.moved',
   'player.attendance',
   'payment.claimed',
   'payment.confirmed',
@@ -275,6 +300,7 @@ export type EventCatalogueIsConsistent = Assert<
   Exact<EventPayloadMap['player.joined'], z.infer<typeof realtimeSchema.player.joined>>
 > &
   Assert<Exact<EventPayloadMap['player.left'], z.infer<typeof realtimeSchema.player.left>>> &
+  Assert<Exact<EventPayloadMap['player.moved'], z.infer<typeof realtimeSchema.player.moved>>> &
   Assert<
     Exact<EventPayloadMap['player.attendance'], z.infer<typeof realtimeSchema.player.attendance>>
   > &

@@ -95,6 +95,7 @@ pub async fn route(
         (Method::Post, [_, "register"]) => register(req, env, identity, &id()).await,
         (Method::Patch, [_, "register"]) => change_guests(req, env, identity, &id()).await,
         (Method::Delete, [_, "register"]) => withdraw(env, identity, &id()).await,
+        (Method::Put, [_, "slot"]) => change_slot(req, env, identity, &id()).await,
 
         (Method::Post, [_, "attendance"]) => attendance(req, env, identity, &id()).await,
         (Method::Post, [_, "goals"]) => goals(req, env, identity, &id()).await,
@@ -483,6 +484,92 @@ async fn register(
     }
 
     Ok(Response::from_json(&Registered { registration: Some(mine.clone()), counts, changed })?)
+}
+
+/// Stand somewhere else on the same pitch.
+///
+/// Everything this does not touch is the point of it existing. Your status,
+/// your position in the queue, your guests and the head count are all left
+/// exactly as they were, because none of them is a question about where you
+/// are standing — and a move that could put you behind somebody who signed up
+/// after you would be a trap rather than a bit of fun.
+///
+/// Whether the circle is free is deliberately not checked here. Which spots
+/// exist at all is a question about a drawing that this file cannot see: the
+/// count follows from the cap and the head count, the cap can move underneath
+/// it, and guests occupy circles nobody ever asked for. `placeOnPitch` settles
+/// a contested number the same way on every device — earliest signup takes it,
+/// the loser falls into the first gap — so the honest thing to store is what
+/// they asked for.
+async fn change_slot(
+    req: &mut Request,
+    env: &Env,
+    identity: &Identity,
+    session_id: &str,
+) -> ApiResult<Response> {
+    let body = parse_optional_body(req).await?;
+    let Some(slot) = slot_input(&body)? else {
+        return Err(http::bad_request("Which spot?"));
+    };
+
+    let db_handle = crate::env::db(env)?;
+    let Some(session) = db::get_session_row(&db_handle, session_id).await? else {
+        return Err(http::not_found("No such session"));
+    };
+    if session.status == "cancelled" {
+        return Err(http::conflict("That session was cancelled"));
+    }
+    if !db::is_registration_open(&session) {
+        return Err(http::conflict_with(
+            "Registration has closed for this session",
+            http::code::REGISTRATION_CLOSED,
+        ));
+    }
+
+    let before = db::list_registrations(&db_handle, session_id).await?;
+    let Some(mine) = before.iter().find(|r| r.member_id == identity.member_id).cloned() else {
+        return Err(http::conflict("Register yourself first"));
+    };
+    // A waitlisted member is not on the pitch to move about on it. The bench is
+    // one place, not a row of them, and honouring a number here would store a
+    // spot that would be silently claimed the moment they were promoted.
+    if mine.status != "in" {
+        return Err(http::conflict("You are on the waitlist for this session"));
+    }
+
+    let timestamp = http::now_iso();
+    let result = db_handle
+        .prepare(
+            "UPDATE registrations SET slot = ?3
+              WHERE session_id = ?1 AND member_id = ?2 AND status = 'in'
+                AND (slot IS NULL OR slot <> ?3)",
+        )
+        .bind(&[text(session_id), text(&identity.member_id), number(slot)])?
+        .run()
+        .await?;
+    let changed = result.meta()?.and_then(|meta| meta.changes).is_some_and(|changes| changes > 0);
+
+    let after = db::list_registrations(&db_handle, session_id).await?;
+    let updated = after.iter().find(|r| r.member_id == identity.member_id).cloned();
+    let counts = db::count_registrations(&after);
+
+    if changed {
+        create_pub_sub(env)
+            .emit(
+                &[&session_channel(session_id)],
+                "player.moved",
+                &json!({
+                    "sessionId": session_id,
+                    "memberId": identity.member_id,
+                    "memberName": identity.name,
+                    "slot": slot,
+                    "at": timestamp,
+                }),
+            )
+            .await;
+    }
+
+    Ok(Response::from_json(&Registered { registration: updated, counts, changed })?)
 }
 
 /// Change how many friends you are bringing, without losing your spot.

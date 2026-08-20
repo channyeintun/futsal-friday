@@ -154,6 +154,26 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
             return;
           }
 
+          case 'player.moved': {
+            // Nobody joined and nobody left, so there is no count to correct
+            // and no promotion to worry about — one field on one row moves and
+            // `placeOnPitch` redraws the field from it.
+            const { memberId, slot } = event.data;
+            flash(memberId);
+            patch((current) => {
+              if (current.session.id !== event.data.sessionId) return current;
+              const registrations = current.registrations.map((r) =>
+                r.memberId === memberId ? { ...r, slot } : r,
+              );
+              return {
+                ...current,
+                registrations,
+                me: current.me?.memberId === memberId ? { ...current.me, slot } : current.me,
+              };
+            });
+            return;
+          }
+
           case 'player.attendance': {
             const { memberId, attended, guestsArrived } = event.data;
             flash(memberId);

@@ -8,7 +8,7 @@ import type {
   TeamDraw,
   UpdateSessionInput,
 } from '@futsal/shared';
-import { del, get, patch, post } from './client.js';
+import { del, get, patch, post, put } from './client.js';
 
 export interface SessionsOverview {
   upcoming: Session | null;
@@ -74,6 +74,17 @@ export const registerForSession = (id: string, guests = 0, slot?: number | null)
 /** Change how many friends you are bringing, without giving up your spot. */
 export const setSessionGuests = (id: string, guests: number) =>
   patch<RegisterResult>(`/sessions/${id}/register`, { guests });
+
+/**
+ * Stand somewhere else, without giving up the spot you already have.
+ *
+ * A `PUT` because it is the whole of what it sets and doing it twice lands you
+ * in the same place — and separate from `register` because the two differ in
+ * the only way that matters here: register decides whether you are playing at
+ * all, and this cannot.
+ */
+export const moveOnPitch = (id: string, slot: number) =>
+  put<RegisterResult>(`/sessions/${id}/slot`, { slot });
 
 export const withdrawFromSession = (id: string) =>
   del<WithdrawResult>(`/sessions/${id}/register`);

@@ -14,7 +14,7 @@ import {
   waitingSlots,
 } from '@futsal/shared';
 import { type CSSProperties, type ReactNode, useEffect, useState } from 'react';
-import { registerForSession, withdrawFromSession } from '../api/sessions.js';
+import { moveOnPitch, registerForSession, withdrawFromSession } from '../api/sessions.js';
 import { platform } from '../platform/index.js';
 import { useApp } from '../state/app.js';
 import { useLocale } from '../state/locale.js';
@@ -40,13 +40,19 @@ import { ErrorBanner } from './ui.js';
  * > A spot is a `<button>` if and only if pressing it does something the server
  * > will act on. Everything else is a `<span>`.
  *
- * Registering is `WHERE NOT EXISTS (session_id, member_id)` on the Worker side,
- * so a second tap from somebody already registered is a 200 that changes
- * nothing. If empty spots stayed pressable once you were in, that dead tap
- * would be reachable — and it would toast as though something had happened.
- * Making the spot a `<span>` instead makes the dead tap unrepresentable rather
- * than merely unvisited, and it costs nothing to say: an empty circle has no
- * name, no number and no position on it, so there is no promise to break.
+ * An empty circle is therefore pressable in two different senses, and which one
+ * is on offer follows entirely from whether you are already out there. If you
+ * are not, it takes the spot. If you are, it moves you to it — the same one
+ * tap, because a member who has just learned that pressing a gap puts them
+ * there has learned the whole gesture, and making the second use of it ask
+ * twice would be teaching an exception rather than a rule.
+ *
+ * What is not on offer is a third thing. Registering is
+ * `WHERE NOT EXISTS (session_id, member_id)` on the Worker side, so a second
+ * *join* from somebody already registered is a 200 that changes nothing — which
+ * is why moving is its own route rather than a re-register with a new number.
+ * And a waitlisted member gets spans again: the bench is one place rather than
+ * a row of them, so there is nowhere on the field for them to move to yet.
  *
  * It also settles the sound for free. A `<span>` matches nothing in the
  * document listener's selector set, so a spot that does nothing makes no noise
@@ -97,7 +103,7 @@ export function Pitch({
   const { session, registrations, registrationOpen, me } = detail;
 
   /** `armed` is your own spot having been pressed once and asking again. */
-  type Phase = 'idle' | 'armed' | 'joining' | 'leaving';
+  type Phase = 'idle' | 'armed' | 'joining' | 'leaving' | 'moving';
   const [phase, setPhase] = useState<Phase>('idle');
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -124,7 +130,7 @@ export function Pitch({
    */
   const [dealing, setDealing] = useState(true);
 
-  const busy = phase === 'joining' || phase === 'leaving';
+  const busy = phase === 'joining' || phase === 'leaving' || phase === 'moving';
 
   /*
    * The picture and the sentence are both derived from this one array, so they
@@ -155,6 +161,14 @@ export function Pitch({
 
   /** Only when there is genuinely a free spot with your name on it. */
   const canJoin = !me && registrationOpen && openCount > 0;
+
+  /*
+   * Already out there, so a gap is somewhere to go rather than somewhere to
+   * join. `status === 'in'` and not merely registered: a waitlisted member has
+   * no card on the field, and storing a spot for them would be a claim staked
+   * silently on a pitch they are not on yet.
+   */
+  const canMove = me?.status === 'in' && registrationOpen;
 
   /*
    * The touchline.
@@ -213,10 +227,28 @@ export function Pitch({
   const onPitch = me !== null;
   useEffect(() => {
     if (!registrationOpen || dealing) return;
-    const lesson = onPitch
-      ? { key: 'tour:tap-out', target: '.pitch-spot.is-me', title: m.pitch.tour.tapOutTitle, body: m.pitch.tour.tapOutBody }
-      : { key: 'tour:tap-in', target: '.pitch-spot.is-open', title: m.pitch.tour.tapInTitle, body: m.pitch.tour.tapInBody };
-    if (platform.storage.get(lesson.key) === 'seen') return;
+    /*
+     * Candidates in the order they become worth knowing, first unseen wins.
+     *
+     * Moving is its own lesson rather than a second step on the tap-out one,
+     * and that is about the people who were here before it existed: a lesson
+     * already marked seen never opens again, so folding it in would have taught
+     * it to nobody who already knew how to leave. A separate key reaches them
+     * the next time they are on the pitch.
+     */
+    const lessons = onPitch
+      ? [
+          { key: 'tour:tap-out', target: '.pitch-spot.is-me', title: m.pitch.tour.tapOutTitle, body: m.pitch.tour.tapOutBody },
+          { key: 'tour:move', target: '.pitch-spot.is-open', title: m.pitch.tour.moveTitle, body: m.pitch.tour.moveBody },
+        ]
+      : [
+          { key: 'tour:tap-in', target: '.pitch-spot.is-open', title: m.pitch.tour.tapInTitle, body: m.pitch.tour.tapInBody },
+        ];
+    // Nowhere to move to is nothing to teach — and the tour would point at a
+    // spot that is not on the field.
+    const due = lessons.filter((l) => l.key !== 'tour:move' || openCount > 0);
+    const lesson = due.find((l) => platform.storage.get(l.key) !== 'seen');
+    if (!lesson) return;
 
     // A beat after the deal settles, so it points at a field that has stopped
     // moving rather than at a card still sliding into place.
@@ -241,7 +273,7 @@ export function Pitch({
       // pointing at a card that is no longer the right card.
       platform.tour.stop();
     };
-  }, [registrationOpen, dealing, onPitch, m, locale]);
+  }, [registrationOpen, dealing, onPitch, openCount, m, locale]);
 
   // The arm lapses on its own, so a pocket press cannot leave a live confirm
   // sitting there — but not while the keyboard is still on it.
@@ -270,6 +302,33 @@ export function Pitch({
       toast(
         result.registration?.status === 'waitlist' ? m.toast.youreOnWaitlist : m.toast.youreIn,
       );
+      onChanged();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : m.session.thatDidNotWork);
+    } finally {
+      setPhase('idle');
+      setPendingKey(null);
+    }
+  };
+
+  /*
+   * Change where you stand, without touching whether you are playing.
+   *
+   * Deliberately not a withdraw followed by a register. That would be the same
+   * two words to a database and a completely different thing to a person: it
+   * would drop you to the back of the queue, hand your spot to the first person
+   * on the waitlist in the instant between the two calls, and leave you
+   * watching somebody else take the game you were already in. Wanting to stand
+   * somewhere else is not wanting to risk that.
+   */
+  const move = async (key: string, slot: number) => {
+    if (busy) return;
+    setPhase('moving');
+    setPendingKey(key);
+    setError(null);
+    try {
+      await moveOnPitch(session.id, slot);
+      toast(m.toast.youMoved);
       onChanged();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : m.session.thatDidNotWork);
@@ -310,7 +369,9 @@ export function Pitch({
   const status: ReactNode = busy
     ? phase === 'joining'
       ? m.pitch.joining
-      : m.pitch.leaving
+      : phase === 'moving'
+        ? m.pitch.moving
+        : m.pitch.leaving
     : session.maxPlayers == null
       ? m.pitch.noCap
       : openCount === 0
@@ -403,6 +464,7 @@ export function Pitch({
                     isFirstOpen: index === firstOpen,
                     viewerId: identity.memberId,
                     canJoin,
+                    canMove,
                     onBench: false,
                     armed: phase === 'armed',
                     pending: pendingKey === spot.key,
@@ -411,6 +473,7 @@ export function Pitch({
                     recentlyChanged,
                     m,
                     onJoin: join,
+                    onMove: move,
                     onArm: () => setPhase('armed'),
                     onLeave: leave,
                   });
@@ -437,6 +500,7 @@ export function Pitch({
               isFirstOpen: spot.kind === 'open',
               viewerId: identity.memberId,
               canJoin: canWait,
+              canMove: false,
               armed: phase === 'armed',
               pending: pendingKey === spot.key,
               busy,
@@ -445,6 +509,7 @@ export function Pitch({
               recentlyChanged,
               m,
               onJoin: join,
+              onMove: move,
               onArm: () => setPhase('armed'),
               onLeave: leave,
             }),
@@ -490,6 +555,7 @@ function renderSpot({
   isFirstOpen,
   viewerId,
   canJoin,
+  canMove,
   armed,
   pending,
   busy,
@@ -498,6 +564,7 @@ function renderSpot({
   recentlyChanged,
   m,
   onJoin,
+  onMove,
   onArm,
   onLeave,
 }: {
@@ -508,6 +575,8 @@ function renderSpot({
   isFirstOpen: boolean;
   viewerId: string;
   canJoin: boolean;
+  /** You are on the pitch already, so an empty spot is somewhere to go. */
+  canMove: boolean;
   armed: boolean;
   pending: boolean;
   busy: boolean;
@@ -517,6 +586,7 @@ function renderSpot({
   recentlyChanged: Set<string>;
   m: ReturnType<typeof useLocale>['m'];
   onJoin(key: string, slot: number | null): void;
+  onMove(key: string, slot: number): void;
   onArm(): void;
   onLeave(key: string): void;
 }) {
@@ -581,7 +651,17 @@ function renderSpot({
     </span>
   );
 
-  if (open && canJoin) {
+  if (open && (canJoin || canMove)) {
+    /*
+     * Landing on a spot, whether or not you were already out there.
+     *
+     * The haptic is the same for both because what the hand is being told is
+     * the same: you are here now. It is one of only three presses in the app
+     * that buzz — this, and giving a spot up — because those are the ones that
+     * change what you have promised the group, and they are worth feeling land
+     * without looking. See `platform.haptics`.
+     */
+    const moving = canMove && !onBench;
     return (
       <button
         key={spot.key}
@@ -589,16 +669,21 @@ function renderSpot({
         className={className}
         style={style}
         disabled={busy}
-        // The only two presses in the app that buzz are this one and its
-        // opposite. Both change what you have promised the group, and both are
-        // worth feeling land without looking. See `platform.haptics`.
         data-haptic="in"
-        onClick={() => onJoin(spot.key, onBench ? null : index)}
+        onClick={() =>
+          moving ? onMove(spot.key, index) : onJoin(spot.key, onBench ? null : index)
+        }
         // Every empty spot is the same offer, so only the first is worth
         // announcing — eight identical "Take this spot" is noise, and the
         // caption below already says how many there are.
         {...(isFirstOpen
-          ? { 'aria-label': onBench ? m.pitch.joinWaitlist : m.pitch.takeSpot }
+          ? {
+              'aria-label': moving
+                ? m.pitch.moveHere
+                : onBench
+                  ? m.pitch.joinWaitlist
+                  : m.pitch.takeSpot,
+            }
           : { tabIndex: -1, 'aria-hidden': true })}
       >
         {inside}

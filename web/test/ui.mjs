@@ -131,7 +131,8 @@ async function run() {
          tour's own starts having already been taught, so a coach mark
          is never over the control the next assertion is about to press. */
       try { localStorage.setItem('futsal:tour:tap-in', 'seen');
-            localStorage.setItem('futsal:tour:tap-out', 'seen'); } catch {}`,
+            localStorage.setItem('futsal:tour:tap-out', 'seen');
+            localStorage.setItem('futsal:tour:move', 'seen'); } catch {}`,
   });
 
   const evalJs = async (expression) => {
@@ -362,13 +363,51 @@ async function run() {
   check('the roster agrees', (await playing()) === headsBefore + 1);
   /*
    * The invariant the whole component turns on: a spot is a button if and only
-   * if pressing it does something the server will act on. Registering is
-   * `WHERE NOT EXISTS` on the Worker side, so a second tap on an empty spot
-   * would be a 200 that changes nothing — this is what makes that dead tap
-   * unrepresentable rather than merely unvisited.
+   * if pressing it does something the server will act on.
+   *
+   * Once you are out there that is your own card, which gives the spot up, and
+   * every empty one, which moves you to it. What it is never is somebody else's
+   * card — pressing that has nothing to ask the server for.
    */
-  check('AND NOTHING ELSE ON THE PITCH IS A CONTROL', (await pressable()) === 1,
-    `${await pressable()} pressable spots`);
+  check('YOUR CARD AND THE GAPS ARE CONTROLS, NOBODY ELSE IS',
+    (await pressable()) === 1 + (await openSpots()),
+    `${await pressable()} pressable, 1 mine + ${await openSpots()} open`);
+  check('and none of them is another player',
+    await evalJs(`[...document.querySelectorAll('button.pitch-spot')]
+      .every((s) => s.classList.contains('is-me') || s.classList.contains('is-open'))`));
+
+  /*
+   * Moving is the same one press as arriving, and costs nothing but position.
+   *
+   * The point of the feature is that it is *not* a withdraw and a rejoin: the
+   * head count must not flinch, because if it did somebody on the waitlist
+   * would have been promoted into the gap and this member would be behind them.
+   */
+  const movedFrom = landed;
+  const movedTo = await evalJs(`(() => {
+    const spots = [...document.querySelectorAll('.pitch-spot')];
+    const open = spots.filter((s) => s.classList.contains('is-open') && s.tagName === 'BUTTON');
+    const target = open[0];
+    if (!target) return -1;
+    target.click();
+    return spots.indexOf(target);
+  })()`);
+  check('an empty spot is pressable once you are on the pitch', movedTo >= 0);
+  await sleep(1600);
+  check('YOU MOVE TO THE SPOT YOU PRESSED',
+    await evalJs(`[...document.querySelectorAll('.pitch-spot')]
+      .findIndex((s) => s.classList.contains('is-me'))`) === movedTo,
+    `pressed ${movedTo}, ended on ${await evalJs(`[...document.querySelectorAll('.pitch-spot')]
+      .findIndex((s) => s.classList.contains('is-me'))`)}`);
+  check('and you left the spot you were standing on', movedTo !== movedFrom,
+    `moved from ${movedFrom} to ${movedTo}`);
+  check('MOVING COSTS NOBODY THEIR PLACE', (await playing()) === headsBefore + 1,
+    `expected ${headsBefore + 1} playing, got ${await playing()}`);
+  check('and opens no gap and closes none', (await openSpots()) === openBefore - 1,
+    `before=${openBefore} after=${await openSpots()}`);
+  // Arriving somewhere is arriving somewhere, whichever spot you came from.
+  check('landing feels the same as it did the first time',
+    (await buzzes()) === '["[25]","[25]"]', await buzzes());
 
   // Leaving from the field asks twice; the button below still leaves in one.
   await evalJs(`document.querySelector('button.pitch-spot.is-me').click()`);
@@ -377,14 +416,14 @@ async function run() {
     await evalJs(`!!document.querySelector('.pitch-spot.is-me.is-armed[data-sound="tap-out"]')`));
   check('still on the pitch after that press', (await playing()) === headsBefore + 1);
   // Arming changes nothing yet, so it must not feel like it did.
-  check('ARMING DOES NOT BUZZ', (await buzzes()) === '["[25]"]', await buzzes());
+  check('ARMING DOES NOT BUZZ', (await buzzes()) === '["[25]","[25]"]', await buzzes());
   await evalJs(`document.querySelector('button.pitch-spot.is-me').click()`);
   await sleep(1600);
   check('the second press gives the spot up', (await playing()) === headsBefore,
     `expected ${headsBefore}, got ${await playing()}`);
   // A single buzz cannot mean two opposite things, so leaving is a different one.
   check('and giving it up feels different from taking it',
-    (await buzzes()) === '["[25]","[25,45,25]"]', await buzzes());
+    (await buzzes()) === '["[25]","[25]","[25,45,25]"]', await buzzes());
 
   /*
    * The preference actually gates it.
@@ -1186,7 +1225,8 @@ async function run() {
     await sleep(600);
   }
   await evalJs(`localStorage.removeItem('futsal:tour:tap-in');
-    localStorage.removeItem('futsal:tour:tap-out')`);
+    localStorage.removeItem('futsal:tour:tap-out');
+    localStorage.removeItem('futsal:tour:move')`);
   await goToTab('History', 'History');
   await sleep(500);
   await goToTab('Session', 'Playing');
@@ -1229,6 +1269,32 @@ async function run() {
   await shoot('19-tour-tap-out');
   await evalJs(`document.querySelector('.ff-tour .driver-popover-next-btn')?.click()`);
   await waitFor(`!document.querySelector('.driver-popover')`, 'and closes');
+
+  /*
+   * The third lesson, and the reason it is a third rather than a second step.
+   *
+   * Moving arrived after people were already using the pitch, and a lesson
+   * marked seen never opens again — so folding it into the tap-out one would
+   * have taught it to nobody who already knew how to leave. Its own key is what
+   * reaches them, which is exactly what this asserts: still on the pitch, the
+   * tap-out mark already spent, and the next lesson is the new one.
+   */
+  await goToTab('History', 'History');
+  await sleep(500);
+  await goToTab('Session', 'Playing');
+  await waitFor(`!!document.querySelector('.driver-popover.ff-tour')`, 'the third lesson opens');
+  check('AND THEN IT TEACHES MOVING, TO SOMEBODY WHO ALREADY KNEW HOW TO LEAVE',
+    await evalJs(`/different spot/.test(document.querySelector('.ff-tour .driver-popover-title')?.textContent ?? '')`),
+    await evalJs(`document.querySelector('.ff-tour .driver-popover-title')?.textContent`));
+  check('pointing at somewhere to go, not at the card you are on',
+    await evalJs(`document.querySelector('.driver-active-element')?.matches('.pitch-spot.is-open') === true`),
+    await evalJs(`document.querySelector('.driver-active-element')?.className`));
+  await shoot('20-tour-move');
+  await evalJs(`document.querySelector('.ff-tour .driver-popover-next-btn')?.click()`);
+  await waitFor(`!document.querySelector('.driver-popover')`, 'and that closes too');
+  check('three lessons, and the pitch has nothing left to say',
+    await evalJs(`['tap-in','tap-out','move'].every((k) => localStorage.getItem('futsal:tour:' + k) === 'seen')`),
+    await evalJs(`['tap-in','tap-out','move'].map((k) => k + '=' + localStorage.getItem('futsal:tour:' + k)).join(' ')`));
 
   // Console errors, excluding noise we do not control.
   const errors = events
