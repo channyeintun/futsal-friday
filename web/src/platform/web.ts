@@ -796,6 +796,8 @@ const PERSPECTIVE_KEY = 'pitch-perspective';
  * drawing the screen was designed around rather than a fallback.
  */
 const display: Platform['display'] = {
+  prefersReducedMotion: () =>
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true,
   pitchPerspective: () => storage.get(PERSPECTIVE_KEY) !== '0',
   setPitchPerspective(on) {
     storage.set(PERSPECTIVE_KEY, on ? '1' : '0');

@@ -260,6 +260,14 @@ export interface PushSubscriptionJson {
  * that draws a pitch honours it.
  */
 export interface Display {
+  /**
+   * Whether this device has asked for less movement.
+   *
+   * Read rather than assumed, and read through here rather than from a media
+   * query in a component, for the same reason every other capability is: a
+   * component that knows about `matchMedia` knows about the browser.
+   */
+  prefersReducedMotion(): boolean;
   /** True by default: the field recedes, the way the game screens draw it. */
   pitchPerspective(): boolean;
   setPitchPerspective(on: boolean): void;

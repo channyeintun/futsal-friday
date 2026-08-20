@@ -3501,3 +3501,149 @@ button.pitch-spot::before {
   justify-content: center;
   padding: 2px 0 10px;
 }
+
+/* ---------------------------------------------------------- pack opening */
+
+/*
+ * The draw, turned over one card at a time.
+ *
+ * Over everything, because for four seconds it is the only thing happening —
+ * and because the board it is about is directly underneath, so anything less
+ * than full cover would have the answer visible beside the ceremony.
+ */
+.pack {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 20px;
+  background: radial-gradient(120% 90% at 50% 30%, #123055 0%, #05070c 70%);
+  color: #fff;
+  animation: ff-pack-in 220ms ease-out both;
+}
+
+@keyframes ff-pack-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.pack-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
+:lang(my) .pack-title {
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.pack-teams {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+}
+
+.pack-team {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pack-letter {
+  font-size: 1.4rem;
+  font-weight: 800;
+  opacity: 0.55;
+  min-width: 1ch;
+}
+
+.pack-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+/*
+ * One card, with a back and a front on the same square of space.
+ *
+ * `transform-style: preserve-3d` on the holder and a Y rotation on each face is
+ * the whole trick. It is the one place in this app that uses a real 3D
+ * transform — the pitch deliberately fakes its perspective in two dimensions,
+ * because there the thing being rotated holds cards that must stay square to
+ * the screen. Here the card *is* the thing rotating, which is the case
+ * `preserve-3d` is for.
+ */
+.pack-card {
+  position: relative;
+  width: 52px;
+  height: calc(52px * 1.27);
+  transform-style: preserve-3d;
+  transition: transform 420ms cubic-bezier(0.2, 0.8, 0.3, 1);
+  transform: rotateY(180deg);
+}
+
+.pack-card.is-up {
+  transform: rotateY(0deg);
+}
+
+.pack-back,
+.pack-front {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+}
+
+.pack-front {
+  transform: rotateY(0deg);
+}
+
+/*
+ * The back: the same silhouette, struck blank.
+ *
+ * Clipped to the card's own outline rather than drawn as a rectangle, so a
+ * face-down card is unmistakably one of these rather than a tile that will
+ * become one.
+ */
+.pack-back {
+  transform: rotateY(180deg);
+  clip-path: url(#ff-ic-clip);
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgb(255 255 255 / 0.05) 0 3px,
+      transparent 3px 7px
+    ),
+    linear-gradient(160deg, #1d3f6e 0%, #0a1730 60%, #050a18 100%);
+}
+
+.pack-skip {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.55;
+}
+
+/*
+ * Asked for less motion: no flips, no scrim fade, everything already up.
+ *
+ * The component sets `turned` to Infinity in that case, so this only has to
+ * stop the transition — but it has to, or the cards would still swing on the
+ * one render where they mount.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .pack {
+    animation: none;
+  }
+
+  .pack-card {
+    transition: none;
+  }
+}

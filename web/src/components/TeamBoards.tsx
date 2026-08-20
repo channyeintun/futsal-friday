@@ -14,7 +14,7 @@ import {
   slotsMissingFrom,
   teamRecords,
 } from '@futsal/shared';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   addLatecomers,
   clearSessionTeams,
@@ -25,6 +25,7 @@ import {
 import { useApp } from '../state/app.js';
 import { useLocale } from '../state/locale.js';
 import { Avatar } from './Avatar.js';
+import { PackOpening } from './PackOpening.js';
 import { Icon } from './Icon.js';
 import { Button, Dialog, ErrorBanner } from './ui.js';
 
@@ -105,6 +106,28 @@ export function TeamBoards({
    */
   const [dealing, setDealing] = useState(false);
 
+  /*
+   * Whether to open the draw rather than simply show it.
+   *
+   * Keyed on `drawnAt` changing *while this is mounted*, which is exactly the
+   * set of people looking at the session when somebody shuffles — the group
+   * standing on the pitch. The ref starts at whatever was already there, so
+   * arriving at a session that was drawn an hour ago shows the board and no
+   * ceremony: a reveal of old news is a cutscene, not an event.
+   */
+  const seenDraw = useRef(draw?.drawnAt ?? null);
+  const [opening, setOpening] = useState(false);
+  useEffect(() => {
+    const at = draw?.drawnAt ?? null;
+    if (at === seenDraw.current) return;
+    const first = seenDraw.current === null && at !== null;
+    seenDraw.current = at;
+    // A draw appearing where there was none is still news — somebody pressed
+    // shuffle for the first time — but only if it is this session's first draw
+    // and not the page catching up on one it was never watching.
+    if (at !== null && (!first || justNow(at))) setOpening(true);
+  }, [draw?.drawnAt]);
+
   // Who is on the pitch right now, by the same rules the bill uses. The draw
   // is a snapshot of this, not a view of it — see `slotsMissingFrom`.
   const slots = arrivedSlots(detail.registrations);
@@ -178,6 +201,10 @@ export function TeamBoards({
 
   return (
     <div className="card">
+      {opening && draw ? (
+        <PackOpening draw={draw} onDone={() => setOpening(false)} />
+      ) : null}
+
       <div className="row between">
         <h2 className="card-title">{m.teams.title}</h2>
         {draw ? <span className="muted">{m.teams.teamSize(draw.teams.flat().length)}</span> : null}
@@ -751,4 +778,18 @@ function GoalStepper({
       </div>
     </div>
   );
+}
+
+/**
+ * Whether a draw is new enough to be worth opening.
+ *
+ * The first draw a page ever sees is ambiguous: it is either somebody pressing
+ * shuffle a second ago, or a board that has been sitting there since before the
+ * app was opened. The timestamp settles it, and generously — a slow phone on a
+ * bad connection can take a few seconds to hear about a draw it should still
+ * celebrate.
+ */
+function justNow(at: string): boolean {
+  const when = Date.parse(at);
+  return Number.isFinite(when) && Date.now() - when < 15_000;
 }

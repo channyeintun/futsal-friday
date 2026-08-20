@@ -360,6 +360,9 @@ export const en = {
 
   teams: {
     title: 'Teams',
+    drawLabel: 'The draw',
+    opening: 'Opening the draw',
+    tapToSkip: 'Tap to skip',
     split: 'Split into teams',
     body: 'Everyone who turned up, dealt out at random. Anyone can shuffle again.',
     bodyBefore: 'Everyone who is in, dealt out at random. Anyone can shuffle again.',
