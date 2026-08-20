@@ -19,6 +19,7 @@ import { platform } from '../platform/index.js';
 import { useApp } from '../state/app.js';
 import { useLocale } from '../state/locale.js';
 import { Avatar } from './Avatar.js';
+import { ItemCard } from './ItemCard.js';
 import { GuestPicker } from './GuestPicker.js';
 import { Icon } from './Icon.js';
 import { PitchTurf } from './PitchTurf.js';
@@ -398,21 +399,35 @@ export function Pitch({
   const firstOpen = spots.findIndex((spot) => spot.kind === 'open');
 
   /*
-   * The number on the card.
+   * The number on the card, which is the order people said yes in.
    *
    * A player item wears a rating. This app has none, and inventing one would be
-   * a figure that means nothing — but it does have the order people said yes
-   * in, which is real, already runs down the side of the roster, and reads as a
-   * squad number: first to sign up wears 1.
+   * a figure that means nothing — but signup order is real, already runs down
+   * the side of the roster, and reads as a squad number: first to sign up
+   * wears 1.
+   *
+   * It comes off `position` rather than off a walk of the drawing. Numbering
+   * the placed spots 1..n as they were laid out claimed to be signup order and
+   * was not: `placeOnPitch` honours a pressed spot before anything else, so the
+   * count was really reading order down the field — which meant everybody's
+   * number changed whenever anyone joined, left, or moved to another circle.
+   * `position` is assigned once by the server and never moves.
+   *
+   * A guest wears none. They have no registration of their own to take a number
+   * from, and lending them their bringer's puts the same figure on three cards
+   * in a row — which reads as a fault rather than as a party.
    */
-  const shirtNumbers = new Map<string, number>();
-  placement.forEach((slot) => {
-    if (slot) shirtNumbers.set(slotKey(slot), shirtNumbers.size + 1);
+  const positions = new Map<string, number>();
+  registrations.forEach((registration) => {
+    positions.set(registration.memberId, registration.position);
   });
-  const shirtOf = (spot: Spot) => (spot.kind === 'taken' ? shirtNumbers.get(spot.key) : undefined);
+  const shirtOf = (spot: Spot) =>
+    spot.kind === 'taken' && spot.slot.guestIndex === 0
+      ? positions.get(spot.slot.memberId)
+      : undefined;
 
   return (
-    <div className="card pitch-card">
+    <div className="card pitch-panel">
       {error ? <ErrorBanner>{error}</ErrorBanner> : null}
 
       <div
@@ -620,6 +635,7 @@ function renderSpot({
   const mine = !open && spot.slot.memberId === viewerId;
   const isGuest = !open && spot.slot.guestIndex > 0;
   const isMe = mine && !isGuest;
+  const armedHere = isMe && armed;
 
   const className = [
     'pitch-spot',
@@ -628,7 +644,7 @@ function renderSpot({
     isMe ? 'is-me' : null,
     isGuest ? 'is-guest' : null,
     mine ? 'is-mine' : null,
-    isMe && armed ? 'is-armed' : null,
+    armedHere ? 'is-armed' : null,
     pending ? 'is-pending' : null,
     !open && recentlyChanged.has(spot.slot.memberId) ? 'flash' : null,
   ]
@@ -647,34 +663,42 @@ function renderSpot({
    * than as dots. A guest takes their bringer's name at a lighter weight, which
    * is the convention the team board already uses for the same reason.
    */
+  /*
+   * The item, at whatever size this pitch is drawing them.
+   *
+   * The same component the podium uses. It used to be a hand-rolled stack of
+   * spans with its own silhouette and its own aspect ratio, which is why a spot
+   * out here and a card on the leaderboard never quite read as the same object.
+   */
   const inside = (
-    <span className="pitch-card">
-      {shirt !== undefined ? <span className="pitch-card-shirt">{shirt}</span> : null}
-      <span className="pitch-card-face">
-        {!open && !isGuest ? (
+    <ItemCard
+      width={spotSize}
+      open={open}
+      metal={armedHere ? 'warm' : isGuest ? 'silver' : 'gold'}
+      rating={shirt}
+      isMe={isMe}
+      name={open || isGuest ? undefined : spot.slot.memberName}
+      portrait={
+        !open && !isGuest ? (
           <Avatar
             memberId={spot.slot.memberId}
             name={spot.slot.memberName}
             avatarUpdatedAt={spot.slot.memberAvatarUpdatedAt}
             size={spotSize}
+            tinted={false}
+            initialsScale={0.3}
           />
         ) : (
-          <span className="pitch-disc">
+          <span className="ic-glyph">
             {open ? (
               <Icon name="add" size={Math.round(spotSize * 0.42)} />
             ) : (
               <Icon name="person" size={Math.round(spotSize * 0.4)} />
             )}
           </span>
-        )}
-      </span>
-      {/* A guest has no name of their own, and repeating the bringer's on three
-          cards in a row reads as a duplicate rather than as a party. The dashed
-          card and the label a screen reader gets already say whose they are. */}
-      <span className="pitch-card-name truncate" aria-hidden="true">
-        {open || isGuest ? '' : spot.slot.memberName}
-      </span>
-    </span>
+        )
+      }
+    />
   );
 
   if (open && (canJoin || canMove)) {

@@ -17,6 +17,7 @@ export function Avatar({
   avatarUpdatedAt,
   size = 40,
   tinted = true,
+  initialsScale = 0.4,
 }: {
   memberId: string;
   name: string;
@@ -32,6 +33,15 @@ export function Avatar({
    * tier instead, which is also what a real player item does with a cut-out.
    */
   tinted?: boolean;
+  /**
+   * Initials as a fraction of the box, when there is no photograph.
+   *
+   * Four tenths is right for a disc, where the letters are the whole object. It
+   * is far too much on a player item, where the box is the full width of the
+   * card and two capitals at that size run past the frame — there the letters
+   * stand in for a face that would have filled the space, not for the card.
+   */
+  initialsScale?: number;
 }) {
   const { data: blob } = useAvatar(memberId, avatarUpdatedAt);
   const [url, setUrl] = useState<string | null>(null);
@@ -51,7 +61,7 @@ export function Avatar({
   const style = {
     width: size,
     height: size,
-    fontSize: Math.round(size * 0.4),
+    fontSize: Math.round(size * initialsScale),
     // Kept even behind a photo: PNGs with transparency are common, and without
     // something underneath they show the card through and the circle looks
     // broken rather than round. Switched off only where what shows through is

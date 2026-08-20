@@ -140,7 +140,19 @@ export const PITCH_MAX_HEIGHT = 470;
  * face above a name. The width is what the line arithmetic solves for; this
  * turns that into the height it costs.
  */
-export const PITCH_CARD_RATIO = 1.34;
+/*
+ * The shape of a player item, measured off a real one rather than chosen.
+ *
+ * 127/100. It was 1.34, which was near enough to look deliberate and far
+ * enough that a spot on the pitch and a card on the podium were visibly not the
+ * same object. Both surfaces draw the same silhouette now, so both take this
+ * number — see `ITEM_CARD_RATIO` in the web package, which is the same figure
+ * on the other side of the seam.
+ *
+ * Shorter cards mean the height budget buys more of them, so every roster's
+ * spots get the same size or larger; nothing shrinks.
+ */
+export const PITCH_CARD_RATIO = 1.27;
 /** Between one line and the next. Shared with the stylesheet. */
 export const PITCH_LINE_GAP = 8;
 const PITCH_PAD = 24;

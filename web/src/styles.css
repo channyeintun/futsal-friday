@@ -1793,146 +1793,6 @@ md-outlined-text-field {
   color: var(--ff-pitch-on);
 }
 
-/* The face fills the card's width and is exactly the avatar's own size, so the
-   picture needs no override to sit right. */
-/*
- * Armed to leave: the card changes metal.
- *
- * This used to be four cyan corner brackets standing off the card — the squad
- * screen's way of marking the item you are on. It went because a selection box
- * on a pitch where nothing is "selected" is a frame around your own face for no
- * reason, and it fought the card it was drawn on.
- *
- * The state still has to be visible, and a state belongs *on* the item rather
- * than in a box around it: an armed card turns warm, keeps its changed label,
- * and the caption under the field says so in words. Colour is never carrying it
- * alone.
- */
-.pitch-spot.is-me.is-armed .pitch-card {
-  background:
-    radial-gradient(66% 46% at 52% 26%, rgb(255 255 255 / 0.5), transparent 72%),
-    linear-gradient(158deg, #ffd2cb 0%, #e07a6a 56%, #c25a48 100%);
-}
-
-/*
- * The card itself, inside the spot.
- *
- * A layer of its own so the silhouette mask has something to cut that is not
- * the whole button: the corner brackets live on the spot and would be sliced
- * off at the point otherwise, losing the two bottom corners that make them read
- * as brackets.
- *
- * The fill has to be *visible*, which is the thing the first attempt got wrong.
- * A portrait filling the card edge to edge hides the item entirely and leaves a
- * square photo with a caption under it. The picture is smaller than the card on
- * purpose; the gold around it is what you are actually looking at.
- */
-.pitch-card {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
-
-.pitch-spot:not(.is-open) .pitch-card {
-  mask: var(--ff-item-shape) center / 100% 100% no-repeat;
-  color: #2a1e05;
-  background:
-    radial-gradient(66% 46% at 52% 26%, rgb(255 255 255 / 0.55), transparent 72%),
-    linear-gradient(158deg, #f4dc96 0%, #c69d38 56%, #a87e21 100%);
-}
-
-/*
- * A guest is a silver item.
- *
- * Same silhouette, quieter metal — which is the distinction the game already
- * makes between a common card and a better one, and it costs no explaining.
- * The dashed ring the guest disc wore elsewhere is dropped here: on a filled
- * card it read as damage rather than as "no account behind this one".
- */
-.pitch-spot.is-guest .pitch-card {
-  background:
-    radial-gradient(66% 46% at 52% 26%, rgb(255 255 255 / 0.5), transparent 72%),
-    linear-gradient(158deg, #eef0f4 0%, #b6bcc8 56%, #949bab 100%);
-}
-
-.pitch-spot.is-guest .pitch-disc {
-  border: 0;
-  background: none;
-  color: #2a1e05;
-  opacity: 0.7;
-}
-
-/*
- * The number, where the rating sits on a real item.
- *
- * Signup order rather than an invented rating — see `shirtOf`. Sized off the
- * card so it holds its proportion when a big roster shrinks everything.
- */
-.pitch-card-shirt {
-  position: absolute;
-  z-index: 1;
-  top: 2%;
-  left: 7%;
-  font-size: calc(var(--ff-spot, 52px) * 0.3);
-  font-weight: 800;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  /* It sits on the portrait now, which may be a photograph of anything. */
-  color: #fff;
-  text-shadow: 0 1px 3px rgb(0 0 0 / 0.75);
-}
-
-/*
- * The portrait is the top of the card, not a badge sitting on it.
- *
- * Square, full width, centred, cropped by the card rather than shrunk to fit —
- * which is what a player item is. It had been a small circle nudged off centre
- * to clear the number, and a circle inside a rectangle is a chip, not a card.
- *
- * The crop is the point: an `Avatar` is square, the space for it is not, and
- * letting the bottom of it run under the name is how a real portrait is framed.
- */
-.pitch-card-face {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 66%;
-  overflow: hidden;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-}
-
-.pitch-card-face .avatar {
-  border-radius: 0;
-}
-
-/*
- * The name, on a rule rather than in a box.
- *
- * An item separates the name from the portrait with a hairline, not a filled
- * bar — and sits it clear of the point the mask cuts, or the descenders end up
- * inside the notch.
- */
-.pitch-card-name {
-  position: absolute;
-  z-index: 1;
-  left: 6%;
-  right: 6%;
-  bottom: 13%;
-  padding-top: 1px;
-  border-top: 1px solid rgb(42 30 5 / 0.34);
-  text-align: center;
-  font-size: clamp(6px, calc(var(--ff-spot, 52px) * 0.17), 10px);
-  font-weight: 700;
-  line-height: 1.1;
-}
-
-.pitch-spot.is-guest .pitch-card-name {
-  font-weight: 400;
-}
-
 button.pitch-spot {
   cursor: pointer;
 }
@@ -1955,30 +1815,6 @@ button.pitch-spot::before {
   transform: translate(-50%, -50%);
 }
 
-.pitch-disc {
-  width: 100%;
-  height: 100%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  color: var(--ff-pitch-on);
-}
-
-/*
- * An empty spot is a card placeholder, not a dashed circle.
- *
- * FC's empty squad screen is a grid of rounded rectangles with the crest
- * ghosted in the middle. Keeping the radius small against the round avatars
- * beside them is what makes "nobody here" read as a slot waiting for somebody
- * rather than as a person with no picture.
- */
-.pitch-spot.is-open .pitch-disc {
-  border: 2px dashed var(--ff-pitch-ring);
-  border-radius: 6px;
-  background: rgb(127 127 127 / 0.12);
-}
-
 .pitch-spot.is-pending {
   opacity: 0.55;
 }
@@ -1991,13 +1827,11 @@ button.pitch-spot::before {
  * rows are buttons. This is what covers the ninety milliseconds in between, and
  * it costs no JavaScript at all.
  */
-.pitch-spot:active .avatar,
-.pitch-spot:active .pitch-disc {
+.pitch-spot:active .ic {
   transform: scale(0.92);
 }
 
-.pitch-spot .avatar,
-.pitch-spot .pitch-disc {
+.pitch-spot .ic {
   transition: transform 90ms cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -2059,19 +1893,18 @@ button.pitch-spot::before {
     animation: none;
   }
 
-  .pitch-spot .avatar,
-  .pitch-spot .pitch-disc {
+  .pitch-spot .ic {
     transition: none;
   }
 
-  .pitch-spot:active .avatar,
-  .pitch-spot:active .pitch-disc {
+  /* With the shrink gone, a press has to land some other way: the frame
+     brightens instead of the card moving. */
+  .pitch-spot:active .ic {
     transform: none;
   }
 
-  .pitch-spot:active .pitch-disc {
-    background: var(--ff-pitch-ring);
-    color: var(--ff-pitch);
+  .pitch-spot:active .ic-rail.is-outer {
+    stroke: var(--ff-pitch-ring);
   }
 }
 
@@ -2093,22 +1926,8 @@ button.pitch-spot::before {
   background: var(--md-sys-color-surface-container-highest);
 }
 
-/* Off the turf, so the ring that lifts a face off green would only add noise. */
-.pitch-bench .avatar {
-  border-color: var(--md-sys-color-outline-variant);
-}
-
 .pitch-spot.is-bench {
   color: var(--md-sys-color-on-surface-variant);
-}
-
-.pitch-spot.is-bench.is-open .pitch-disc {
-  border-color: var(--md-sys-color-outline);
-}
-
-.pitch-spot.is-bench.is-guest .pitch-disc {
-  border-color: var(--md-sys-color-outline-variant);
-  background: none;
 }
 
 /*
@@ -2175,150 +1994,20 @@ button.pitch-spot::before {
 }
 
 /*
- * The item silhouette.
+ * The podium card is now just the press target around an item.
  *
- * Square shoulders and a shallow point, which is the shape without being a
- * tracing of it. `clip-path` rather than border-radius, because the bottom is
- * two straight edges meeting, not a curve.
+ * Everything that used to be drawn here — the silhouette, the tier metal, the
+ * rating block, the face, the name — moved into `ItemCard`, so that a spot on
+ * the pitch and a card on this podium are the same object at two sizes rather
+ * than two shapes that resembled each other.
  */
 .fc-card {
-  position: relative;
-  flex: 0 1 96px;
-  min-width: 0;
-  aspect-ratio: 3 / 4.1;
-  /*
-   * Laid out by position rather than by flow, the same way a spot on the pitch
-   * is.
-   *
-   * It was a column — a rating, then a circular face, then a name — and that is
-   * a chip with a picture on it, not an item. The portrait on a player item is
-   * the top of the card: square, full width, cropped by the card rather than
-   * shrunk to sit inside it, with the figure over it and the name on a rule
-   * beneath. Stacking them in flow cannot express any of that, because the
-   * portrait has to reach edges the padding was holding it away from.
-   */
-  display: block;
+  flex: none;
   padding: 0;
   border: 0;
+  background: none;
   cursor: pointer;
-  color: #2a1e05;
-  mask: var(--ff-item-shape) center / 100% 100% no-repeat;
-  background:
-    radial-gradient(60% 42% at 50% 34%, rgb(255 255 255 / 0.42), transparent 70%),
-    linear-gradient(160deg, var(--ff-tier-hi) 0%, var(--ff-tier-lo) 100%);
-}
-
-/* First is tallest, the way a podium is. */
-.fc-card.is-rank-1 {
-  --ff-tier-hi: #f5d47a;
-  --ff-tier-lo: #b98b21;
-  flex-basis: 108px;
-}
-
-.fc-card.is-rank-2 {
-  --ff-tier-hi: #e6e8ee;
-  --ff-tier-lo: #9aa0ad;
-}
-
-.fc-card.is-rank-3 {
-  --ff-tier-hi: #e3b48c;
-  --ff-tier-lo: #9c6438;
-}
-
-/* Yours is bracketed, the way FC marks the item that is you. */
-.fc-card.is-me::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  --ff-bracket: 2px;
-  --ff-bracket-arm: 10px;
-  background:
-    linear-gradient(var(--ff-cyan) 0 0) 0 0 / var(--ff-bracket-arm) var(--ff-bracket) no-repeat,
-    linear-gradient(var(--ff-cyan) 0 0) 0 0 / var(--ff-bracket) var(--ff-bracket-arm) no-repeat,
-    linear-gradient(var(--ff-cyan) 0 0) 100% 0 / var(--ff-bracket-arm) var(--ff-bracket) no-repeat,
-    linear-gradient(var(--ff-cyan) 0 0) 100% 0 / var(--ff-bracket) var(--ff-bracket-arm) no-repeat;
-}
-
-/*
- * Rating and its board, stacked in the corner, exactly as an item wears them.
- *
- * On the portrait now rather than above it, which is where an item puts it —
- * and which means it is sitting on a photograph of anything, so it carries its
- * own contrast the way the squad number on the pitch does.
- */
-.fc-card-rating {
-  position: absolute;
-  z-index: 1;
-  top: 4%;
-  left: 8%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  line-height: 1;
-  color: #fff;
-  text-shadow: 0 1px 3px rgb(0 0 0 / 0.75);
-}
-
-.fc-card-rating strong {
-  font-size: 1.25rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
-.fc-card-rating small {
-  font-size: 0.55rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  opacity: 0.9;
-}
-
-/* Burmese takes no tracking, and the codes are Myanmar there. */
-:lang(my) .fc-card-rating small {
-  letter-spacing: normal;
-}
-
-/*
- * The portrait is the top of the card.
- *
- * Square and the full width of it, cropped by this box rather than scaled down
- * to fit — the crop is the point, because an `Avatar` is square and the space
- * for a face on an item is not. `TopPlayers` sizes it to the card it is in, so
- * the two ends meet exactly; a card squeezed narrower than that crops further
- * in rather than spilling.
- */
-.fc-card-face {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 62%;
-  overflow: hidden;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-}
-
-.fc-card-face .avatar {
-  border: 0;
-  border-radius: 0;
-  /* Initials sit on the tier rather than on a tint of their own, so they take
-     the card's ink instead of the white that reads on a coloured disc. */
-  color: #2a1e05;
-}
-
-/* The name on a rule, clear of the point the mask cuts. */
-.fc-card-name {
-  position: absolute;
-  z-index: 1;
-  left: 7%;
-  right: 7%;
-  bottom: 14%;
-  padding-top: 3px;
-  border-top: 1px solid rgb(42 30 5 / 0.34);
-  text-align: center;
-  font-size: 0.68rem;
-  font-weight: 700;
-  line-height: 1.15;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.28));
 }
 
 /* ----------------------------------------------------------- team boards */
@@ -3545,4 +3234,215 @@ button.pitch-spot::before {
   outline: 2px solid var(--ff-cyan);
   outline-offset: 3px;
   border-radius: 12px;
+}
+
+/* ------------------------------------------------------------ item cards */
+
+/*
+ * The player item, shared by the pitch and the podium.
+ *
+ * `--ic-w` is the only input; every size below is a fraction of it, which is
+ * what lets one set of rules serve a 28px spot on a crowded pitch and a 108px
+ * card on a podium. The proportions come off a trace of a real item rather than
+ * off a guess — see `ItemCard.tsx`.
+ */
+.ic {
+  position: relative;
+  display: block;
+  width: var(--ic-w);
+  height: calc(var(--ic-w) * 1.27);
+  /*
+   * One clip does all the work.
+   *
+   * It cuts the portrait to the silhouette, and it cuts the outer half off
+   * every frame stroke — which is what makes a stroke of width S paint exactly
+   * S/2 inward with a hard outer edge, instead of straddling the outline and
+   * spilling past it.
+   */
+  clip-path: url(#ff-ic-clip);
+  background: var(--ff-ic-ink, #0d1b3e);
+  color: #fff;
+}
+
+.ic-portrait {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* The portrait is square and the card is not, so it is cropped rather than
+   squashed — the crop is what makes it a portrait and not a thumbnail. */
+.ic-portrait .avatar {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: #fff;
+}
+
+/*
+ * The ink under the name.
+ *
+ * A real item darkens sharply through the lower third so white type holds over
+ * whatever the photograph happens to be doing there. Measured falloff: it
+ * starts at 62% of the card's height and is essentially opaque by 80%.
+ */
+.ic-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgb(4 10 32 / 0) 52%,
+    rgb(4 10 32 / 0.45) 74%,
+    rgb(4 10 32 / 0.7) 100%
+  );
+}
+
+.ic-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.ic-rail {
+  fill: none;
+  stroke-linejoin: round;
+}
+
+/*
+ * The rails, widest first, each painting inward over the last.
+ *
+ * Widths are in the path's own units, so they scale with the card. Half of each
+ * is clipped away, which is why they read as 4.2 / 2.45 / 1.75 units of band.
+ * `stroke-linejoin: round` is not decoration: a miter spikes inward at the cusp
+ * floors and at the bottom point, and at 52px that spike is the whole cusp.
+ */
+.ic-rail.is-edge {
+  stroke: rgb(2 6 20 / 0.55);
+  stroke-width: 11;
+}
+
+.ic-rail.is-outer {
+  stroke: var(--ic-metal);
+  stroke-width: 8.4;
+}
+
+.ic-rail.is-gap {
+  stroke: #0b1e3d;
+  stroke-width: 4.9;
+}
+
+.ic-rail.is-inner {
+  stroke: var(--ic-metal);
+  stroke-width: 3.5;
+}
+
+/* A pitch card is a third the width of a podium one; three rails inside it
+   would be under a third of a pixel each. One honest band instead. */
+.ic.is-pitch .ic-rail.is-outer {
+  stroke-width: 7;
+}
+
+.ic-rail.is-mine {
+  stroke: var(--ff-cyan);
+  stroke-width: 2.2;
+}
+
+/*
+ * The rating, and the code that says what it counts.
+ *
+ * Bigger than the real item gives it, deliberately. On a card this small it is
+ * the only number there is, and the board exists to show it — shrinking to
+ * EA's own proportion would be a legibility regression on the one thing being
+ * ranked.
+ */
+.ic-rating {
+  position: absolute;
+  z-index: 1;
+  top: 9%;
+  left: 9.5%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+}
+
+.ic-rating strong {
+  font-size: calc(var(--ic-w) * 0.3);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.ic.is-podium .ic-rating strong,
+.ic.is-full .ic-rating strong {
+  font-size: calc(var(--ic-w) * 0.185);
+}
+
+.ic-rating small {
+  margin-top: 0.15em;
+  font-size: max(0.55rem, calc(var(--ic-w) * 0.072));
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: 0.92;
+}
+
+/* Burmese takes no tracking, and the board codes are Myanmar there. */
+:lang(my) .ic-rating small {
+  letter-spacing: normal;
+}
+
+.ic-name {
+  position: absolute;
+  z-index: 1;
+  left: 9%;
+  right: 9%;
+  bottom: 7%;
+  text-align: center;
+  font-weight: 700;
+  line-height: 1.15;
+  font-size: clamp(7px, calc(var(--ic-w) * 0.17), 10px);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.55);
+}
+
+.ic.is-podium .ic-name,
+.ic.is-full .ic-name {
+  bottom: 9%;
+  font-size: max(0.62rem, calc(var(--ic-w) * 0.088));
+}
+
+/*
+ * A spot with nobody on it.
+ *
+ * The same outline, dashed and hollow — so an empty place on the pitch reads as
+ * somewhere one of these goes, rather than as a rounded rectangle that happens
+ * to be near some cards. The dash is on the path itself, so it follows the
+ * cusps and the point instead of boxing them.
+ */
+.ic.is-open {
+  background: rgb(127 127 127 / 0.12);
+}
+
+.ic.is-open .ic-rail.is-outer {
+  stroke: var(--ff-pitch-ring);
+  stroke-width: 5;
+  stroke-dasharray: 7 5;
+}
+
+.ic.is-open .ic-portrait {
+  color: var(--ff-pitch-on);
+  opacity: 0.85;
+}
+
+/* The + on an empty spot and the person on a guest's, centred in the card. */
+.ic-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
 }

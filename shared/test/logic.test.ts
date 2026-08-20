@@ -666,8 +666,12 @@ check('the pitch never grows past its box',
 // control. Worth pinning so a change to the sizing has to face the question.
 check('a spot never gets too small to see',
   everyCount.filter((n) => pitchLines(n).length > 0 && pitchSlotSize(pitchLines(n)) < 24), []);
-check('a roster this big does shrink the cards', pitchSlotSize(pitchLines(38)), 27);
-check('and a normal Friday does not', pitchSlotSize(pitchLines(12)), 50);
+// Both figures moved up by two when `PITCH_CARD_RATIO` went from 1.34 to the
+// measured 127/100: a shorter card buys more of them out of the same height
+// budget, so every roster's spots stay the same or grow. What is being pinned
+// is that a big roster still shrinks and an ordinary Friday still does not.
+check('a roster this big does shrink the cards', pitchSlotSize(pitchLines(38)), 29);
+check('and a normal Friday does not', pitchSlotSize(pitchLines(12)), 52);
 
 
 // --- the pitch: standing where you pressed ---------------------------------

@@ -1,5 +1,6 @@
 import type { LeaderboardRow } from '../api/members.js';
 import { Avatar } from './Avatar.js';
+import { ItemCard } from './ItemCard.js';
 import { navigate } from '../router.js';
 import { useMessages } from '../state/locale.js';
 
@@ -44,34 +45,41 @@ export function TopPlayers({
         DOM keeps rank order for a screen reader; only the visual order moves.
       */}
       <div className="top-players-row">
-        {top.map((row) => (
-          <button
-            key={row.member.id}
-            type="button"
-            className={`fc-card is-rank-${row.rank}${row.member.id === viewerId ? ' is-me' : ''}`}
-            style={{ order: row.rank === 1 ? 2 : row.rank === 2 ? 1 : 3 }}
-            onClick={() => navigate({ name: 'profile', id: row.member.id })}
-          >
-            <span className="fc-card-rating">
-              <strong>{valueOf(row, board)}</strong>
-              <small>{code}</small>
-            </span>
-            <span className="fc-card-face">
-              {/* Sized to the card it is standing in, so the portrait meets both
-                  edges exactly rather than sitting inside them as a disc. The
-                  two figures are the flex bases in `.fc-card`; first is wider
-                  because a podium's middle step is. */}
-              <Avatar
-                memberId={row.member.id}
+        {top.map((row) => {
+          const value = valueOf(row, board);
+          const width = row.rank === 1 ? 108 : 96;
+          return (
+            <button
+              key={row.member.id}
+              type="button"
+              className="fc-card"
+              style={{ order: row.rank === 1 ? 2 : row.rank === 2 ? 1 : 3 }}
+              onClick={() => navigate({ name: 'profile', id: row.member.id })}
+            >
+              <ItemCard
+                width={width}
+                metal={row.rank === 1 ? 'gold' : row.rank === 2 ? 'silver' : 'bronze'}
+                /* A rank-2 card can legitimately be on nothing — the podium
+                   only bails when the *winner* is on zero — and a big 0 reads
+                   as a broken card rather than as a true one. */
+                rating={value === 0 ? '—' : value}
+                code={code}
                 name={row.member.name}
-                avatarUpdatedAt={row.member.avatarUpdatedAt}
-                size={row.rank === 1 ? 108 : 96}
-                tinted={false}
+                isMe={row.member.id === viewerId}
+                portrait={
+                  <Avatar
+                    memberId={row.member.id}
+                    name={row.member.name}
+                    avatarUpdatedAt={row.member.avatarUpdatedAt}
+                    size={width}
+                    tinted={false}
+                    initialsScale={0.26}
+                  />
+                }
               />
-            </span>
-            <span className="fc-card-name truncate">{row.member.name}</span>
-          </button>
-        ))}
+            </button>
+          );
+        })}
       </div>
     </section>
   );

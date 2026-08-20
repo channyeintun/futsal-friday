@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
+import { ItemCardDefs } from './components/ItemCard.js';
 import { platform } from './platform/index.js';
 import './styles.css';
 
@@ -9,6 +10,10 @@ if (!container) throw new Error('Missing #root');
 
 createRoot(container).render(
   <StrictMode>
+    {/* Beside `App` rather than inside it: `App` returns early for a signed-out
+        visitor and for one waiting on approval, and a card's outline cannot be
+        conditional on which screen is up. */}
+    <ItemCardDefs />
     <App />
   </StrictMode>,
 );
