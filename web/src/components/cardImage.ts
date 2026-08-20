@@ -64,11 +64,28 @@ const BEAMS: readonly (readonly [number, number])[] = [
 /**
  * How many device pixels per card unit.
  *
- * Five over the scene gives 700x910: big enough to look sharp when a chat app
+ * Six over the scene gives 840x1092: big enough to look sharp when a chat app
  * blows it up, small enough that the PNG stays a few hundred kilobytes on a
  * phone uploading over whatever network there is at a futsal pitch.
  */
-const SCALE = 5;
+const SCALE = 6;
+
+/*
+ * Drawn this many times over and averaged down.
+ *
+ * The frame is a stroke clipped to its own outline, and a clip is rasterised
+ * into a bitmap as a one-bit mask — a pixel is in or it is out, with nothing in
+ * between. Every curve on the silhouette therefore came out as a visible
+ * staircase however large the image was: more pixels only made smaller steps,
+ * never softer ones.
+ *
+ * Rendering at twice the final size and letting the browser filter it down
+ * gives each edge pixel four samples to average, which is what turns the
+ * staircase back into an edge. Two rather than three because the intermediate
+ * bitmap is the constraint: at 2x this is 1680x2184, a shade under four
+ * megapixels, and older iPhones refuse a canvas much past five.
+ */
+const SUPERSAMPLE = 2;
 
 export interface CardImage {
   name: string;
@@ -92,20 +109,28 @@ export async function cardToPng(card: CardImage): Promise<Blob | null> {
   try {
     const href = card.portrait ? await dataUrl(card.portrait) : null;
     const svg = cardSvg(card, href);
+    const width = SCENE_W * SCALE;
+    const height = SCENE_H * SCALE;
+
     const image = new Image();
-    image.width = SCENE_W * SCALE;
-    image.height = SCENE_H * SCALE;
+    image.width = width * SUPERSAMPLE;
+    image.height = height * SUPERSAMPLE;
     // `charset` matters: a Burmese name is multi-byte and the default for a
     // data URL is US-ASCII, which turns it into mojibake.
     image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     await image.decode();
 
     const canvas = document.createElement('canvas');
-    canvas.width = SCENE_W * SCALE;
-    canvas.height = SCENE_H * SCALE;
+    canvas.width = width;
+    canvas.height = height;
     const context = canvas.getContext('2d');
     if (!context) return null;
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    // The averaging step. Without asking for it explicitly some browsers pick
+    // a nearest-neighbour path for large reductions, which would throw away
+    // exactly the samples this was rendered oversized to collect.
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(image, 0, 0, width, height);
     return await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
   } catch {
     return null;
@@ -205,7 +230,7 @@ function cardSvg(card: CardImage, portrait: string | null): string {
     .map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="url(#bok)"/>`)
     .join('');
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${SCENE_W * SCALE}" height="${SCENE_H * SCALE}" viewBox="0 0 ${SCENE_W} ${SCENE_H}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${SCENE_W * SCALE * SUPERSAMPLE}" height="${SCENE_H * SCALE * SUPERSAMPLE}" viewBox="0 0 ${SCENE_W} ${SCENE_H}">
   <defs>
     <path id="o" d="${OUTLINE}"/>
     <clipPath id="c"><use href="#o"/></clipPath>
