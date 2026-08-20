@@ -118,6 +118,31 @@ const NEAR_NET = 0.1268;
 const CENTRE_CIRCLE = 0.4643;
 
 /*
+ * Flat uses the near figure at both ends, and the reason is the paragraph
+ * above.
+ *
+ * These are fractions of the half-width at the end they sit on, and in
+ * perspective those half-widths differ — so `0.561` of the narrow far end and
+ * `0.4085` of the wide near one come out at 58.3 and 59.6, near enough the same
+ * six metres. Take the taper away and both ends measure against the near width,
+ * where the same two fractions come out at 81.9 and 59.6: the D at the top of a
+ * flat pitch was drawn a third wider than the one at the bottom, and the goal
+ * and its net with it.
+ *
+ * The near figure is the one to keep. It is already measured against the width
+ * both ends now have, so the bottom of the field does not move and only the top
+ * is corrected — and a pitch seen from above has one D, drawn twice.
+ */
+const ends = (flat: boolean) => ({
+  farD: flat ? NEAR_D : FAR_D,
+  nearD: NEAR_D,
+  farGoal: flat ? NEAR_GOAL : FAR_GOAL,
+  nearGoal: NEAR_GOAL,
+  farNet: flat ? NEAR_NET : FAR_NET,
+  nearNet: NEAR_NET,
+});
+
+/*
  * The round markings, one set of numbers per mode.
  *
  * Perspective keeps the hand-drawn figures verbatim — 26, 30, 34, and two
@@ -202,8 +227,9 @@ export function PitchTurf({ flat = false }: { flat?: boolean }) {
   // came back out of the arithmetic as 67.78999999999999 and went into the
   // attribute that way.
   const centreRx = round(at(CENTRE_CIRCLE, 0.5) - MID_X);
-  const farDRx = round(at(FAR_D, 0) - MID_X);
-  const nearDRx = round(at(NEAR_D, 1) - MID_X);
+  const mark = ends(flat);
+  const farDRx = round(at(mark.farD, 0) - MID_X);
+  const nearDRx = round(at(mark.nearD, 1) - MID_X);
   const marks = flat
     ? {
         centreRy: round(centreRx * squash),
@@ -284,12 +310,12 @@ export function PitchTurf({ flat = false }: { flat?: boolean }) {
           This single shape is what stops the drawing reading as soccer. */}
       <path
         className="pitch-line"
-        d={`M${at(-FAR_D, 0)} ${FAR_Y} A${farDRx} ${marks.farDRy} 0 0 0 ${at(FAR_D, 0)} ${FAR_Y}`}
+        d={`M${at(-mark.farD, 0)} ${FAR_Y} A${farDRx} ${marks.farDRy} 0 0 0 ${at(mark.farD, 0)} ${FAR_Y}`}
         vectorEffect="non-scaling-stroke"
       />
       <path
         className="pitch-line"
-        d={`M${at(-NEAR_D, 1)} ${NEAR_Y} A${nearDRx} ${marks.nearDRy} 0 0 1 ${at(NEAR_D, 1)} ${NEAR_Y}`}
+        d={`M${at(-mark.nearD, 1)} ${NEAR_Y} A${nearDRx} ${marks.nearDRy} 0 0 1 ${at(mark.nearD, 1)} ${NEAR_Y}`}
         vectorEffect="non-scaling-stroke"
       />
       <circle className="pitch-mark" cx={MID_X} cy={marks.farSpot} r="2" />
@@ -298,17 +324,17 @@ export function PitchTurf({ flat = false }: { flat?: boolean }) {
       {/* Goals, on the goal lines, narrowing with the field. */}
       <path
         className="pitch-goal"
-        d={`M${at(-FAR_GOAL, 0)} ${FAR_Y} H${at(FAR_GOAL, 0)}`}
+        d={`M${at(-mark.farGoal, 0)} ${FAR_Y} H${at(mark.farGoal, 0)}`}
         vectorEffect="non-scaling-stroke"
       />
       <path
         className="pitch-goal"
-        d={`M${at(-NEAR_GOAL, 1)} ${NEAR_Y} H${at(NEAR_GOAL, 1)}`}
+        d={`M${at(-mark.nearGoal, 1)} ${NEAR_Y} H${at(mark.nearGoal, 1)}`}
         vectorEffect="non-scaling-stroke"
       />
       <path
         className="pitch-net"
-        d={`${net(FAR_NET, 0, FAR_Y, 2, flat)} ${net(NEAR_NET, 1, NEAR_Y, 399, flat)}`}
+        d={`${net(mark.farNet, 0, FAR_Y, 2, flat)} ${net(mark.nearNet, 1, NEAR_Y, 399, flat)}`}
       />
     </svg>
   );
