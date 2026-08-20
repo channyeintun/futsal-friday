@@ -57,11 +57,16 @@ export function TopPlayers({
               <small>{code}</small>
             </span>
             <span className="fc-card-face">
+              {/* Sized to the card it is standing in, so the portrait meets both
+                  edges exactly rather than sitting inside them as a disc. The
+                  two figures are the flex bases in `.fc-card`; first is wider
+                  because a podium's middle step is. */}
               <Avatar
                 memberId={row.member.id}
                 name={row.member.name}
                 avatarUpdatedAt={row.member.avatarUpdatedAt}
-                size={44}
+                size={row.rank === 1 ? 108 : 96}
+                tinted={false}
               />
             </span>
             <span className="fc-card-name truncate">{row.member.name}</span>

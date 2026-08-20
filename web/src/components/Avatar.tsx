@@ -16,11 +16,22 @@ export function Avatar({
   name,
   avatarUpdatedAt,
   size = 40,
+  tinted = true,
 }: {
   memberId: string;
   name: string;
   avatarUpdatedAt: string | null;
   size?: number;
+  /**
+   * Whether to paint the member's own colour behind the face.
+   *
+   * On by default, and wanted almost everywhere. The exception is a surface
+   * that already carries a meaning in its own colour — a gold, silver or bronze
+   * item on the podium — where a full-bleed tint over the top of it says
+   * "somebody" at the cost of saying "first". There the initials sit on the
+   * tier instead, which is also what a real player item does with a cut-out.
+   */
+  tinted?: boolean;
 }) {
   const { data: blob } = useAvatar(memberId, avatarUpdatedAt);
   const [url, setUrl] = useState<string | null>(null);
@@ -43,8 +54,9 @@ export function Avatar({
     fontSize: Math.round(size * 0.4),
     // Kept even behind a photo: PNGs with transparency are common, and without
     // something underneath they show the card through and the circle looks
-    // broken rather than round.
-    background: tintFor(memberId),
+    // broken rather than round. Switched off only where what shows through is
+    // the point — see `tinted`.
+    background: tinted ? tintFor(memberId) : undefined,
   };
 
   return (

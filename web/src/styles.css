@@ -2186,10 +2186,19 @@ button.pitch-spot::before {
   flex: 0 1 96px;
   min-width: 0;
   aspect-ratio: 3 / 4.1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 8px 6px 0;
+  /*
+   * Laid out by position rather than by flow, the same way a spot on the pitch
+   * is.
+   *
+   * It was a column — a rating, then a circular face, then a name — and that is
+   * a chip with a picture on it, not an item. The portrait on a player item is
+   * the top of the card: square, full width, cropped by the card rather than
+   * shrunk to sit inside it, with the figure over it and the name on a rule
+   * beneath. Stacking them in flow cannot express any of that, because the
+   * portrait has to reach edges the padding was holding it away from.
+   */
+  display: block;
+  padding: 0;
   border: 0;
   cursor: pointer;
   color: #2a1e05;
@@ -2230,17 +2239,28 @@ button.pitch-spot::before {
     linear-gradient(var(--ff-cyan) 0 0) 100% 0 / var(--ff-bracket) var(--ff-bracket-arm) no-repeat;
 }
 
-/* Rating and its board, stacked in the corner, exactly as an item wears them. */
+/*
+ * Rating and its board, stacked in the corner, exactly as an item wears them.
+ *
+ * On the portrait now rather than above it, which is where an item puts it —
+ * and which means it is sitting on a photograph of anything, so it carries its
+ * own contrast the way the squad number on the pitch does.
+ */
 .fc-card-rating {
-  align-self: flex-start;
+  position: absolute;
+  z-index: 1;
+  top: 4%;
+  left: 8%;
   display: flex;
   flex-direction: column;
   align-items: center;
   line-height: 1;
+  color: #fff;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.75);
 }
 
 .fc-card-rating strong {
-  font-size: 1.3rem;
+  font-size: 1.25rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -2249,7 +2269,7 @@ button.pitch-spot::before {
   font-size: 0.55rem;
   font-weight: 700;
   letter-spacing: 0.04em;
-  opacity: 0.8;
+  opacity: 0.9;
 }
 
 /* Burmese takes no tracking, and the codes are Myanmar there. */
@@ -2257,22 +2277,48 @@ button.pitch-spot::before {
   letter-spacing: normal;
 }
 
+/*
+ * The portrait is the top of the card.
+ *
+ * Square and the full width of it, cropped by this box rather than scaled down
+ * to fit — the crop is the point, because an `Avatar` is square and the space
+ * for a face on an item is not. `TopPlayers` sizes it to the card it is in, so
+ * the two ends meet exactly; a card squeezed narrower than that crops further
+ * in rather than spilling.
+ */
 .fc-card-face {
-  margin-top: -6px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 62%;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
 }
 
 .fc-card-face .avatar {
-  border: 2px solid rgb(255 255 255 / 0.5);
+  border: 0;
+  border-radius: 0;
+  /* Initials sit on the tier rather than on a tint of their own, so they take
+     the card's ink instead of the white that reads on a coloured disc. */
+  color: #2a1e05;
 }
 
+/* The name on a rule, clear of the point the mask cuts. */
 .fc-card-name {
-  width: 100%;
-  margin-top: 4px;
+  position: absolute;
+  z-index: 1;
+  left: 7%;
+  right: 7%;
+  bottom: 14%;
   padding-top: 3px;
-  border-top: 1px solid rgb(42 30 5 / 0.28);
+  border-top: 1px solid rgb(42 30 5 / 0.34);
   text-align: center;
   font-size: 0.68rem;
   font-weight: 700;
+  line-height: 1.15;
 }
 
 /* ----------------------------------------------------------- team boards */
