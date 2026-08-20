@@ -131,14 +131,24 @@ export const memberProfile = (memberId: string, signal?: AbortSignal) =>
 /**
  * Profile pictures.
  *
- * A face at 40px in a list needs far less than a payment screenshot does, so
- * this compresses harder — square-ish, short edge, low target — and the Worker
- * caps it again at 200 KB.
+ * Still compressed harder than a payment screenshot, but no longer nearly as
+ * hard as it was. 256px was sized when the largest a face ever got was a 40px
+ * circle in a list; a picture is now the top of a player item, and the two
+ * places that draw it biggest are the card on a profile — 200 CSS pixels, so
+ * 600 on a three-times screen — and the shareable PNG, which rasterises the
+ * portrait at 500. Against either of those a 256px original is a two-times
+ * upscale, which is exactly what "the photos look blurry" was.
+ *
+ * 512 covers both with a little to spare. It costs about three times the bytes
+ * per face, which is a real cost on a pitch screen holding a dozen of them —
+ * but only once each: the cache key carries `avatarUpdatedAt`, so a picture at
+ * a given version is immutable and is fetched exactly once per device. The
+ * Worker caps it again at 200 KB regardless.
  */
 export async function uploadMyAvatar(file: Blob): Promise<Member> {
   const compressed = await platform.compressImage(file, {
-    maxDimension: 256,
-    targetBytes: 30_000,
+    maxDimension: 512,
+    targetBytes: 90_000,
   });
   const result = await request<{ member: Member }>('PUT', '/members/me/avatar', {
     raw: compressed.blob,

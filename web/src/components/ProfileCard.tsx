@@ -60,6 +60,7 @@ export function ProfileCard({ profile }: { profile: MemberProfile }) {
         metal: 'steel',
         stats,
         portrait: portrait ?? null,
+        footer: m.app.name,
       });
       if (!png) {
         toast(m.profile.couldNotShare);

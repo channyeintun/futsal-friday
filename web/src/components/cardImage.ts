@@ -35,17 +35,45 @@ import { METAL_RAMPS, OUTLINE, RAMP_STOPS, type ItemMetal } from './ItemCard.js'
 const W = 100;
 const H = 127;
 
+/*
+ * The scene the card is standing in, and where it stands.
+ *
+ * A card alone on transparency arrives in a chat thread sitting on whatever
+ * that app's background happens to be — usually white, which is the one colour
+ * this card was never designed against, and it reads as a sticker somebody
+ * cut out. Giving it its own night gives the share a picture rather than an
+ * asset, and it costs nothing: every part of it is a gradient, so there is
+ * still no file to fetch.
+ */
+const SCENE_W = 140;
+const SCENE_H = 182;
+const CARD_X = 20;
+const CARD_Y = 24;
+
+/** Above the top edge, so the beams' vertex is out of shot. */
+const BEAM_Y = -46;
+
+/** Angle from vertical, and half-width where the beam leaves the frame. */
+const BEAMS: readonly (readonly [number, number])[] = [
+  [-42, 18],
+  [-16, 11],
+  [15, 22],
+  [39, 9],
+];
+
 /**
  * How many device pixels per card unit.
  *
- * Six gives a 600x762 image: big enough to look sharp when a chat app blows it
- * up, small enough that the PNG stays a couple of hundred kilobytes on a phone
- * that has to upload it over the network it has at a futsal pitch.
+ * Five over the scene gives 700x910: big enough to look sharp when a chat app
+ * blows it up, small enough that the PNG stays a few hundred kilobytes on a
+ * phone uploading over whatever network there is at a futsal pitch.
  */
-const SCALE = 6;
+const SCALE = 5;
 
 export interface CardImage {
   name: string;
+  /** The app's own name, along the foot. Passed in so it stays translatable. */
+  footer: string;
   rating: number | string;
   code: string;
   metal: ItemMetal;
@@ -65,16 +93,16 @@ export async function cardToPng(card: CardImage): Promise<Blob | null> {
     const href = card.portrait ? await dataUrl(card.portrait) : null;
     const svg = cardSvg(card, href);
     const image = new Image();
-    image.width = W * SCALE;
-    image.height = H * SCALE;
+    image.width = SCENE_W * SCALE;
+    image.height = SCENE_H * SCALE;
     // `charset` matters: a Burmese name is multi-byte and the default for a
     // data URL is US-ASCII, which turns it into mojibake.
     image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     await image.decode();
 
     const canvas = document.createElement('canvas');
-    canvas.width = W * SCALE;
-    canvas.height = H * SCALE;
+    canvas.width = SCENE_W * SCALE;
+    canvas.height = SCENE_H * SCALE;
     const context = canvas.getContext('2d');
     if (!context) return null;
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
@@ -148,7 +176,36 @@ function cardSvg(card: CardImage, portrait: string | null): string {
     )
     .join('');
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W * SCALE}" height="${H * SCALE}" viewBox="0 0 ${W} ${H}">
+  /*
+   * Light coming from behind the card, the way a pack lands.
+   *
+   * Four beams of uneven angle and width, because an even fan reads as a clock
+   * face. They converge well above the top edge rather than on it: a vertex
+   * inside the picture is a starburst, and what this wants is shafts that were
+   * already going when the frame caught them. Drawn under the card, so it is
+   * lit from behind rather than washed over.
+   */
+  const beams = BEAMS
+    .map(
+      ([angle, spread]) =>
+        `<polygon points="${SCENE_W / 2},${BEAM_Y} ${SCENE_W / 2 - spread},${SCENE_H} ${SCENE_W / 2 + spread},${SCENE_H}"
+           fill="url(#beam)" transform="rotate(${angle} ${SCENE_W / 2} ${BEAM_Y})"/>`,
+    )
+    .join('');
+
+  /* Out-of-focus floodlights. Radial stops rather than a blur filter, which is
+     slow to rasterise and unevenly supported inside an `<img>`. */
+  const bokeh = [
+    [26, 40, 13],
+    [116, 30, 9],
+    [22, 132, 11],
+    [122, 118, 15],
+    [70, 168, 10],
+  ]
+    .map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="url(#bok)"/>`)
+    .join('');
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${SCENE_W * SCALE}" height="${SCENE_H * SCALE}" viewBox="0 0 ${SCENE_W} ${SCENE_H}">
   <defs>
     <path id="o" d="${OUTLINE}"/>
     <clipPath id="c"><use href="#o"/></clipPath>
@@ -163,22 +220,60 @@ function cardSvg(card: CardImage, portrait: string | null): string {
       <stop offset="0.74" stop-color="#040a20" stop-opacity="0.45"/>
       <stop offset="1" stop-color="#040a20" stop-opacity="0.7"/>
     </linearGradient>
+    <radialGradient id="night" cx="50%" cy="26%" r="86%">
+      <stop offset="0" stop-color="#1b4470"/>
+      <stop offset="0.45" stop-color="#0d2244"/>
+      <stop offset="1" stop-color="#04070f"/>
+    </radialGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#bfe4ff" stop-opacity="0.30"/>
+      <stop offset="0.55" stop-color="#8ec8ff" stop-opacity="0.07"/>
+      <stop offset="1" stop-color="#8ec8ff" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="bok">
+      <stop offset="0" stop-color="#9fd4ff" stop-opacity="0.30"/>
+      <stop offset="0.6" stop-color="#9fd4ff" stop-opacity="0.09"/>
+      <stop offset="1" stop-color="#9fd4ff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="halo">
+      <stop offset="0" stop-color="${ramp[1]}" stop-opacity="0.55"/>
+      <stop offset="0.55" stop-color="${ramp[4]}" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="${ramp[4]}" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="vig" cx="50%" cy="45%" r="72%">
+      <stop offset="0.55" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.55"/>
+    </radialGradient>
   </defs>
-  <g clip-path="url(#c)">
-    <rect width="${W}" height="${H}" fill="url(#ink)"/>
-    ${face}
-    <rect width="${W}" height="${H}" fill="url(#scrim)"/>
-    <use href="#o" fill="none" stroke="rgba(2,6,20,0.55)" stroke-width="11" stroke-linejoin="round"/>
-    <use href="#o" fill="none" stroke="url(#m)" stroke-width="8.4" stroke-linejoin="round"/>
-    <use href="#o" fill="none" stroke="#0b1e3d" stroke-width="4.9" stroke-linejoin="round"/>
-    <use href="#o" fill="none" stroke="url(#m)" stroke-width="3.5" stroke-linejoin="round"/>
+
+  <rect width="${SCENE_W}" height="${SCENE_H}" fill="url(#night)"/>
+  ${beams}
+  ${bokeh}
+  {/* The card's own metal, thrown onto the air behind it. */}
+  <ellipse cx="${SCENE_W / 2}" cy="${CARD_Y + H * 0.45}" rx="${W * 0.82}" ry="${H * 0.6}" fill="url(#halo)"/>
+  <rect width="${SCENE_W}" height="${SCENE_H}" fill="url(#vig)"/>
+
+  <g transform="translate(${CARD_X} ${CARD_Y})">
+    <g clip-path="url(#c)">
+      <rect width="${W}" height="${H}" fill="url(#ink)"/>
+      ${face}
+      <rect width="${W}" height="${H}" fill="url(#scrim)"/>
+      <use href="#o" fill="none" stroke="rgba(2,6,20,0.55)" stroke-width="11" stroke-linejoin="round"/>
+      <use href="#o" fill="none" stroke="url(#m)" stroke-width="8.4" stroke-linejoin="round"/>
+      <use href="#o" fill="none" stroke="#0b1e3d" stroke-width="4.9" stroke-linejoin="round"/>
+      <use href="#o" fill="none" stroke="url(#m)" stroke-width="3.5" stroke-linejoin="round"/>
+    </g>
+    <text x="9.5" y="24" fill="#fff" font-family="${FONT}" font-size="18.5" font-weight="800"
+      >${escapeXml(String(card.rating))}</text>
+    <text x="${codeCentre(card.rating)}" y="31.5" text-anchor="middle" fill="#fff"
+      font-family="${FONT}" font-size="7" font-weight="700">${escapeXml(card.code)}</text>
+    <text x="${W / 2}" y="95" text-anchor="middle" fill="#fff" font-family="${FONT}"
+      font-size="8.8" font-weight="700">${escapeXml(card.name)}</text>
+    ${stats}
   </g>
-  <text x="9.5" y="24" fill="#fff" font-family="${FONT}" font-size="18.5" font-weight="800"
-    >${escapeXml(String(card.rating))}</text>
-  <text x="${codeCentre(card.rating)}" y="31.5" text-anchor="middle" fill="#fff"
-    font-family="${FONT}" font-size="7" font-weight="700">${escapeXml(card.code)}</text>
-  <text x="${W / 2}" y="95" text-anchor="middle" fill="#fff" font-family="${FONT}"
-    font-size="8.8" font-weight="700">${escapeXml(card.name)}</text>
-  ${stats}
+
+  <text x="${SCENE_W / 2}" y="${SCENE_H - 8}" text-anchor="middle" fill="#fff" fill-opacity="0.5"
+    font-family="${FONT}" font-size="5.6" font-weight="700"
+    letter-spacing="0.9">${escapeXml(card.footer)}</text>
 </svg>`;
 }
