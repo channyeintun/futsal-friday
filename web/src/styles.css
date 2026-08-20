@@ -3446,3 +3446,58 @@ button.pitch-spot::before {
   width: 100%;
   height: 100%;
 }
+
+/*
+ * The six figures, on the full card only.
+ *
+ * A label above its value in each column, which is the way round an item does
+ * it — you read what is being counted before you read the count. Six across is
+ * only legible from about 180px, which is why `tierFor` gates it there and the
+ * podium gets none.
+ */
+.ic-stats {
+  position: absolute;
+  z-index: 1;
+  left: 6%;
+  right: 6%;
+  bottom: 14%;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  text-align: center;
+  line-height: 1.05;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.55);
+}
+
+.ic-stat small {
+  display: block;
+  font-size: calc(var(--ic-w) * 0.038);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  opacity: 0.85;
+}
+
+.ic-stat strong {
+  display: block;
+  font-size: calc(var(--ic-w) * 0.052);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Burmese board codes are words rather than three letters, so they get no
+   tracking and need the room the Latin ones do not. */
+:lang(my) .ic-stat small {
+  letter-spacing: normal;
+  font-size: calc(var(--ic-w) * 0.032);
+}
+
+/* The name climbs above the stats when there are stats to climb above. */
+.ic.is-full .ic-name {
+  bottom: 25%;
+}
+
+/* The card gets the width it needs and the room to be looked at. */
+.item-hero {
+  display: flex;
+  justify-content: center;
+  padding: 2px 0 10px;
+}

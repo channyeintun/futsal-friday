@@ -110,6 +110,7 @@ export function ItemCard({
   portrait,
   isMe,
   open,
+  stats,
   tier: forced,
 }: {
   /** The card's width in px. Everything else is derived from it. */
@@ -130,6 +131,14 @@ export function ItemCard({
    * rectangle never was.
    */
   open?: boolean;
+  /**
+   * The six figures across the foot of the card, on the `full` tier only.
+   *
+   * Six because that is what an item wears, and because this app happens to
+   * have exactly six numbers about a person that are true without being
+   * derived from a formula. There is no seventh worth inventing.
+   */
+  stats?: readonly { label: string; value: number | string }[];
   /** Override the size ladder. Only for a caller that knows better. */
   tier?: ItemTier;
 }) {
@@ -183,6 +192,17 @@ export function ItemCard({
       ) : null}
 
       {showName ? <span className="ic-name truncate">{name}</span> : null}
+
+      {tier === 'full' && stats?.length ? (
+        <span className="ic-stats">
+          {stats.map((stat) => (
+            <span className="ic-stat" key={stat.label}>
+              <small>{stat.label}</small>
+              <strong>{stat.value}</strong>
+            </span>
+          ))}
+        </span>
+      ) : null}
     </span>
   );
 }

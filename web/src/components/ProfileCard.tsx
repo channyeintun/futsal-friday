@@ -7,6 +7,7 @@ import { platform } from '../platform/index.js';
 import { useApp } from '../state/app.js';
 import { useLocale } from '../state/locale.js';
 import { Avatar } from './Avatar.js';
+import { ItemCard } from './ItemCard.js';
 import { Icon } from './Icon.js';
 import { Button, Dialog, ErrorBanner } from './ui.js';
 
@@ -89,6 +90,44 @@ export function ProfileCard({ profile }: { profile: MemberProfile }) {
 
   return (
     <div className="card">
+      {/*
+        The card, at the one size that can carry everything it wears.
+        
+        This is the item's proper home: the pitch and the podium are too small
+        for the six figures across the foot, and this screen is the only place
+        that already knows all six. The number it wears is appearances, because
+        that is the one figure about a person here that only ever goes up and
+        needs no formula — the rest are the six below it.
+      */}
+      <div className="item-hero">
+        <ItemCard
+          width={HERO_WIDTH}
+          metal="steel"
+          rating={profile.streak.played}
+          code={m.board.codeApps}
+          name={profile.member.name}
+          isMe={isMe}
+          stats={[
+            { label: m.board.codeStreak, value: profile.streak.current },
+            { label: m.board.codeBest, value: profile.streak.best },
+            { label: m.board.codeGoals, value: profile.goals },
+            { label: m.board.codeMvp, value: profile.mvps },
+            { label: m.board.codeAttendance, value: attendance(profile) },
+            { label: m.board.codeTotal, value: profile.streak.total },
+          ]}
+          portrait={
+            <Avatar
+              memberId={profile.member.id}
+              name={profile.member.name}
+              avatarUpdatedAt={profile.member.avatarUpdatedAt}
+              size={HERO_WIDTH}
+              tinted={false}
+              initialsScale={0.22}
+            />
+          }
+        />
+      </div>
+
       {/* Strictly two things on this row. Anything else — the remove action,
           an error — goes below, or it squeezes the name into a wrap. */}
       <div className="row" style={{ gap: 14, alignItems: 'center' }}>
@@ -195,4 +234,20 @@ function StreakRow({ profile }: { profile: MemberProfile }) {
       </p>
     </>
   );
+}
+
+/**
+ * Wide enough for six figures across the foot.
+ *
+ * `tierFor` puts the full card at 180 and up, which is where a six-across row
+ * stops being 5px type. 200 fits inside the narrowest phone the app supports
+ * with its card padding either side.
+ */
+const HERO_WIDTH = 200;
+
+/** Turned up, as a whole percentage. Nought sessions is nought, not a divide. */
+function attendance(profile: MemberProfile): number {
+  return profile.streak.total === 0
+    ? 0
+    : Math.round((profile.streak.played / profile.streak.total) * 100);
 }
