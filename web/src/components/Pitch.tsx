@@ -409,7 +409,14 @@ export function Pitch({
       <div
         className="pitch"
         role="group"
-        aria-label={m.pitch.label}
+        /*
+         * The only instruction somebody using a screen reader hears on entering
+         * the region, so it has to say which of the two offers is live. It said
+         * "press an empty spot to take it" to everybody, including the people
+         * for whom an empty spot is somewhere to move to and taking one is not
+         * on the table at all.
+         */
+        aria-label={canMove ? m.pitch.labelOnPitch : m.pitch.label}
         style={
           {
             '--ff-spot': `${spotSize}px`,

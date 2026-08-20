@@ -279,6 +279,7 @@ export const en = {
 
   pitch: {
     label: 'The pitch — press an empty spot to take it',
+    labelOnPitch: 'The pitch — press an empty spot to move to it',
     /*
      * The two lessons the pitch has to teach, and only those.
      *

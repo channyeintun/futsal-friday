@@ -2252,13 +2252,29 @@ fn register_input(raw: &Value) -> ApiResult<i64> {
     Ok(optional(object, "guests", |value, path| int_of(value, path, 0, 5))?.unwrap_or(0))
 }
 
-/// Which spot on the pitch was pressed. Absent means no preference.
+/// Which spot on the pitch was pressed. No preference means no preference,
+/// however the client chose to say so.
+///
+/// An explicit `null` has to mean the same as an absent key here, and that is
+/// not pedantry about JSON: the web client writes `slot: slot ?? null` on every
+/// registration, so the touchline — where there is no circle to press and the
+/// slot genuinely is nothing — was sending a null that `int_of` rejected. The
+/// result was a 400 on the one path that matters most, joining the waitlist for
+/// a session that is already full.
+///
+/// Fixed on this side rather than at the caller on purpose. Clients are cached
+/// by a service worker and phones are not reloaded to order, so the copies
+/// already out there will go on sending `null` for as long as they live;
+/// tightening the client would fix nobody who is holding one.
 ///
 /// Bounded only by the widest formation the app can draw — sixty spots, the
 /// same ceiling as `maxPlayers` — because the real bound is a drawing the
 /// server has never seen and which changes whenever the cap does.
 fn slot_input(raw: &Value) -> ApiResult<Option<i64>> {
     let object = object_of(raw)?;
+    if matches!(object.get("slot"), Some(Value::Null)) {
+        return Ok(None);
+    }
     optional(object, "slot", |value, path| int_of(value, path, 0, 59))
 }
 
@@ -2495,6 +2511,24 @@ mod tests {
         assert_eq!(register_input(&parse(r#"{"guests":5}"#)).unwrap(), 5);
         assert_eq!(post_message_input(&parse(r#"{"body":" hi "}"#)).unwrap(), "hi");
         assert_eq!(cast_vote_input(&parse(r#"{"nomineeId":null}"#)).unwrap(), None);
+
+        /*
+         * Joining from the touchline, exactly as the web client words it.
+         *
+         * `registerForSession` writes `slot: slot ?? null` on every call, so
+         * the bench — where there is no circle to press — sends the key set to
+         * null rather than leaving it out. Reading that as a malformed number
+         * meant a 400 on the one path that matters most: joining the waitlist
+         * for a session that is already full. All three spellings of "no
+         * preference" have to agree.
+         */
+        assert_eq!(slot_input(&parse(r#"{"guests":0,"slot":null}"#)).unwrap(), None);
+        assert_eq!(slot_input(&parse(r#"{"guests":0}"#)).unwrap(), None);
+        assert_eq!(slot_input(&parse(r#"{"guests":0,"slot":7}"#)).unwrap(), Some(7));
+        // A slot that is not a number is still wrong, null being the exception
+        // rather than the rule.
+        assert!(slot_input(&parse(r#"{"slot":"7"}"#)).is_err());
+        assert!(slot_input(&parse(r#"{"slot":60}"#)).is_err());
 
         let created = create_session(&parse(
             r#"{"startsAt":"2026-08-16T12:30:00Z","venueId":null,"notes":"  padded  "}"#,

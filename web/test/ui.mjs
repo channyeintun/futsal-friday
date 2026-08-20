@@ -383,6 +383,43 @@ async function run() {
    * head count must not flinch, because if it did somebody on the waitlist
    * would have been promoted into the gap and this member would be behind them.
    */
+  /*
+   * Where the roster below lists you, which is your `position` column rendered.
+   * The server orders that list by `position ASC`, so this is the queue itself
+   * and not a restatement of the field.
+   */
+  /*
+   * The registration row itself, from the server — and `createdAt` above all.
+   *
+   * Two probes were tried before this one and both were theatre. The rendered
+   * roster index cannot tell a move from a rejoin here, and neither can
+   * `position`: the member doing the moving signed up last, so deleting their
+   * row and taking `MAX(position) + 1` hands back the very number they had.
+   * A fixture where nobody registered afterwards cannot observe a lost place in
+   * a queue, and an assertion that cannot fail is worse than none — it reads as
+   * cover.
+   *
+   * `createdAt` is the one field a rejoin cannot fake: `register` stamps a
+   * fresh one, and this route never touches it. Checked together with
+   * `position` and `status`, it pins the row as the same row.
+   */
+  const queuePlace = async () => {
+    const raw = await evalJs(`(async () => {
+      const after = document.location.pathname.split('/session/')[1];
+      const id = after ? after.split('/')[0] : 'ses_dev';
+      const r = await fetch('/api/sessions/' + id, { credentials: 'include' });
+      if (!r.ok) return 'http ' + r.status;
+      const body = await r.json();
+      const mine = body.me ?? (body.registrations ?? []).find((x) => x.memberId === body.viewerId);
+      return mine ? [mine.position, mine.status, mine.createdAt].join('|') : 'absent';
+    })()`);
+    return raw;
+  };
+  const queueBefore = await queuePlace();
+  // If this could not read a number the comparison below would pass by
+  // agreeing with itself, which is exactly the failure it exists to prevent.
+  check('your registration can actually be read back',
+    /^\d+\|in\|.+/.test(String(queueBefore)), `read ${queueBefore}`);
   const movedFrom = landed;
   const movedTo = await evalJs(`(() => {
     const spots = [...document.querySelectorAll('.pitch-spot')];
@@ -401,8 +438,21 @@ async function run() {
       .findIndex((s) => s.classList.contains('is-me'))`)}`);
   check('and you left the spot you were standing on', movedTo !== movedFrom,
     `moved from ${movedFrom} to ${movedTo}`);
+  /*
+   * The head count alone does not test this, which is worth spelling out
+   * because the assertion is named after the invariant.
+   *
+   * A withdraw-then-register lands on the same head count — one head leaves and
+   * the same head returns — and on the same drawn field. What it does not
+   * survive is the queue: `register` takes `MAX(position) + 1`, so a mover who
+   * went out and came back is last in the roster below rather than wherever
+   * they signed up. That number is on screen, so assert on it.
+   */
   check('MOVING COSTS NOBODY THEIR PLACE', (await playing()) === headsBefore + 1,
     `expected ${headsBefore + 1} playing, got ${await playing()}`);
+  check('AND IT IS THE SAME REGISTRATION, NOT A NEW ONE',
+    (await queuePlace()) === queueBefore,
+    `was ${queueBefore}, now ${await queuePlace()}`);
   check('and opens no gap and closes none', (await openSpots()) === openBefore - 1,
     `before=${openBefore} after=${await openSpots()}`);
   // Arriving somewhere is arriving somewhere, whichever spot you came from.

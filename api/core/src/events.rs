@@ -145,6 +145,19 @@ const PLAYER_LEFT: Rule = Rule::Object(&[
 /// Carries the resulting head count so the settle screen can update the
 /// suggested charge without a refetch — attendance is usually marked by several
 /// people at once, in the ten minutes around kickoff.
+/// Somebody already on the pitch picked a different circle.
+///
+/// Carries no counts, and that absence is the event. Nobody joined and nobody
+/// left, so there is nothing for a viewer to recount — only one card to slide
+/// across. `slot` is never null here: giving a spot up is `player.left`.
+const PLAYER_MOVED: Rule = Rule::Object(&[
+    Field { name: "sessionId", rule: ID },
+    Field { name: "memberId", rule: ID },
+    Field { name: "memberName", rule: TEXT },
+    Field { name: "slot", rule: COUNT },
+    Field { name: "at", rule: ISO },
+]);
+
 const PLAYER_ATTENDANCE: Rule = Rule::Object(&[
     Field { name: "sessionId", rule: ID },
     Field { name: "memberId", rule: ID },
@@ -308,7 +321,12 @@ const SESSION_UPDATED: Rule = Rule::Object(&[
 const REALTIME_SCHEMA: &[(&str, &[(&str, Rule)])] = &[
     (
         "player",
-        &[("joined", PLAYER_JOINED), ("left", PLAYER_LEFT), ("attendance", PLAYER_ATTENDANCE)],
+        &[
+            ("joined", PLAYER_JOINED),
+            ("left", PLAYER_LEFT),
+            ("moved", PLAYER_MOVED),
+            ("attendance", PLAYER_ATTENDANCE),
+        ],
     ),
     (
         "payment",
@@ -324,9 +342,10 @@ const REALTIME_SCHEMA: &[(&str, &[(&str, Rule)])] = &[
     ("session", &[("updated", SESSION_UPDATED)]),
 ];
 
-pub const EVENT_NAMES: [&str; 11] = [
+pub const EVENT_NAMES: [&str; 12] = [
     "player.joined",
     "player.left",
+    "player.moved",
     "player.attendance",
     "payment.claimed",
     "payment.confirmed",
@@ -624,6 +643,7 @@ mod tests {
             [
                 "player.joined",
                 "player.left",
+                "player.moved",
                 "player.attendance",
                 "payment.claimed",
                 "payment.confirmed",
