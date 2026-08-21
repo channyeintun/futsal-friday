@@ -321,10 +321,10 @@ export function TeamBoards({
 
             This was gated on `!settled`, which suppressed it in the one case
             that matters: the board opens days before kickoff and registration
-            runs right up to it, so teams settled on Tuesday and two more
-            people on Thursday is ordinary. Silently leaving them off — with
-            only a full redraw, which destroys the fixtures and their scores,
-            to put it right — was the worst of both.
+            runs through the game itself, so teams settled on Tuesday and two
+            more people on Thursday — or at 19:35 — is ordinary. Silently
+            leaving them off, with only a full redraw, which destroys the
+            fixtures and their scores, to put it right, was the worst of both.
           */}
           {live && missing.length > 0 ? (
             <div className="attend-note">

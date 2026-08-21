@@ -23,6 +23,8 @@ use wasm_bindgen::JsValue;
 use worker::d1::D1Database;
 use worker::Result as WorkerResult;
 
+use futsal_core::clock::registration_open;
+
 use crate::js;
 
 /* ------------------------------------------------------------------- rows */
@@ -938,20 +940,27 @@ pub async fn mvp_wins_by_member(db: &D1Database) -> WorkerResult<Vec<(String, i6
 
 /* -------------------------------------------------------- composite reads */
 
-/// Registration is open while the session is still scheduled and kickoff has
-/// not passed. This is the single definition of that rule — the UI mirrors it
-/// for button state, but the server decides.
+/// Registration is open while the session is still scheduled and the game has
+/// not finished — `futsal_core::clock::registration_open` is where that window
+/// is written down and why. Every route that writes a registration asks here,
+/// and the screen only mirrors the answer for button state: the server decides.
 pub fn is_registration_open(session: &Session) -> bool {
     is_registration_open_at(session, js::now_ms())
 }
 
 /// The same rule against a given instant, in `Date.now()` milliseconds.
 ///
-/// Strictly greater, so at the exact kickoff instant registration is closed. An
-/// unparseable `startsAt` gives `NaN`, and every comparison with `NaN` is
-/// false — closed, which is the answer JavaScript gave too.
+/// The row is parsed here and answered in `futsal_core::clock`, which is where
+/// the window itself is written down and tested. An unparseable `starts_at` is
+/// closed — the `NaN` comparison in the original said the same, and the check is
+/// explicit here because `NaN as i64` is 0 in Rust rather than another `NaN`,
+/// which would put every such session in January 1970 and open.
 pub fn is_registration_open_at(session: &Session, now_ms: f64) -> bool {
-    session.status == "scheduled" && js::parse_date(&session.starts_at) > now_ms
+    let starts_at = js::parse_date(&session.starts_at);
+    if starts_at.is_nan() {
+        return false;
+    }
+    registration_open(starts_at as i64, &session.status, now_ms as i64)
 }
 
 pub async fn load_session_detail(

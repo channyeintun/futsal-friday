@@ -430,11 +430,31 @@ const run = async () => {
   check('and the last page says there is no more', cursor === null, cursor);
   check('every id appears exactly once', new Set(walked).size === walked.length, walked.length);
 
-  section('registration closes at kickoff');
+  section('registration runs through the game, not up to it');
+  // Somebody walking on after the whistle is the ordinary case, not an edge
+  // one — and the app is no use to them if the only way to be on the roster
+  // closed while they were in a taxi.
+  const underWay = await call('POST', '/sessions', {
+    token: organizer,
+    body: { startsAt: new Date(Date.now() - 30 * 60_000).toISOString(), venueId },
+  });
+  const underWayId = underWay.body.session.id;
+  const midGame = await call('GET', `/sessions/${underWayId}`, { token: alice.token });
+  check('a game already under way is still open',
+    midGame.body?.registrationOpen === true, midGame.body?.registrationOpen);
+  const walkOn = await call('POST', `/sessions/${underWayId}/register`, { token: alice.token });
+  check('AND A LATECOMER CAN STILL SIGN UP',
+    walkOn.status === 200 && walkOn.body?.registration?.status === 'in', walkOn.body);
+
+  // Two hours later everybody has gone home and the fixture is a record:
+  // joining one adds a name nobody can check to a bill already split.
   const pastStart = new Date(Date.now() - 3 * 86_400_000).toISOString();
   const past = await call('POST', '/sessions', { token: organizer, body: { startsAt: pastStart, venueId } });
+  const played = await call('GET', `/sessions/${past.body.session.id}`, { token: alice.token });
+  check('a game that has been played is closed',
+    played.body?.registrationOpen === false, played.body?.registrationOpen);
   const lateJoin = await call('POST', `/sessions/${past.body.session.id}/register`, { token: alice.token });
-  check('cannot register after kickoff', lateJoin.status === 409, lateJoin.body);
+  check('cannot register for it', lateJoin.status === 409, lateJoin.body);
   check('closure has its own error code',
     lateJoin.body?.error?.code === 'registration_closed', lateJoin.body);
 
@@ -466,9 +486,9 @@ const run = async () => {
   section('goals, form and the ranking');
   // A game two hours old with three players in it, so goals can be recorded
   // against something the screen would also allow.
-  // Created in the future and then moved back: registration closes at kickoff,
-  // so a session that is already two hours old cannot be signed up for — but
-  // goals only make sense on one that has been played.
+  // Created in the future and then moved back: registration closes two hours
+  // after kickoff, so a session that is already that old cannot be signed up
+  // for — but goals only make sense on one that has been played.
   const goalSession = await call('POST', '/sessions', {
     token: organizer,
     body: { startsAt: new Date(Date.now() + 4 * 86_400_000).toISOString() },

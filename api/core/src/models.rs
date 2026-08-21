@@ -2576,7 +2576,7 @@ pub struct SessionDetail {
     pub session: Session,
     pub registrations: Vec<Registration>,
     pub counts: SessionCounts,
-    /// Whether registration is still open (before kickoff, not cancelled).
+    /// Whether registration is still open (until the game ends, not cancelled).
     pub registration_open: bool,
     /// The caller's own registration, if any.
     pub me: Option<Registration>,

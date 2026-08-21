@@ -172,10 +172,11 @@ export function SessionView({
       ) : registrationOpen ? (
         /* The pitch replaces the button and, above the roster, answers "who is
            coming?" faster than the list can — you count the gaps. It is only
-           here while there is something to sign up to: the server refuses both
-           joining and leaving once the whistle has gone, so after kickoff the
-           list below is the screen, which is also when it grows attendance
-           toggles and goal counts and has work to do. */
+           here while there is something to sign up to, which runs through the
+           game and not merely up to it: somebody who walks on at 19:35 still
+           needs a spot to press. Once the whistle has gone it shares the screen
+           with the attendance toggles and goal counts below — the field is who
+           signed up, the marks are who came. */
         <Pitch detail={detail} recentlyChanged={recentlyChanged} onChanged={onChanged} />
       ) : (
         <div className="muted" style={{ textAlign: 'center' }}>

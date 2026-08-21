@@ -563,7 +563,7 @@ export const sessionDetailSchema = z.object({
     /** How many of `in` are guests, so a screen can say why the numbers differ. */
     guests: z.number().int().default(0),
   }),
-  /** Whether registration is still open (before kickoff, not cancelled). */
+  /** Whether registration is still open (until the game ends, not cancelled). */
   registrationOpen: z.boolean(),
   /** The caller's own registration, if any. */
   me: registrationSchema.nullable(),

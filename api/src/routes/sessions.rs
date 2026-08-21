@@ -1098,11 +1098,12 @@ async fn confirm(env: &Env, identity: &Identity, session_id: &str) -> ApiResult<
 
 /// Deal in whoever signed up after the teams were drawn.
 ///
-/// The board opens days before kickoff and registration stays open right up to
-/// it, so "teams settled on Tuesday, two more people on Thursday" is the
-/// ordinary case rather than an edge one. Redrawing answers it badly: it moves
-/// people who already know their side, and on a confirmed board it takes the
-/// fixture list and every recorded score with it.
+/// The board opens days before kickoff and registration stays open through the
+/// game itself, so "teams settled on Tuesday, two more people on Thursday" — or
+/// somebody walking on ten minutes in — is the ordinary case rather than an edge
+/// one. Redrawing answers it badly: it moves people who already know their side,
+/// and on a confirmed board it takes the fixture list and every recorded score
+/// with it.
 ///
 /// This only ever appends — each latecomer onto the smallest side — so nobody
 /// moves and nothing is lost. Open to any member for that reason: there is

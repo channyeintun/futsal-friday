@@ -21,9 +21,31 @@ pub const DEFAULT_KICKOFF_HOUR: i64 = 19;
 pub const DEFAULT_KICKOFF_MINUTE: i64 = 30;
 
 /// How long after kickoff a session counts as finished. The cron uses it to mark
-/// sessions completed and the team board uses it to stop being a live control
-/// and start being a record — one definition, so the two cannot disagree.
+/// sessions completed, the team board uses it to stop being a live control and
+/// start being a record, and registration closes on it too — one definition, so
+/// the three cannot disagree.
 pub const SESSION_RUNS_FOR_MS: i64 = 2 * 60 * 60 * 1000;
+
+/// Whether somebody can still put their name down for this session.
+///
+/// The window used to end at kickoff, which is the one moment it is most wrong:
+/// nobody is on their phone at 19:29, and a player who walks on at 19:35 was
+/// unregistered for a game they played all of — off the roster, out of the
+/// draw, and out of the split, so everybody else covered their share.
+///
+/// So it runs for as long as the game does. `SESSION_RUNS_FOR_MS` is the same
+/// window the cron calls a session finished at and the team board stops being a
+/// control at, which is what lets a latecomer be signed up and then dealt onto
+/// the smallest side while the game is still on.
+///
+/// It is not open forever, and that is the other half of the rule: a session
+/// that has been played is a record. Signing up for one weeks later would add a
+/// name to a roster nobody can check and a head to a bill already split. The
+/// status carries the same answer from the other direction — a cancelled game
+/// has nothing to join, and settling marks a session completed.
+pub fn registration_open(starts_at_ms: i64, status: &str, now_ms: i64) -> bool {
+    status == "scheduled" && now_ms < starts_at_ms + SESSION_RUNS_FOR_MS
+}
 
 const MS_PER_MINUTE: i64 = 60_000;
 const MS_PER_HOUR: i64 = 3_600_000;
@@ -301,6 +323,25 @@ mod tests {
         assert_eq!(clock_time(19, 30, true), "7:30 PM");
         assert_eq!(clock_time(0, 5, true), "12:05 AM");
         assert_eq!(clock_time(12, 0, true), "12:00 PM");
+    }
+
+    #[test]
+    fn registration_runs_through_the_game_and_stops_there() {
+        let kickoff = 1_754_656_200_000; // Fri 19:30 ICT.
+
+        assert!(registration_open(kickoff, "scheduled", kickoff - MS_PER_DAY));
+        // The case this rule exists for: 19:30 on the dot, and ten minutes in.
+        assert!(registration_open(kickoff, "scheduled", kickoff));
+        assert!(registration_open(kickoff, "scheduled", kickoff + 10 * MS_PER_MINUTE));
+        assert!(registration_open(kickoff, "scheduled", kickoff + SESSION_RUNS_FOR_MS - 1));
+
+        // Everybody has gone home; from here the fixture is a record.
+        assert!(!registration_open(kickoff, "scheduled", kickoff + SESSION_RUNS_FOR_MS));
+        assert!(!registration_open(kickoff, "scheduled", kickoff + 7 * MS_PER_DAY));
+
+        // Status closes it from the other side, whatever the clock says.
+        assert!(!registration_open(kickoff, "cancelled", kickoff - MS_PER_DAY));
+        assert!(!registration_open(kickoff, "completed", kickoff + MS_PER_MINUTE));
     }
 
     #[test]

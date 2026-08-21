@@ -84,10 +84,18 @@ import { ErrorBanner } from './ui.js';
  * something to say, and a spot on it is a control under exactly the same rule
  * as a spot on the field.
  *
- * No pitch at all after kickoff. The server refuses both registering and
- * withdrawing once the whistle has gone, so every spot would be an affordance
- * that lies — and there is no honest thing to draw instead, because a pitch of
- * who *registered* contradicts the attendance marks directly below it.
+ * No pitch once the game is over. It used to go at kickoff, on the grounds that
+ * the server refused to register anybody after the whistle — but that rule was
+ * the thing that was wrong: people walk on late, and somebody who plays the
+ * whole game has to be able to get onto the roster while it is happening, or
+ * they are in neither the draw nor the split. So the field stays out for as
+ * long as registration is open, which is as long as the game is being played,
+ * and the spot a latecomer presses is a real spot.
+ *
+ * What it is *not*, after kickoff, is a picture of who is on the pitch — it is
+ * who signed up, and the attendance marks one card down are who turned up. The
+ * two disagreeing is the point of having both: the roster is the promise and
+ * the marks are the record.
  */
 export function Pitch({
   detail,

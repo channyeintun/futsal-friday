@@ -29,9 +29,9 @@ export const DEFAULT_KICKOFF = { weekday: 5, hour: 19, minute: 30 } as const;
  *
  * Long enough that a late start cannot close registration early, short enough
  * that the organizer can settle up the same evening. The cron uses it to mark
- * sessions completed and the team board uses it to stop being a live control
- * and start being a record — one definition, so the two cannot disagree about
- * when the game ended.
+ * sessions completed, the team board uses it to stop being a live control and
+ * start being a record, and registration closes on it too — one definition, so
+ * the three cannot disagree about when the game ended.
  */
 export const SESSION_RUNS_FOR_MS = 2 * 60 * 60 * 1000;
 
