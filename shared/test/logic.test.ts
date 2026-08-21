@@ -1,4 +1,4 @@
-import { nextFridayKickoff, formatKickoff, startOfZonedDay, toZonedParts, zonedDateKey, fromDatetimeLocal, toDatetimeLocal } from '../src/time.ts';
+import { nextFridayKickoff, formatKickoff, startOfZonedDay, toZonedParts, zonedDateKey, fromDatetimeLocal, toDatetimeLocal, wholeDaysUntil } from '../src/time.ts';
 import { splitEqually, splitWithOverrides, formatVnd, parseVnd } from '../src/money.ts';
 import {
   arrivedSlots, assignLatecomers, canRedrawTeams, canSplitInto, drawTeams, matchPlayed, maxTeamsFor, roundRobin,
@@ -614,6 +614,15 @@ check('no cap and nobody yet still offers a spot', pitchSlotCount(0, null, true)
 check('a cap that closed draws only the people', pitchSlotCount(7, 12, false), 7);
 check('a full pitch that closed still draws everyone', pitchSlotCount(12, 12, false), 12);
 check('a closed session nobody joined draws nothing', pitchSlotCount(0, 12, false), 0);
+
+// A link counts a permission down, so the honest half-day is the one you have.
+const noon = new Date('2026-08-21T12:00:00.000Z');
+check('nine and a half days left says nine', wholeDaysUntil('2026-08-31T00:00:00.000Z', noon), 9);
+check('a link with a day and a bit left says one', wholeDaysUntil('2026-08-22T18:00:00.000Z', noon), 1);
+// The last day floors to zero, which the panel renders as "less than a day
+// left" — never as a count, which would promise more room than there is.
+check('twenty minutes left is not a day', wholeDaysUntil('2026-08-21T12:20:00.000Z', noon), 0);
+check('an expiry already past never goes negative', wholeDaysUntil('2026-08-01T00:00:00.000Z', noon), 0);
 
 // The server decides in/waitlist for the whole party at once.
 check('a solo fits the last spot', partyFits(11, 12, 0), true);

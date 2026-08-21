@@ -1,5 +1,5 @@
 import type { ClaimLink, GroupInvite, Member } from '@futsal/shared';
-import { formatKickoff } from '@futsal/shared';
+import { formatKickoff, wholeDaysUntil } from '@futsal/shared';
 import { useEffect, useState } from 'react';
 import {
   currentGroupInvite,
@@ -251,6 +251,13 @@ export function GroupInviteCard() {
 
   if (!loaded) return null;
 
+  /*
+   * Read at render rather than held in state. The panel is opened, looked at
+   * and left; there is nothing here worth a timer, and a count that ticks over
+   * while somebody reads it would be motion for its own sake.
+   */
+  const daysLeft = invite ? wholeDaysUntil(invite.expiresAt) : 0;
+
   return (
     <div className="card">
       <h2 className="card-title">{m.invite.groupLink}</h2>
@@ -268,7 +275,13 @@ export function GroupInviteCard() {
               ? m.invite.waitingToJoin(invite.unclaimed)
               : m.invite.everyoneJoined}
             {' · '}
-            {m.invite.expires(formatKickoff(invite.expiresAt, locale, hour12))}
+            {/* The countdown is the line; the date it lands on is the title,
+                for anyone who wants to know exactly when. A personal claim
+                link still shows its date outright — that one is minted, read
+                and used in the same minute, so a count would be noise. */}
+            <span title={formatKickoff(invite.expiresAt, locale, hour12)}>
+              {daysLeft === 0 ? m.invite.lessThanADay : m.invite.expiresInDays(daysLeft)}
+            </span>
           </p>
           <Button onClick={copy}>{m.invite.copyGroupLink}</Button>
           <ConfirmButton

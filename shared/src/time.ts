@@ -234,6 +234,24 @@ export function fromDatetimeLocal(value: string): Date {
   });
 }
 
+/**
+ * Whole days between now and an expiry, floored, never below zero.
+ *
+ * Floored rather than rounded because this counts a permission down, and the
+ * honest half-day is the one you have rather than the one you might: a link
+ * with nine and a half days left says nine. The floor is also what makes the
+ * last day say zero, which the caller renders as "less than a day left" rather
+ * than as a count — "1 day left" on something that dies in twenty minutes is
+ * the screen misleading whoever is deciding whether to bother reposting it.
+ *
+ * It is a duration and not a calendar difference, which is why the wording it
+ * feeds avoids saying "today": twenty hours left can still land tomorrow.
+ */
+export function wholeDaysUntil(instant: Date | string | number, now: Date = new Date()): number {
+  const diffMs = asDate(instant).getTime() - now.getTime();
+  return Math.max(0, Math.floor(diffMs / MS_PER_DAY));
+}
+
 /** Short human delta, e.g. "in 2d 3h" / "3d 2h အကြာ". */
 export function relativeToNow(
   instant: Date | string | number,

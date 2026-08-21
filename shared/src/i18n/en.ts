@@ -187,6 +187,18 @@ export const en = {
     groupLink: 'Group invite link',
     groupLinkBody:
       'Paste this once into the group chat. Each person taps their own name, and it locks to their phone. Organizers are never listed — send them a personal link instead.',
+    /*
+     * A countdown rather than a date, because the question the organizer is
+     * actually asking is "do I need to repost this?" — which a date makes you
+     * do arithmetic to answer. The last day says so in words: "1 day left" on
+     * a link that dies in twenty minutes reads as more room than there is.
+     *
+     * "Less than a day" rather than "expires today" because the count is a
+     * duration, not a calendar: a link with twenty hours left can perfectly
+     * well die tomorrow morning, and the date beside it would say so.
+     */
+    expiresInDays: (days: number) => (days === 1 ? '1 day left' : `${days} days left`),
+    lessThanADay: 'Less than a day left',
     createGroupLink: 'Create group link',
     copyGroupLink: 'Copy group link',
     rotateGroupLink: 'Replace link',
