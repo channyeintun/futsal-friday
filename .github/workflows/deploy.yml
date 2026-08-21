@@ -1,0 +1,95 @@
+name: CI/CD
+
+# Checks run for every push and pull request. Deployment happens only for main,
+# after the checks pass, and never for a pull request from a fork.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Superseded PR runs are worth cancelling; a deploy in flight is not.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Public build-time configuration for the frontend. `web/.env.production` is
+  # git-ignored, so CI supplies the same two values here. Override either with a
+  # repository variable of the same name without touching this file.
+  VITE_API_URL: ${{ vars.VITE_API_URL || 'https://futsal-friday-api.chanyeintun.workers.dev' }}
+  VITE_APP_URL: ${{ vars.VITE_APP_URL || 'https://futsal-friday.pages.dev' }}
+
+jobs:
+  check:
+    name: Typecheck and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install the Wasm target
+        run: rustup target add wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: api
+
+      - run: npm ci
+
+      # Typechecks shared + web, then `cargo check --target wasm32` and the
+      # Rust tests for both crates.
+      - name: Typecheck and check the Worker
+        run: npm run check
+
+      - name: Shared logic and i18n tests
+        run: npm run test:shared
+
+      - name: Build the frontend
+        run: npm run build
+
+  deploy:
+    name: Deploy
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install the Wasm target
+        run: rustup target add wasm32-unknown-unknown
+
+      # `cache-bin` is what keeps `cargo install worker-build` — the Worker's
+      # build step, and the slowest thing here on a cold runner — off the
+      # critical path after the first run.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: api
+          cache-bin: true
+
+      - run: npm ci
+
+      # Migrations ship in the same commit as the code that needs them, so the
+      # database moves first. Every migration in this repo is additive, which is
+      # what makes running it ahead of the deploy safe.
+      - name: Apply D1 migrations
+        run: npm run db:migrate:remote
+
+      - name: Deploy the Worker
+        run: npm run deploy:api
+
+      - name: Deploy the frontend
+        run: npm run deploy:web -- --branch=main
