@@ -22,6 +22,7 @@
 //! be taught the same thing, and would hide it.
 
 mod base64;
+mod cache;
 mod cors;
 mod cron;
 mod db;

@@ -184,7 +184,7 @@ pub struct SessionMessageRow {
 /// `row.status as Session['status']` did: the cast checked nothing, so a value
 /// SQLite somehow held would travel out unaltered rather than being rejected
 /// here.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Member {
     pub id: String,
@@ -445,7 +445,14 @@ pub struct MemberHistoryPage {
     pub next_cursor: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+/*
+ * Round-trips through the cache, so it is `Deserialize` as well.
+ *
+ * The camel-case rename applies in both directions, which is what makes the
+ * stored form and the wire form the same bytes — one shape to reason about
+ * rather than two that have to agree.
+ */
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LeaderboardEntry {
     pub member: Member,
@@ -1867,7 +1874,7 @@ pub struct StreakEntry {
 }
 
 /// Attendance run, computed from every past session since the member joined.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Streak {
     /// Consecutive games played, counting back from the most recent one.
     pub current: i64,
@@ -2142,4 +2149,55 @@ fn atob(value: &str) -> Option<Vec<u8>> {
     }
     // The bits past the last whole byte are dropped, not checked for zero.
     Some(out)
+}
+
+#[cfg(test)]
+mod cache_round_trip {
+    use super::*;
+
+    /// The board goes to Redis as JSON and comes back as these structs.
+    ///
+    /// Worth pinning because the failure is quiet in the wrong direction: a
+    /// field that serialises one way and reads back another produces a board
+    /// that is subtly wrong rather than one that is obviously broken, and the
+    /// camel-case rename means the stored names are not the Rust ones. A
+    /// mismatch that made it un-deserialisable would be harmless — that is a
+    /// cache miss — so this checks the case that is not.
+    #[test]
+    fn an_entry_survives_the_cache() {
+        let entry = LeaderboardEntry {
+            member: Member {
+                id: "mem_a".into(),
+                name: "Aung".into(),
+                is_organizer: true,
+                active: true,
+                created_at: "2026-01-02T03:04:05.000Z".into(),
+                notify_session: false,
+                notify_payment: true,
+                language: "my".into(),
+                hour12: true,
+                claimed_at: Some("2026-02-03T04:05:06.000Z".into()),
+                has_pending_link: true,
+                avatar_updated_at: Some("2026-03-04T05:06:07.000Z".into()),
+                approved_at: Some("2026-04-05T06:07:08.000Z".into()),
+            },
+            streak: Streak { current: 3, best: 9, played: 11, total: 14 },
+            goals: 27,
+            mvps: 4,
+        };
+
+        let stored = serde_json::to_string(&entry).unwrap();
+        let read: LeaderboardEntry = serde_json::from_str(&stored).unwrap();
+
+        // Field by field would drift as the struct grows; re-serialising asks
+        // the only question that matters, which is whether anything moved.
+        assert_eq!(serde_json::to_string(&read).unwrap(), stored);
+        assert_eq!(read.member.id, "mem_a");
+        assert_eq!(read.streak.best, 9);
+        assert_eq!(read.goals, 27);
+        assert_eq!(read.mvps, 4);
+        // The names in Redis are the names on the wire, not the Rust ones.
+        assert!(stored.contains("\"isOrganizer\""));
+        assert!(stored.contains("\"avatarUpdatedAt\""));
+    }
 }

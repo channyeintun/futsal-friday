@@ -111,6 +111,30 @@ impl PubSub {
                 );
             }
             PubSub::Upstash(client) => {
+                /*
+                 * Anything derived from the whole history is now wrong.
+                 *
+                 * Hung off `emit` rather than sprinkled through the routes
+                 * because this is already the call every mutation makes to say
+                 * it changed something — and a list of a dozen call sites is a
+                 * list somebody eventually forgets to add to. The names are
+                 * matched positively: a new event has to opt in, so the failure
+                 * mode of forgetting is a stale board for an hour rather than a
+                 * silent extra Redis round trip on every message posted.
+                 *
+                 * It is also self-consistent about being switched off. The
+                 * cache and the stream are the same Redis, so a deployment
+                 * without one has neither, and there is nothing to invalidate.
+                 */
+                if AFFECTS_HISTORY.contains(&event) {
+                    let commands = serde_json::json!([["DEL", crate::cache::LEADERBOARD_KEY]]);
+                    if let Err(error) =
+                        pipeline(&client.base_url, &client.token, &commands).await
+                    {
+                        console_log!("[cache] could not drop the leaderboard: {error}");
+                    }
+                }
+
                 let promises = Array::new();
                 for channel in channels {
                     // Stream ids are handed out synchronously for every target
@@ -156,6 +180,19 @@ impl PubSub {
         }
     }
 }
+
+/// Events after which the leaderboard has to be recomputed.
+///
+/// Everything the board is derived from: who is registered, who turned up, who
+/// won an award, and which sessions are in the window at all. Deliberately not
+/// `teams.changed`, `player.moved`, `message.*` or `payment.*` — none of those
+/// moves a figure on any board, and dropping the key for them would mean
+/// rebuilding it during the busiest minute of a Friday for no reason.
+///
+/// Goals and member changes do not emit events at all, so those two invalidate
+/// by hand at their own call sites.
+const AFFECTS_HISTORY: [&str; 5] =
+    ["player.joined", "player.left", "player.attendance", "mvp.changed", "session.updated"];
 
 // ---------------------------------------------------------------------------
 // Upstash
@@ -878,6 +915,24 @@ fn argument(value: &Value) -> Value {
 }
 
 /// `POST <base>/pipeline` with the commands as a JSON array of arrays.
+/// The REST endpoint and token, when Redis is configured at all.
+///
+/// Exposed so the cache can sit on the same connection rather than growing a
+/// second client with its own configuration and its own way of being absent.
+pub fn upstash_rest(env: &Env) -> Option<(String, String)> {
+    crate::env::upstash(env)
+        .map(|(url, token)| (url.strip_suffix('/').unwrap_or(&url).to_string(), token))
+}
+
+/// Run Redis commands over the REST pipeline. Shared with `cache`.
+pub async fn redis_pipeline(
+    base_url: &str,
+    token: &str,
+    commands: &Value,
+) -> Result<Value, String> {
+    pipeline(base_url, token, commands).await
+}
+
 async fn pipeline(base_url: &str, token: &str, commands: &Value) -> Result<Value, String> {
     let body = commands.to_string();
     let url = format!("{base_url}/pipeline");

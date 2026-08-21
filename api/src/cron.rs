@@ -56,7 +56,38 @@ pub async fn run_scheduled_maintenance_at(env: &Env, now_ms: f64) -> WorkerResul
         console_log!("notifications {}", summary.to_json());
     }
 
-    run_session_maintenance(env, now_ms).await
+    run_session_maintenance(env, now_ms).await?;
+
+    // Last, and allowed to fail quietly: it is an optimisation, and a tick that
+    // completed the week's sessions and sent its reminders has done its job
+    // whether or not the board was rebuilt.
+    warm_leaderboard(env).await;
+    Ok(())
+}
+
+/*
+ * Rebuild the leaderboard so that nobody has to wait for it.
+ *
+ * The cache is dropped by whatever changed a figure on the board, which leaves
+ * the next person to open that screen paying for the recomputation. This runs
+ * hourly on the same tick as everything else, so in practice that person is
+ * this function — and a Friday's worth of changes has usually settled long
+ * before anybody looks at the standings again.
+ *
+ * It writes unconditionally rather than only on a miss. The board it computes
+ * is by definition newer than whatever is in the key, and writing it also
+ * refreshes the hour of life the value carries, which is what stops a quiet
+ * week from expiring the cache over and over for no reader.
+ */
+async fn warm_leaderboard(env: &Env) {
+    let Ok(db) = crate::env::db(env) else { return };
+    let Ok(entries) = crate::db::load_leaderboard(&db).await else {
+        console_log!("[cache] could not rebuild the leaderboard");
+        return;
+    };
+    if let Ok(value) = serde_json::to_value(&entries) {
+        let _ = crate::cache::put(env, crate::cache::LEADERBOARD_KEY, &value).await;
+    }
 }
 
 /// The original defaulted `now` here as well, but every call site — its one

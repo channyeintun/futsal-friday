@@ -858,6 +858,10 @@ async fn goals(
         .bind(&[text(session_id), text(&subject), number(input.goals)])?
         .run()
         .await?;
+
+    // Goals are the one figure on the leaderboard whose change emits no event,
+    // so the invalidation that rides on `emit` cannot see it. Said here instead.
+    crate::cache::forget_leaderboard(env).await;
     if changes(&updated)? == 0 {
         return Err(http::not_found("They are not on the list for that session"));
     }

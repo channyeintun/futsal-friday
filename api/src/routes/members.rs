@@ -20,6 +20,7 @@ use wasm_bindgen::JsValue;
 use worker::d1::D1Database;
 use worker::{Env, Headers, HttpMetadata, Request, Response, ResponseBody};
 
+use crate::cache;
 use crate::db::{self, Attendance, Member, MemberRow, Streak};
 use crate::http::{self, new_id, now_iso, ApiError, ApiResult};
 use crate::middleware::{require_organizer, Identity};
@@ -265,7 +266,29 @@ async fn leaderboard(env: &Env, url: &str) -> ApiResult<Response> {
     // A member id, not base64 — and `if (cursor)`, so an empty one is absent.
     let cursor = query(url, "cursor").filter(|value| !value.is_empty());
 
-    let all = db::load_leaderboard(&db).await?;
+    /*
+     * Off the cache when it is there.
+     *
+     * The computation behind this is five queries over the whole history window
+     * plus a streak per member, and it is identical for every viewer — a board
+     * is read far more often than it changes, so paying for it per request was
+     * the wrong way round. `cache` holds the computed entries; everything that
+     * could change a figure on them drops the key, and the cron rebuilds it
+     * before most people look.
+     */
+    let all = match cache::get(env, cache::LEADERBOARD_KEY)
+        .await
+        .and_then(|value| serde_json::from_value::<Vec<db::LeaderboardEntry>>(value).ok())
+    {
+        Some(cached) => cached,
+        None => {
+            let computed = db::load_leaderboard(&db).await?;
+            if let Ok(value) = serde_json::to_value(&computed) {
+                cache::put(env, cache::LEADERBOARD_KEY, &value).await?;
+            }
+            computed
+        }
+    };
     // Nobody with nothing to show: a board of forty people on zero is not a
     // ranking, it is a roster.
     let mut ranked: Vec<db::LeaderboardEntry> = all
@@ -388,6 +411,8 @@ async fn approve(env: &Env, identity: &Identity, id: &str) -> ApiResult<Response
         .bind(&[text(id), text(&approved_at)])?
         .run()
         .await?;
+    // The leaderboard draws on this — approving somebody adds them to the board.
+    cache::forget_leaderboard(env).await;
 
     let next = MemberRow { approved_at: Some(approved_at), ..existing };
     Ok(Response::from_json(&MemberEnvelope { member: db::to_member(&next) })?)
@@ -495,6 +520,8 @@ async fn put_avatar(env: &Env, identity: &Identity, req: &mut Request) -> ApiRes
         .bind(&[text(&identity.member_id), text(&key), text(&updated_at)])?
         .run()
         .await?;
+    // The leaderboard draws on this — the picture is part of the entry.
+    cache::forget_leaderboard(env).await;
 
     // Only once the row points at the new object. Deleting first would leave a
     // broken picture if the write below failed; deleting after is at worst an
@@ -524,6 +551,8 @@ async fn delete_avatar(env: &Env, identity: &Identity) -> ApiResult<Response> {
         .bind(&[text(&identity.member_id)])?
         .run()
         .await?;
+    // The leaderboard draws on this — the picture is part of the entry.
+    cache::forget_leaderboard(env).await;
     if let Some(previous) = existing.avatar_key.as_deref().filter(|old| !old.is_empty()) {
         let _ = proofs.delete(previous).await;
     }
@@ -625,6 +654,8 @@ async fn create(env: &Env, identity: &Identity, req: &mut Request) -> ApiResult<
         Ok(statement) => statement.run().await,
         Err(error) => Err(error),
     };
+    // The leaderboard draws on this — a new member is a new row on the board.
+    cache::forget_leaderboard(env).await;
     if let Err(error) = inserted {
         // Names have to be unambiguous — they are how the organizer picks who a
         // claim link is for — so surface the collision as a real message.
@@ -697,6 +728,8 @@ async fn update(
         Ok(statement) => statement.run().await,
         Err(error) => Err(error),
     };
+    // The leaderboard draws on this — name and active both show.
+    cache::forget_leaderboard(env).await;
     if let Err(error) = written {
         if is_unique_violation(&error) {
             return Err(http::conflict(format!("{} is already on the list", next.name)));
@@ -728,6 +761,8 @@ async fn remove(env: &Env, identity: &Identity, id: &str) -> ApiResult<Response>
         .bind(&[text(id)])?
         .run()
         .await?;
+    // The leaderboard draws on this — deactivating takes them off it.
+    cache::forget_leaderboard(env).await;
     Ok(Response::from_json(&Acknowledged { ok: true })?)
 }
 
