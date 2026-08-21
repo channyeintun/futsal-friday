@@ -171,10 +171,21 @@ export function ProfileCard({ profile }: { profile: MemberProfile }) {
         />
         </div>
 
-      {/* Only where the device can actually take a file. A button that opens
-          nothing is worse than no button, and desktop browsers routinely
-          advertise `share` while refusing files. */}
-      {platform.share.canShareFile(PROBE) ? (
+      {/*
+        Yours only, and only where the device can take a file.
+
+        It was offered on everybody's profile, under a label that said "your
+        card" — which was wrong twice over: the words did not match the card,
+        and handing somebody a picture of another person to post is not the
+        same act as posting your own. Sharing a team-mate's card is a fine
+        thing to want; it is just not this button, and it would need its own
+        wording naming whose card it is.
+
+        The capability check stays: a desktop browser will routinely advertise
+        `share` and then refuse files, and a button that opens nothing is worse
+        than no button.
+      */}
+      {isMe && platform.share.canShareFile(PROBE) ? (
         <Button variant="tonal" onClick={shareCard} disabled={sharing}>
           <Icon name="share" size={18} slot="icon" />
           {sharing ? m.profile.sharingCard : m.profile.shareCard}
