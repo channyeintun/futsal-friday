@@ -1,6 +1,6 @@
 import { formatKickoff } from '@futsal/shared';
 import { Icon } from '../components/Icon.js';
-import { ProfileCard } from '../components/ProfileCard.js';
+import { ProfileCard, ProfileCardSkeleton } from '../components/ProfileCard.js';
 import { ErrorBanner, Spinner } from '../components/ui.js';
 import { useHistory, useProfile } from '../hooks/queries.js';
 import { useApp } from '../state/app.js';
@@ -23,7 +23,23 @@ export function ProfilePage({ memberId }: { memberId: string }) {
   // Somebody else's match list is the organizer's business, or your own.
   const history = useHistory(memberId, identity.isOrganizer || memberId === identity.memberId);
 
-  if (profile.isPending) return <Spinner label={m.app.loading} />;
+  /*
+   * The card's own outline, not a spinner.
+   *
+   * This screen is a card and a list under it. Saying so while the data is in
+   * flight keeps the page the height it is about to be, and turns the wait into
+   * "this is loading" rather than "something is happening somewhere".
+   */
+  if (profile.isPending) {
+    return (
+      <>
+        <p className="sr-only" role="status">
+          {m.app.loading}
+        </p>
+        <ProfileCardSkeleton />
+      </>
+    );
+  }
   if (profile.error || !profile.data) {
     return <ErrorBanner>{m.profile.couldNotLoad}</ErrorBanner>;
   }

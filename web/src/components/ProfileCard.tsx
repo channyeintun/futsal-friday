@@ -8,7 +8,7 @@ import { platform } from '../platform/index.js';
 import { useApp } from '../state/app.js';
 import { useLocale } from '../state/locale.js';
 import { Avatar } from './Avatar.js';
-import { ItemCard } from './ItemCard.js';
+import { ItemCard, ItemCardSkeleton } from './ItemCard.js';
 import { cardToPng } from './cardImage.js';
 import { Icon } from './Icon.js';
 import { Button, Dialog, ErrorBanner } from './ui.js';
@@ -314,3 +314,32 @@ function attendance(profile: MemberProfile): number {
  * there.
  */
 const PROBE = new File([new Uint8Array()], 'card.png', { type: 'image/png' });
+
+/**
+ * The profile card's shape, while the profile is still in flight.
+ *
+ * Same card, same width, same rows underneath — so what happens when the data
+ * lands is the placeholder filling in rather than the page changing height. A
+ * spinner cannot do that: it occupies no particular shape, so everything below
+ * it jumps the moment it goes.
+ *
+ * Hidden from a screen reader entirely. A skeleton is a promise about layout,
+ * and layout is exactly what a screen reader does not consume; the caller says
+ * "loading" once, in words, and that is the whole of it.
+ */
+export function ProfileCardSkeleton() {
+  return (
+    <div className="card">
+      <div className="item-hero">
+        <ItemCardSkeleton width={HERO_WIDTH} />
+      </div>
+      <div className="row" style={{ gap: 14, alignItems: 'center' }} aria-hidden="true">
+        <span className="skeleton-bar" style={{ width: 64, height: 64, borderRadius: '50%' }} />
+        <div className="grow" style={{ minWidth: 0 }}>
+          <span className="skeleton-bar" style={{ width: '55%', height: '1.1em' }} />
+          <span className="skeleton-bar" style={{ width: '38%', marginTop: 8 }} />
+        </div>
+      </div>
+    </div>
+  );
+}

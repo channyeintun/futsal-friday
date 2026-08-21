@@ -279,3 +279,36 @@ export function ItemCardDefs() {
     </svg>
   );
 }
+
+/**
+ * The card's outline with nothing in it yet.
+ *
+ * A skeleton rather than a spinner, because the shape is the point: this screen
+ * is going to be a card, and saying so while the data is in flight means the
+ * layout never jumps and the wait reads as loading rather than as nothing. A
+ * circular spinner says only "something is happening somewhere".
+ *
+ * It uses the real silhouette and the real rails, so what appears is the same
+ * object arriving rather than a grey box being replaced by one.
+ */
+export function ItemCardSkeleton({ width }: { width: number }) {
+  return (
+    <span
+      className="ic is-skeleton"
+      style={{ '--ic-w': `${width}px`, '--ic-metal': 'url(#ff-ic-silver)' } as CSSProperties}
+      aria-hidden="true"
+    >
+      <span className="ic-shimmer" />
+      <svg
+        className="ic-frame"
+        viewBox="0 0 100 127"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <use href="#ff-ic-outline" className="ic-rail is-edge" />
+        <use href="#ff-ic-outline" className="ic-rail is-outer" />
+      </svg>
+    </span>
+  );
+}

@@ -4,6 +4,7 @@ import { Avatar } from '../components/Avatar.js';
 import { ExpandHandle } from '../components/ExpandHandle.js';
 import { Icon } from '../components/Icon.js';
 import { ProfileCard } from '../components/ProfileCard.js';
+import { ItemCardSkeleton } from '../components/ItemCard.js';
 import { TeamResult } from '../components/TeamResult.js';
 import { VirtualList } from '../components/VirtualList.js';
 import { ErrorBanner, Spinner } from '../components/ui.js';
@@ -77,6 +78,14 @@ export function HistoryPage() {
         <ProfileCard profile={profile.data} />
       ) : (
         <div className="card">
+          {/* The card's outline while the profile is in flight, so this screen
+              is the height it is about to be and nothing below it jumps when
+              the real one lands. What is already known — the name, and what
+              you owe — is shown rather than covered up: a skeleton belongs
+              over the unknown parts only. */}
+          <div className="item-hero">
+            <ItemCardSkeleton width={200} />
+          </div>
           <div className="row between">
             <div>
               <h2 className="card-title">{identity.name}</h2>

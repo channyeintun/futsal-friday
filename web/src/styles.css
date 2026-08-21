@@ -3647,3 +3647,79 @@ button.pitch-spot::before {
     transition: none;
   }
 }
+
+/*
+ * A card that has not arrived yet.
+ *
+ * The real silhouette, the real rails, and a sweep across the interior — so the
+ * wait is visibly this screen loading rather than an unrelated grey rectangle
+ * that will shortly be swapped for something a different size.
+ */
+.ic.is-skeleton {
+  background: var(--md-sys-color-surface-container-high);
+}
+
+.ic.is-skeleton .ic-rail.is-outer {
+  opacity: 0.35;
+}
+
+.ic.is-skeleton .ic-rail.is-edge {
+  stroke: rgb(0 0 0 / 0.12);
+}
+
+.ic-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgb(255 255 255 / 0.28) 50%,
+    transparent 80%
+  );
+  background-size: 220% 100%;
+  animation: ff-shimmer 1400ms linear infinite;
+}
+
+@keyframes ff-shimmer {
+  from { background-position: 140% 0; }
+  to { background-position: -60% 0; }
+}
+
+/* Placeholder lines, for the text beside and beneath a card. */
+.skeleton-bar {
+  display: block;
+  height: 0.8em;
+  border-radius: var(--ff-radius-pill);
+  background: var(--md-sys-color-surface-container-high);
+  overflow: hidden;
+  position: relative;
+}
+
+.skeleton-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgb(255 255 255 / 0.28) 50%,
+    transparent 80%
+  );
+  background-size: 220% 100%;
+  animation: ff-shimmer 1400ms linear infinite;
+}
+
+/*
+ * Asked for less motion: the shape still stands in, but nothing sweeps.
+ *
+ * A skeleton without its animation is still doing its job — it is holding the
+ * layout and saying what is coming — so this drops the movement rather than
+ * the placeholder.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .ic-shimmer,
+  .skeleton-bar::after {
+    animation: none;
+    background: none;
+  }
+}
