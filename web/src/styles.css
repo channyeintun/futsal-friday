@@ -3490,9 +3490,27 @@ button.pitch-spot::before {
   font-size: calc(var(--ic-w) * 0.032);
 }
 
-/* The name climbs above the stats when there are stats to climb above. */
+/*
+ * The full card's lower third belongs to the figures.
+ *
+ * The portrait is a square crop, so unlike a cut-out it ends in a hard
+ * horizontal edge — and it was ending at exactly the pixel the stat labels
+ * began, which put that seam directly behind the first row of type. Stopping
+ * the picture short of them gives the figures a band of their own to sit on,
+ * which is what an item does with the space under the name.
+ *
+ * `height` with `bottom: auto`, because `.ic-portrait` is pinned to all four
+ * sides: without releasing the bottom the height is ignored and the crop never
+ * happens.
+ */
+.ic.is-full .ic-portrait {
+  bottom: auto;
+  height: 73%;
+}
+
+/* Sat on the picture, just above where it stops. */
 .ic.is-full .ic-name {
-  bottom: 25%;
+  bottom: 28%;
 }
 
 /* The card gets the width it needs and the room to be looked at. */

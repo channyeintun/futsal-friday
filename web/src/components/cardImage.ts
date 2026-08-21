@@ -35,6 +35,15 @@ import { METAL_RAMPS, OUTLINE, RAMP_STOPS, type ItemMetal } from './ItemCard.js'
 const W = 100;
 const H = 127;
 
+/**
+ * Where the picture stops, as a share of the card's height.
+ *
+ * 73%, which is the same fraction the live card crops at — so the band the
+ * figures sit on is the same band in both drawings rather than two numbers that
+ * happen to look similar today.
+ */
+const PORTRAIT_H = H * 0.73;
+
 /*
  * The scene the card is standing in, and where it stands.
  *
@@ -185,9 +194,17 @@ function cardSvg(card: CardImage, portrait: string | null): string {
   // Six columns, centred on the same closed form the DOM grid produces.
   const columns = card.stats.map((_, index) => 6 + ((W - 12) / 6) * (index + 0.5));
 
+  /*
+   * The picture stops short of the figures, as it does on the live card.
+   *
+   * A square crop ends in a hard horizontal edge, and running it down to its
+   * full width would put that edge directly behind the first row of stat
+   * labels. `slice` still fills the box and crops what does not fit, so the
+   * face stays the same size — only the bottom of the frame moves up.
+   */
   const face = portrait
-    ? `<image href="${portrait}" x="0" y="0" width="${W}" height="${W}" preserveAspectRatio="xMidYMid slice"/>`
-    : `<text x="${W / 2}" y="${W * 0.56}" text-anchor="middle" fill="#fff"
+    ? `<image href="${portrait}" x="0" y="0" width="${W}" height="${PORTRAIT_H}" preserveAspectRatio="xMidYMid slice"/>`
+    : `<text x="${W / 2}" y="${PORTRAIT_H * 0.6}" text-anchor="middle" fill="#fff"
          font-family="${FONT}" font-size="${W * 0.26}" font-weight="700"
          >${escapeXml(initialsOf(card.name))}</text>`;
 
@@ -292,7 +309,7 @@ function cardSvg(card: CardImage, portrait: string | null): string {
       >${escapeXml(String(card.rating))}</text>
     <text x="${codeCentre(card.rating)}" y="31.5" text-anchor="middle" fill="#fff"
       font-family="${FONT}" font-size="7" font-weight="700">${escapeXml(card.code)}</text>
-    <text x="${W / 2}" y="95" text-anchor="middle" fill="#fff" font-family="${FONT}"
+    <text x="${W / 2}" y="90" text-anchor="middle" fill="#fff" font-family="${FONT}"
       font-size="8.8" font-weight="700">${escapeXml(card.name)}</text>
     ${stats}
   </g>
