@@ -607,6 +607,14 @@ check('no cap draws one open spot', pitchSlotCount(7, null, true), 8);
 check('no cap and closed draws nobody extra', pitchSlotCount(7, null, false), 7);
 check('no cap and nobody yet still offers a spot', pitchSlotCount(0, null, true), 1);
 
+// An empty spot is an offer, so a closed session has none — the field becomes
+// the record of who signed up. A capped game that never filled used to draw its
+// unclaimed circles for ever, which on a game already played is not five places
+// going spare but five holes in the record.
+check('a cap that closed draws only the people', pitchSlotCount(7, 12, false), 7);
+check('a full pitch that closed still draws everyone', pitchSlotCount(12, 12, false), 12);
+check('a closed session nobody joined draws nothing', pitchSlotCount(0, 12, false), 0);
+
 // The server decides in/waitlist for the whole party at once.
 check('a solo fits the last spot', partyFits(11, 12, 0), true);
 check('a party of three does not fit two spots', partyFits(10, 12, 2), false);

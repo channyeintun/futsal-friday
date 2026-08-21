@@ -448,7 +448,13 @@ export function Pitch({
          * for whom an empty spot is somewhere to move to and taking one is not
          * on the table at all.
          */
-        aria-label={canMove ? m.pitch.labelOnPitch : m.pitch.label}
+        aria-label={
+          !registrationOpen
+            ? m.pitch.labelRecord
+            : canMove
+              ? m.pitch.labelOnPitch
+              : m.pitch.label
+        }
         style={
           {
             '--ff-spot': `${spotSize}px`,
@@ -514,6 +520,7 @@ export function Pitch({
                     viewerId: identity.memberId,
                     canJoin,
                     canMove,
+                    canLeave: registrationOpen,
                     onBench: false,
                     armed: phase === 'armed',
                     pending: pendingKey === spot.key,
@@ -550,6 +557,7 @@ export function Pitch({
               viewerId: identity.memberId,
               canJoin: canWait,
               canMove: false,
+              canLeave: registrationOpen,
               armed: phase === 'armed',
               pending: pendingKey === spot.key,
               busy,
@@ -572,18 +580,31 @@ export function Pitch({
         thirty-second poll rewrites an identical string and React leaves the
         node alone — no repeat announcements.
       */}
-      <p className="pitch-status" role="status">
-        {status}
-      </p>
-      {statusBody ? <p className="pitch-why muted">{statusBody}</p> : null}
-      {partyStuck && me ? (
-        <p className="pitch-why muted">{m.pitch.partyTooBig(1 + me.guests, openCount)}</p>
+      {/*
+        Only while there is an offer to caption. Every line it can say is about
+        joining — how many spots are left, that tapping a full pitch benches
+        you — and a game that kicked off two hours ago has no use for any of
+        them. `SessionView` says registration is closed once, above the field,
+        which is the whole of what there is to say.
+      */}
+      {registrationOpen ? (
+        <>
+          <p className="pitch-status" role="status">
+            {status}
+          </p>
+          {statusBody ? <p className="pitch-why muted">{statusBody}</p> : null}
+          {partyStuck && me ? (
+            <p className="pitch-why muted">{m.pitch.partyTooBig(1 + me.guests, openCount)}</p>
+          ) : null}
+        </>
       ) : null}
 
       {/* Only once you are in: bringing friends to a session you are not
           playing in is not a thing, and the cap check needs a spot to measure
-          against. */}
-      {me ? (
+          against. And only while it is open — `change_guests` answers
+          REGISTRATION_CLOSED after kickoff, so on a finished game the picker
+          was a stepper that spends a round trip to fail. */}
+      {me && registrationOpen ? (
         <GuestPicker sessionId={session.id} guests={me.guests} onChanged={onChanged} />
       ) : null}
     </div>
@@ -605,6 +626,7 @@ function renderSpot({
   viewerId,
   canJoin,
   canMove,
+  canLeave,
   armed,
   pending,
   busy,
@@ -626,6 +648,16 @@ function renderSpot({
   canJoin: boolean;
   /** You are on the pitch already, so an empty spot is somewhere to go. */
   canMove: boolean;
+  /**
+   * Whether giving the spot up is still on the table.
+   *
+   * False once registration has closed, which is what stops your own card
+   * being a live button on a game that has already been played: `withdraw`
+   * answers REGISTRATION_CLOSED after kickoff, so the two-press gesture would
+   * arm, buzz, spend a round trip and fail. Closed, your card is a picture of
+   * you having been there — which is what the rest of the field is too.
+   */
+  canLeave: boolean;
   armed: boolean;
   pending: boolean;
   busy: boolean;
@@ -749,7 +781,7 @@ function renderSpot({
     );
   }
 
-  if (isMe) {
+  if (isMe && canLeave) {
     return (
       <button
         key={spot.key}
@@ -790,13 +822,21 @@ function renderSpot({
         ? { 'aria-hidden': true }
         : {
             role: 'img',
-            'aria-label': mine
-              ? m.pitch.yourGuest
-              : isGuest
-                ? m.pitch.guestSpot(spot.slot.memberName)
-                : onBench
-                  ? m.pitch.waitingSpot(spot.slot.memberName)
-                  : m.pitch.playerSpot(spot.slot.memberName),
+            /*
+             * Guest first, because `mine` covers two different cards.
+             *
+             * It used to lead on `mine`, which was safe only while your own
+             * card could never reach here — it was always a button. Now that a
+             * closed session makes it a picture, leading on `mine` announced
+             * you as your own guest.
+             */
+            'aria-label': isGuest
+              ? mine
+                ? m.pitch.yourGuest
+                : m.pitch.guestSpot(spot.slot.memberName)
+              : onBench
+                ? m.pitch.waitingSpot(spot.slot.memberName)
+                : m.pitch.playerSpot(spot.slot.memberName),
           })}
     >
       {inside}

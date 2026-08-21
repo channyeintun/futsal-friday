@@ -289,6 +289,15 @@ export const en = {
     label: 'The pitch — press an empty spot to take it',
     labelOnPitch: 'The pitch — press an empty spot to move to it',
     /*
+     * The same field once nothing on it is pressable.
+     *
+     * A closed session still draws its pitch — it is the clearest record of who
+     * signed up that the app has — but the other two labels both end in an
+     * instruction, and reading "press an empty spot" out over a game that
+     * finished last Friday is the screen offering something it will not honour.
+     */
+    labelRecord: 'The pitch — who signed up',
+    /*
      * The two lessons the pitch has to teach, and only those.
      *
      * Tapping in is guessable from a field full of empty spots; giving a spot

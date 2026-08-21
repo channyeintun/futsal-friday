@@ -169,20 +169,28 @@ export function SessionView({
 
       {session.status === 'cancelled' ? (
         <div className="error-banner">{m.session.wasCancelled}</div>
-      ) : registrationOpen ? (
-        /* The pitch replaces the button and, above the roster, answers "who is
-           coming?" faster than the list can — you count the gaps. It is only
-           here while there is something to sign up to, which runs through the
-           game and not merely up to it: somebody who walks on at 19:35 still
-           needs a spot to press. Once the whistle has gone it shares the screen
-           with the attendance toggles and goal counts below — the field is who
-           signed up, the marks are who came. */
-        <Pitch detail={detail} recentlyChanged={recentlyChanged} onChanged={onChanged} />
-      ) : (
+      ) : registrationOpen ? null : (
+        /* Above the field rather than instead of it. The sentence is still the
+           only thing that says the door has shut — the pitch below has stopped
+           offering spots, but a picture cannot say why it stopped. */
         <div className="muted" style={{ textAlign: 'center' }}>
           {m.session.registrationClosed}
         </div>
       )}
+
+      {/* The pitch replaces the button and, above the roster, answers "who is
+          coming?" faster than the list can — you count the gaps.
+
+          It is drawn for every session, open or closed, played or cancelled.
+          It used to be here only while there was something to sign up to, on
+          the reasoning that a field you cannot press is a control that does
+          nothing — but that mistook what people come back to a finished game
+          for. The lineup is the most legible record of a Friday the app holds,
+          and a session that has kicked off swapped it for one grey sentence
+          exactly when the roster became worth looking at. Closed, it is a
+          picture rather than a control: no spot is a button, no caption offers
+          a spot, and the gaps fold away unless somebody asks for them. */}
+      <Pitch detail={detail} recentlyChanged={recentlyChanged} onChanged={onChanged} />
 
       <div
         ref={rosterRef}

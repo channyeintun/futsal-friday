@@ -89,16 +89,24 @@ function slotsWithStatus(
  *    four people who are genuinely playing, so the roster wins.
  * 3. **No cap**, which is most weeks. There is no number to draw ghosts up to,
  *    so the field is exactly the people on it plus the single open spot that
- *    says you can still join — and not even that once registration has closed,
- *    because then there is nothing left to offer.
+ *    says you can still join.
+ *
+ * And over all three, one rule: an empty spot is an offer, so once registration
+ * has closed there are none. The pitch stays on the screen for every session,
+ * including ones played months ago — it is the clearest record of a Friday the
+ * app holds — but a game that has finished draws the people who signed up and
+ * nothing else. Four unclaimed circles under a cap nobody reached are not four
+ * places going spare any more; they are holes in a record, offering something
+ * the server would refuse.
  */
 export function pitchSlotCount(
   headsIn: number,
   maxPlayers: number | null | undefined,
   registrationOpen: boolean,
 ): number {
+  if (!registrationOpen) return headsIn;
   if (maxPlayers != null) return Math.max(headsIn, maxPlayers);
-  return registrationOpen ? headsIn + 1 : headsIn;
+  return headsIn + 1;
 }
 
 /**
