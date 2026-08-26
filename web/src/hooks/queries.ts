@@ -54,6 +54,10 @@ export const queryKeys = {
   payments: (sessionId: string) => ['payments', sessionId] as const,
   members: ['members'] as const,
   pendingMembers: ['members', 'pending'] as const,
+  // Named rather than spelled out at both ends: attendance has to invalidate
+  // this, and a key that only matches by two strings agreeing is a key that
+  // silently stops matching.
+  form: ['members', 'form'] as const,
   venues: (includeRetired: boolean) => ['venues', includeRetired] as const,
   history: (memberId: string) => ['history', memberId] as const,
   balances: ['balances'] as const,
@@ -270,7 +274,7 @@ export function useProfile(memberId: string) {
  */
 export function useRecentForm(enabled = true) {
   return useQuery({
-    queryKey: ['members', 'form'] as const,
+    queryKey: queryKeys.form,
     queryFn: ({ signal }) => listForm(signal),
     enabled,
     // Only moves when a game finishes and somebody marks attendance.

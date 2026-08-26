@@ -98,6 +98,9 @@ check('playing()', my.session.playing(5, 14).includes('5') && my.session.playing
 check('playing() without a cap omits it', !my.session.playing(5, null).includes('/'),
   my.session.playing(5, null));
 check('memberAdded()', my.toast.memberAdded('Kyaw').includes('Kyaw'), my.toast.memberAdded('Kyaw'));
+check('session.attendanceAskOther()', my.session.attendanceAskOther('Kyaw').includes('Kyaw'),
+  my.session.attendanceAskOther('Kyaw'));
+check('session.noShowsCount()', my.session.noShowsCount(3).includes('3'), my.session.noShowsCount(3));
 check('unpaidBody()', my.push.unpaidBody('120.000d', 'x').includes('120.000d'),
   my.push.unpaidBody('120.000d', 'x'));
 check('matchBodyAtVenue()',

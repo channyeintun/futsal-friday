@@ -18,7 +18,8 @@ import { useLocale, useMessages } from '../state/locale.js';
 import { useRecentForm } from '../hooks/queries.js';
 import { useExpandPin } from '../hooks/useExpandPin.js';
 import { AnnounceButton } from './AnnounceButton.js';
-import { AttendanceToggle } from './AttendanceToggle.js';
+import { AttendanceMark } from './AttendanceMark.js';
+import { NoShowSheet } from './NoShowSheet.js';
 import { FormSquares } from './FormSquares.js';
 import { GoalsButton } from './GoalsButton.js';
 import { Avatar } from './Avatar.js';
@@ -220,6 +221,12 @@ export function SessionView({
             <p className="muted" style={{ margin: 0 }}>
               {m.session.attendanceBody}
             </p>
+            {/* The organizer answers for twelve people at the final whistle;
+                everybody else answers for one. Only the first of those needs a
+                path that is not one dialog per person. */}
+            {identity.isOrganizer ? (
+              <NoShowSheet sessionId={session.id} playing={playing} onChanged={onChanged} />
+            ) : null}
           </div>
         ) : null}
 
@@ -299,7 +306,7 @@ export function SessionView({
                       canRecordOthers={identity.isOrganizer}
                       onChanged={onChanged}
                     />
-                    <AttendanceToggle
+                    <AttendanceMark
                       sessionId={session.id}
                       registration={registration}
                       canMarkOthers={identity.isOrganizer}

@@ -268,13 +268,28 @@ export const en = {
       'Everyone on the list counts unless you say otherwise. Only mark the people who did not turn up — their share goes to whoever did.',
     attendanceUnchecked: 'Nobody has checked this yet',
     attendanceCount: (heads: number) => (heads === 1 ? '1 played' : `${heads} played`),
+    attendanceAskSelf: 'Did you play?',
+    attendanceAskOther: (name: string) => `Did ${name} play?`,
+    attendanceAskBody:
+      'Only the people who played split the bill, and a missed game ends a streak. Nothing changes until you pick one.',
+    attendancePresumed: 'Nobody has said. As it stands this counts as played.',
     iWasThere: 'I was there',
     iMissedIt: 'I missed it',
     didNotPlay: 'did not play',
     played: 'played',
+    countedIn: 'counted in',
     markAbsent: 'Mark as no-show',
     markPresent: 'Mark as played',
-    unmark: 'Clear',
+    // Shown as the *current* state as well as the choice that returns to it,
+    // so it has to be a noun phrase. "Clear" read as an instruction, which is
+    // the grammar this control exists to stop repeating.
+    unmark: 'Nobody has said',
+    markNoShows: 'Mark the no-shows',
+    noShowsTitle: 'Who did not play?',
+    noShowsBody: 'Tap anyone who did not turn up. Everyone you leave alone stays counted in.',
+    noShowsCount: (count: number) =>
+      count === 1 ? '1 marked as a no-show' : `${count} marked as no-shows`,
+    noShowsNone: 'Everybody played',
     guestsArrivedTitle: 'How many friends came?',
     guestsArrivedBody: (registered: number) =>
       `You put down ${registered}. Only the ones who turned up are billed.`,
@@ -472,6 +487,11 @@ export const en = {
     sessionCancelled: 'Session cancelled',
     sessionCreated: 'Session created',
     venueSaved: 'Venue saved',
+    // The half of the fix no dialog can do: say, at the moment of acting, that
+    // the action can be taken back. The member in the incident got as far as
+    // the wrong answer and then could not tell that a way back existed.
+    attendanceSaved: 'Saved. Tap it again if that is wrong.',
+    attendanceSheetSaved: 'Saved. Open it again to change anything.',
     memberAdded: (name: string) => `${name} added`,
     memberRemoved: (name: string) => `${name} removed`,
     amountsRebalanced: 'Amounts rebalanced',

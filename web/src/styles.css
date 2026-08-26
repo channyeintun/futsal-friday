@@ -1602,6 +1602,41 @@ md-outlined-text-field {
   color: var(--md-sys-color-on-primary);
 }
 
+/*
+ * The same picker, stacked, for choices that are sentences rather than digits.
+ * Three Burmese answers do not fit across a 414px phone in one row, and a
+ * truncated answer is a bug this part of the app has already had once.
+ */
+.guest-choices.is-stacked {
+  flex-direction: column;
+}
+
+.guest-choices.is-stacked .guest-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* `flex: 1` would stretch these into equal thirds of the column. */
+  flex: none;
+  /* 48px, the height this app gives a full-width row of choices — see
+     `.mvp-choice`. */
+  min-height: 48px;
+  padding: 0 14px;
+  text-align: left;
+}
+
+.guest-choices.is-stacked .choice-dash {
+  width: 18px;
+  text-align: center;
+}
+
+/* Missing until now, which is why the goals picker stayed silently tappable
+   while it was saving. */
+.guest-choice:disabled,
+.team-choice:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 /* ------------------------------------------------------------- the pitch */
 
 /*
@@ -2484,6 +2519,20 @@ button.pitch-spot::before {
   cursor: default;
 }
 
+/* Picked as a no-show, in the roster sheet. Outlined in error rather than
+   filled: this is a list of people, and filling one in would read as a prize.
+   Same reasoning as `.mvp-choice.is-mine` above. */
+.mvp-choice.is-out {
+  border-color: var(--md-sys-color-error);
+  color: var(--md-sys-color-error);
+}
+
+/* The sheet's list lives in a dialog rather than a card, so it caps against the
+   viewport instead of a flex parent. */
+.no-show-list {
+  max-height: min(50dvh, 340px);
+}
+
 .mvp-name {
   flex: 1;
   min-width: 0;
@@ -3085,6 +3134,37 @@ button.pitch-spot::before {
   font-size: 0.68rem;
   line-height: 1.5;
   min-height: 34px;
+}
+
+/*
+ * It has to read as pressable in the state you are trying to get out of.
+ *
+ * There was no :hover, :active or :focus-visible rule on this control at all,
+ * so a red "did not play" pill was a red *label* with no visible way back —
+ * half of why the state read as a fact rather than as a button, and half of why
+ * the member who tripped over it concluded there was nothing more to press. The
+ * border takes on the text colour rather than a new tint, because on your own
+ * row the surface behind this pill is already a container tone.
+ */
+.attend-toggle:hover:not(:disabled),
+.attend-toggle:focus-visible,
+.attend-guests:hover:not(:disabled),
+.attend-guests:focus-visible {
+  opacity: 1;
+  background: var(--md-sys-color-surface-container-highest);
+  border-color: currentColor;
+}
+
+.attend-toggle:active:not(:disabled),
+.attend-guests:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .attend-toggle:active:not(:disabled),
+  .attend-guests:active:not(:disabled) {
+    transform: none;
+  }
 }
 
 /* A hairline between two adjacent destructive controls, so they do not read

@@ -193,6 +193,12 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
                   : current.me,
               };
             });
+            // A watcher's form squares and streak are separate queries with
+            // their own staleTime, and the patch above does not touch them.
+            // Without this, everyone else at the pitch keeps seeing the broken
+            // run of the person whose mark was just corrected.
+            void queryClient.invalidateQueries({ queryKey: queryKeys.form });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.profile(memberId) });
             return;
           }
 
