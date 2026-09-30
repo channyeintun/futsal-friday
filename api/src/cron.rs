@@ -20,7 +20,7 @@ use serde_json::json;
 use wasm_bindgen::JsValue;
 use worker::{console_log, Env, Result as WorkerResult};
 
-use futsal_core::clock::{next_friday_kickoff, SESSION_RUNS_FOR_MS};
+use futsal_core::clock::{next_friday_kickoff, start_of_zoned_day, SESSION_RUNS_FOR_MS};
 use futsal_core::events::{session_channel, LOBBY_CHANNEL};
 
 use crate::db::{get_session_row, SessionRow};
@@ -182,18 +182,57 @@ async fn complete_finished_sessions(env: &Env, now_ms: f64) -> WorkerResult<Vec<
 }
 
 /// Create the upcoming Friday 19:30 ICT session if the group has nothing
-/// scheduled.
+/// scheduled — and has not called that Friday off.
 ///
-/// The guard is "is there *any* future scheduled session", not "is there one at
-/// exactly this timestamp". That way an organizer who has already moved this
-/// week's game to Thursday does not get a duplicate Friday fixture created
-/// underneath them.
+/// The first half of the guard is "is there *any* future scheduled session",
+/// not "is there one at exactly this timestamp". That way an organizer who has
+/// already moved this week's game to Thursday does not get a duplicate Friday
+/// fixture created underneath them — until that game kicks off, when it stops
+/// being upcoming and the Friday appears. Closing that would mean telling a
+/// game moved to Thursday from a midweek extra, which nothing here records, and
+/// guessing wrong would cost the group its Friday every time an extra is added.
+///
+/// The second half is what makes cancelling stick. A cancelled row is not
+/// scheduled, and the slot index deliberately ignores cancelled rows, so without
+/// it the very next tick after a call-off put an empty 19:30 back on everybody's
+/// home screen — with nobody registered, so it read as though the game were on
+/// and the roster had been wiped. It also made the call-off impossible to undo:
+/// the resurrected twin held the slot, so putting the original back on hit the
+/// unique index.
+///
+/// It is bounded to the target Friday's own day, in ICT, rather than to "any
+/// cancelled future session" or "anything cancelled this week":
+///
+/// - Not any future one, because a Friday called off three weeks ahead must not
+///   stop this week's game being created.
+/// - Not the week, because the admin screen adds midweek games, and a midweek
+///   extra that fell through must not take the regular Friday down with it.
+/// - Not the exact kickoff instant, because a game moved to 20:00 on the day and
+///   then rained off is still that Friday called off.
+///
+/// What it does not catch is a week whose game was moved to another day and
+/// then cancelled there: the Friday comes back, visibly, and cancelling it too
+/// makes that one stick. That is the rarer case and the cheaper failure.
 async fn ensure_upcoming_session(env: &Env, now_ms: f64) -> WorkerResult<Option<String>> {
     let db = crate::env::db(env)?;
 
+    let target = next_friday_kickoff(now_ms as i64);
+    let target_day = start_of_zoned_day(target);
+    // A fixed UTC+7 with no daylight saving, so a day is always exactly this.
+    let target_day_end = target_day + 24 * 60 * 60 * 1000;
+
     let existing: Option<String> = db
-        .prepare("SELECT id FROM sessions WHERE status = 'scheduled' AND starts_at >= ?1 LIMIT 1")
-        .bind(&[text(&iso_of(now_ms))])?
+        .prepare(
+            "SELECT id FROM sessions
+          WHERE (status = 'scheduled' AND starts_at >= ?1)
+             OR (status = 'cancelled' AND starts_at >= ?2 AND starts_at < ?3)
+          LIMIT 1",
+        )
+        .bind(&[
+            text(&iso_of(now_ms)),
+            text(&iso_of(target_day as f64)),
+            text(&iso_of(target_day_end as f64)),
+        ])?
         .first(Some("id"))
         .await?;
     if existing.is_some() {
@@ -211,7 +250,7 @@ async fn ensure_upcoming_session(env: &Env, now_ms: f64) -> WorkerResult<Option<
 
     let id = new_id("ses");
     let timestamp = now_iso();
-    let starts_at = iso_of(next_friday_kickoff(now_ms as i64) as f64);
+    let starts_at = iso_of(target as f64);
 
     let written = db
         .prepare(

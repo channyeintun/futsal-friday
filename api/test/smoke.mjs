@@ -15,6 +15,28 @@ import { randomBytes } from 'node:crypto';
 
 const BASE = process.env.API_URL ?? 'http://localhost:8787';
 
+/*
+ * A dead keep-alive socket is retried once.
+ *
+ * `wrangler dev` drops an idle connection after about five seconds, and every
+ * `wrangler d1 execute` below takes a second or so — a section that runs a few
+ * of them between requests hands `fetch` a socket the server has already
+ * closed, and the next request dies before reaching the Worker.
+ * That is what crashed the suite in the streaks section. A reset before any
+ * response means the request was never handled, so trying it again on a fresh
+ * socket cannot double a write.
+ */
+const rawFetch = globalThis.fetch;
+globalThis.fetch = async (...args) => {
+  try {
+    return await rawFetch(...args);
+  } catch (error) {
+    // ECONNRESET or "other side closed", depending on which end noticed first.
+    if (!['ECONNRESET', 'UND_ERR_SOCKET'].includes(error?.cause?.code)) throw error;
+    return rawFetch(...args);
+  }
+};
+
 let passed = 0;
 let failed = 0;
 const failures = [];
@@ -79,6 +101,29 @@ function seedClaimNonce(memberId) {
 function sql(command) {
   execFileSync('npx', ['wrangler', 'd1', 'execute', 'futsal-friday', '--local', '--command', command],
     { encoding: 'utf8', stdio: 'pipe' });
+}
+
+/** The same, for the few checks that have to read underneath the API. */
+function sqlRows(command) {
+  const out = execFileSync('npx',
+    ['wrangler', 'd1', 'execute', 'futsal-friday', '--local', '--json', '--command', command],
+    { encoding: 'utf8', stdio: 'pipe' });
+  return JSON.parse(out)[0]?.results ?? [];
+}
+
+/**
+ * The Friday 19:30 ICT the cron would create next, as the Worker's
+ * `next_friday_kickoff` works it out: strictly after `nowMs`, so at 19:30 on
+ * the dot it is already next week's.
+ */
+function nextFridayKickoff(nowMs) {
+  const ICT = 7 * 3_600_000;
+  const local = new Date(nowMs + ICT);
+  const daysAhead = (5 - local.getUTCDay() + 7) % 7;
+  const at = (days) =>
+    Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() + days, 19, 30) - ICT;
+  const candidate = at(daysAhead);
+  return new Date(candidate > nowMs ? candidate : at(daysAhead + 7)).toISOString();
 }
 
 /**
@@ -1724,6 +1769,108 @@ const run = async () => {
   const completedOne = await call('GET', `/sessions/${past.body.session.id}`, { token: organizer });
   check('past session was completed', completedOne.body?.session?.status === 'completed',
     completedOne.body?.session?.status);
+
+  section('cron: a called-off Friday stays called off');
+  {
+    const runCron = async () => {
+      await fetch(`${BASE}/cdn-cgi/local/scheduled`);
+      await new Promise((r) => setTimeout(r, 500));
+    };
+    const nowIso = new Date().toISOString();
+    const kickoff = nextFridayKickoff(Date.now());
+    const kickoffMs = Date.parse(kickoff);
+    // The Friday's own day in ICT, the window the Worker's guard reads.
+    const ICT = 7 * 3_600_000;
+    const dayStart = new Date(Math.floor((kickoffMs + ICT) / 86_400_000) * 86_400_000 - ICT);
+    const dayStartIso = dayStart.toISOString();
+    const dayEndIso = new Date(dayStart.getTime() + 86_400_000).toISOString();
+    // Far enough back to be nobody's week and nobody's slot.
+    const ASIDE_MS = 400 * 86_400_000;
+    const aside = (iso) => new Date(Date.parse(iso) - ASIDE_MS).toISOString();
+
+    // Everything that could answer the cron's question for it is moved out of
+    // the way for the duration, so the answer is the guard's alone:
+    //
+    // - every other future fixture, parked as completed (which the guard does
+    //   not count and which cannot collide with the slot index on the way back);
+    // - whatever already sits on the Friday's day — the cron's own Friday from
+    //   earlier, and cancelled leftovers from the sections above, which cancel
+    //   games nine and ten days out and never delete them. Those are moved a
+    //   year back rather than parked in place, because a non-cancelled row at
+    //   the kickoff would make the cron's insert a no-op and the check below
+    //   would pass without the cron having done anything.
+    const parked = sqlRows(
+      `SELECT id FROM sessions WHERE status = 'scheduled' AND starts_at >= '${nowIso}'
+          AND NOT (starts_at >= '${dayStartIso}' AND starts_at < '${dayEndIso}');`,
+    ).map((row) => row.id);
+    const moved = sqlRows(
+      `SELECT id, starts_at, status FROM sessions
+        WHERE starts_at >= '${dayStartIso}' AND starts_at < '${dayEndIso}';`,
+    );
+    const midweekId = `ses_midweek_off_${Date.now() % 100000}`;
+    let fridayId = null;
+
+    try {
+      if (parked.length) {
+        sql(`UPDATE sessions SET status = 'completed'
+              WHERE id IN (${parked.map((id) => `'${id}'`).join(',')});`);
+      }
+      for (const row of moved) {
+        sql(`UPDATE sessions SET starts_at = '${aside(row.starts_at)}',
+                    status = CASE status WHEN 'scheduled' THEN 'completed' ELSE status END
+              WHERE id = '${row.id}';`);
+      }
+
+      // A midweek extra that fell through, two days before the Friday — past or
+      // future, since a week-wide guard would count it either way. It is the
+      // case such a guard gets wrong: it must not cost the group its Friday.
+      const midweekAt = new Date(kickoffMs - 2 * 86_400_000).toISOString();
+      sql(`INSERT INTO sessions (id, starts_at, status, created_at, updated_at)
+           VALUES ('${midweekId}', '${midweekAt}', 'cancelled', '${nowIso}', '${nowIso}');`);
+
+      await runCron();
+      const friday = sqlRows(
+        `SELECT id, created_at FROM sessions WHERE starts_at = '${kickoff}' AND status = 'scheduled';`,
+      );
+      check('the cron puts the Friday on, whatever else was called off that week',
+        friday.length === 1 && friday[0].created_at >= nowIso, friday);
+
+      fridayId = friday[0]?.id ?? null;
+      const calledOff = await call('PATCH', `/sessions/${fridayId}`, {
+        token: organizer,
+        body: { status: 'cancelled' },
+      });
+      check('the organizer can call the Friday off', calledOff.status === 200, calledOff.body);
+
+      await runCron();
+      const revived = sqlRows(
+        `SELECT id FROM sessions WHERE starts_at = '${kickoff}' AND status <> 'cancelled';`,
+      );
+      check('the next tick does not bring a called-off Friday back', revived.length === 0, revived);
+
+      // Before the fix this was a 409: the resurrected twin held the slot.
+      const backOn = await call('PATCH', `/sessions/${fridayId}`, {
+        token: organizer,
+        body: { status: 'scheduled' },
+      });
+      check('a called-off Friday can be put back on', backOn.status === 200, backOn.body);
+    } finally {
+      // Whatever happened above, the world goes back as it was found: a failed
+      // assertion does not throw, but a dropped connection or a busy database
+      // would, and parked fixtures that never came back would quietly break the
+      // next run's view of the future.
+      sql(`DELETE FROM sessions WHERE id = '${midweekId}'
+             OR (starts_at = '${kickoff}' AND created_at >= '${nowIso}');`);
+      for (const row of moved) {
+        sql(`UPDATE sessions SET starts_at = '${row.starts_at}', status = '${row.status}'
+              WHERE id = '${row.id}';`);
+      }
+      if (parked.length) {
+        sql(`UPDATE sessions SET status = 'scheduled'
+              WHERE id IN (${parked.map((id) => `'${id}'`).join(',')});`);
+      }
+    }
+  }
 
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {

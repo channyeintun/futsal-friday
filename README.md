@@ -396,10 +396,19 @@ rebalances everyone else and running it twice gives the same answer.
 hit by a once-a-day job. Every step is idempotent, so extra runs are harmless
 and a missed run self-heals.
 
-The session bookkeeping inside it still only runs at 08:00 ICT: it completes
-finished sessions (which opens the payment flow on Saturday morning) and creates
-the upcoming Friday only if nothing is already scheduled — so an organizer who
-moved this week's game to Thursday does not get a duplicate underneath them.
+The session bookkeeping runs on every tick too: it completes finished sessions
+(which opens the payment flow within an hour of the game finishing — two hours
+after kickoff) and creates the upcoming Friday only if nothing is already
+scheduled — so an organizer who moved this week's game to Thursday does not get
+a duplicate underneath them, at least until that game kicks off and stops
+counting as upcoming.
+
+It also leaves a Friday alone once it has been called off. A cancelled session
+on the target Friday's day (ICT) counts as that week being handled, so rain at
+five o'clock stays rain: the next tick does not put an empty 19:30 back on the
+home screen, and the organizer can still put the original back on. It is
+bounded to that one day on purpose — a cancelled midweek extra, or a Friday
+called off weeks ahead, must not stop this week's game being created.
 
 8,760 invocations a year is noise against 100k requests/day.
 
