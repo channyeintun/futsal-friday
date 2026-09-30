@@ -5,12 +5,12 @@
   // Rust, compiled to Wasm. `worker-build` writes the shim wrangler uploads
   // alongside the module; `build/` is ignored, because it is output.
   "main": "build/worker/shim.mjs",
-  // `worker-build` is pinned: the current release refuses any `worker` crate
-  // below 0.8, and this Worker is written against 0.6. The pin also fixes the
-  // `wasm-bindgen` the builder brings, which is why `Cargo.toml` pins the same
-  // version — the two have to agree or `wasm-bindgen` refuses the module.
+  // `worker-build` tracks the `worker` crate's minor version — 0.8 builds
+  // `worker` 0.8 and refuses anything else — so it moves with `Cargo.toml`.
+  // It fetches the `wasm-bindgen` CLI that `Cargo.lock` names, which is why
+  // nothing pins `wasm-bindgen` by hand.
   "build": {
-    "command": "cargo install -q 'worker-build@^0.1' && worker-build --release"
+    "command": "cargo install -q 'worker-build@^0.8' && worker-build --release"
   },
 
   "compatibility_date": "2025-09-01",

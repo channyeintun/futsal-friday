@@ -29,7 +29,7 @@
 //! round trip — a key out of KV, a second provider that calls somebody — the
 //! callers do not change.
 
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use serde::Serialize;
 use serde_json::Value;
 use sha2::Sha256;
@@ -403,7 +403,7 @@ pub fn revoke() -> String {
 /// single SQL statement without needing `AUTH_SECRET`.
 pub fn new_claim_nonce() -> String {
     let mut bytes = [0u8; 32];
-    getrandom::getrandom(&mut bytes).expect("crypto.getRandomValues is always available");
+    getrandom::fill(&mut bytes).expect("crypto.getRandomValues is always available");
     base64::b64url_encode(&bytes)
 }
 

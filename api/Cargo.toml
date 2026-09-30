@@ -15,16 +15,16 @@ members = ["core"]
 
 [dependencies]
 futsal-core = { path = "core" }
-worker = { version = "0.6", features = ["d1", "http"] }
-worker-macros = "0.6"
+# Moves with the `worker-build` in `wrangler.jsonc`: the builder refuses any
+# `worker` outside its own minor version.
+worker = { version = "0.8", features = ["d1", "http"] }
+worker-macros = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 js-sys = "0.3"
-# Pinned to the CLI `worker-build@^0.1` fetches. `worker 0.6` is what this port
-# was written against; the current `worker-build` refuses anything below
-# `worker 0.8`, so the builder is pinned instead — and a pinned builder brings
-# its own `wasm-bindgen`, which has to be the version the crate generates for.
-wasm-bindgen = "=0.2.105"
+# Not pinned: `worker-build` reads this version out of `Cargo.lock` and fetches
+# the `wasm-bindgen` CLI that matches it, so the lockfile is the pin.
+wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 # The SSE stream and the Upstash REST client reach past `worker` to the raw
 # platform: a `TransformStream` whose writer the streaming loop owns, and a
@@ -43,20 +43,32 @@ web-sys = { version = "0.3", features = [
     "WorkerGlobalScope",
     "WritableStreamDefaultWriter",
 ] }
-getrandom = { version = "0.2", features = ["js"] }
+# `crypto.getRandomValues`, for claim nonces and — as `SysRng` — the Web Push
+# keys. On wasm32-unknown-unknown the `wasm_js` feature alone selects it; no
+# `getrandom_backend` rustflag, so no `.cargo/config.toml`.
+getrandom = { version = "0.4", features = ["wasm_js", "sys_rng"] }
 
 # Web Push (RFC 8291 / 8188 / 8292). Pure Rust rather than the host's
 # SubtleCrypto so the RFC 8291 Appendix A vector runs under `cargo test` on the
 # host as well as inside the Worker; all five compile to wasm32-unknown-unknown.
-p256 = { version = "0.13", features = ["ecdh", "ecdsa"] }
-aes-gcm = "0.10"
-hmac = "0.12"
-sha2 = "0.10"
-rand_core = { version = "0.6", features = ["getrandom"] }
+# They are one RustCrypto generation — `digest` 0.11, `rand_core` 0.10 — and
+# move together: mix two generations and their traits no longer line up.
+p256 = { version = "0.14", features = ["ecdh", "ecdsa"] }
+aes-gcm = "0.11"
+hmac = "0.13"
+sha2 = "0.11"
+# Traits only. The generator is `getrandom`'s `SysRng`, which is where
+# `rand_core` 0.10 moved what used to be its own `OsRng`.
+rand_core = "0.10"
 
 [profile.release]
 # Wasm size matters on the free tier; the Worker is cold-started per colo.
 opt-level = "s"
 lto = true
 codegen-units = 1
-strip = true
+# Debug info only, not `true`. A full strip also drops the `target_features`
+# section, which is how `wasm-bindgen` learns the module uses reference types;
+# without them it cannot build the catch wrappers `worker-build` needs to
+# recover the instance after a panic, and the build fails. What this keeps is
+# the function names — under 40 KB gzipped, and what a panic's stack is read by.
+strip = "debuginfo"

@@ -24,9 +24,11 @@
 
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes128Gcm, Nonce};
+use getrandom::SysRng;
 use hmac::{Hmac, Mac};
 use p256::ecdsa::signature::RandomizedSigner;
-use rand_core::{OsRng, RngCore};
+use p256::elliptic_curve::Generate;
+use rand_core::{Rng, UnwrapErr};
 use serde::Serialize;
 use sha2::Sha256;
 use worker::Env;
@@ -181,10 +183,22 @@ pub fn b64url_decode(value: &str) -> Result<Vec<u8>, PushError> {
     Ok(out)
 }
 
+/* ------------------------------------------------------------------- random */
+
+/// The host's CSPRNG — `crypto.getRandomValues` in the Worker, the OS under
+/// `cargo test` — as the infallible generator the curve and the signer take.
+///
+/// This is what `rand_core::OsRng` was before `rand_core` 0.10 moved it into
+/// `getrandom` as a fallible `SysRng`. `UnwrapErr` panics on failure exactly as
+/// `OsRng` did: a Worker without `crypto` is not one this code can run in.
+fn os_rng() -> UnwrapErr<SysRng> {
+    UnwrapErr(SysRng)
+}
+
 /* --------------------------------------------------------------------- HKDF */
 
 fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
-    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(key).expect("HMAC takes a key of any length");
+    let mut mac = <Hmac<Sha256> as KeyInit>::new_from_slice(key).expect("HMAC takes a key of any length");
     mac.update(data);
     mac.finalize().into_bytes().into()
 }
@@ -245,11 +259,11 @@ pub fn encrypt_payload(
             .map_err(|_| PushError::new("Invalid key data"))?;
         salt = sender.salt.clone();
     } else {
-        let secret = p256::SecretKey::random(&mut OsRng);
+        let secret = p256::SecretKey::generate_from_rng(&mut os_rng());
         as_public = secret.public_key().to_sec1_bytes().to_vec();
         as_private = secret;
         let mut fresh = vec![0u8; 16];
-        OsRng.fill_bytes(&mut fresh);
+        os_rng().fill_bytes(&mut fresh);
         salt = fresh;
     }
 
@@ -342,7 +356,7 @@ pub fn vapid_authorization(endpoint: &str, vapid: &VapidKeys, now: f64) -> Resul
     // and it picks a fresh `k` per call, so this signs randomized rather than
     // with RFC 6979.
     let signature: p256::ecdsa::Signature =
-        signing_key.sign_with_rng(&mut OsRng, signing_input.as_bytes());
+        signing_key.sign_with_rng(&mut os_rng(), signing_input.as_bytes());
 
     Ok(format!(
         "vapid t={signing_input}.{}, k={}",
@@ -373,7 +387,7 @@ pub struct GeneratedVapidKeys {
 
 /// Generate a VAPID keypair. Used by `npm run push:keys`.
 pub fn generate_vapid_keys() -> GeneratedVapidKeys {
-    let secret = p256::SecretKey::random(&mut OsRng);
+    let secret = p256::SecretKey::generate_from_rng(&mut os_rng());
     GeneratedVapidKeys {
         public_key: b64url_encode(&secret.public_key().to_sec1_bytes()),
         // The original read the JWK `d` member, which WebCrypto already emits
