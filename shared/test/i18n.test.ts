@@ -113,6 +113,11 @@ check('pitch.partyTooBig() carries both numbers',
   my.pitch.partyTooBig(3, 2).includes('3') && my.pitch.partyTooBig(3, 2).includes('2'),
   my.pitch.partyTooBig(3, 2));
 check('pitch.playerSpot()', my.pitch.playerSpot('Kyaw').includes('Kyaw'), my.pitch.playerSpot('Kyaw'));
+check('mvp.hookTurn() carries both numbers',
+  my.mvp.hookTurn(6, 11).includes('6') && my.mvp.hookTurn(6, 11).includes('11'), my.mvp.hookTurn(6, 11));
+check('mvp.allIn()', my.mvp.allIn(11).includes('11'), my.mvp.allIn(11));
+check('mvp.ballotLabel()', my.mvp.ballotLabel('Kyaw').includes('Kyaw'), my.mvp.ballotLabel('Kyaw'));
+check('mvp.votedFor()', my.mvp.votedFor('Kyaw').includes('Kyaw'), my.mvp.votedFor('Kyaw'));
 
 console.log('\ndates and durations');
 // 2026-08-07T12:30:00Z is Friday 19:30 in Ho Chi Minh City.

@@ -114,6 +114,10 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
                 me: memberId === viewerId ? entry : current.me,
               };
             });
+            // Who played decides who may vote and who can be voted for, and
+            // the ballot is its own read: the patch above moves the roster,
+            // not it. Only refetches while the vote is on screen.
+            void queryClient.invalidateQueries({ queryKey: queryKeys.mvp(event.data.sessionId) });
             return;
           }
 
@@ -151,6 +155,10 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
 
               return { ...current, registrations, counts, me };
             });
+            // Who played decides who may vote and who can be voted for, and
+            // the ballot is its own read: the patch above moves the roster,
+            // not it. Only refetches while the vote is on screen.
+            void queryClient.invalidateQueries({ queryKey: queryKeys.mvp(event.data.sessionId) });
             return;
           }
 
@@ -199,6 +207,10 @@ export function useLiveSession(sessionId: string | null, viewerId: string): Live
             // run of the person whose mark was just corrected.
             void queryClient.invalidateQueries({ queryKey: queryKeys.form });
             void queryClient.invalidateQueries({ queryKey: queryKeys.profile(memberId) });
+            // Who played decides who may vote and who can be voted for, and
+            // the ballot is its own read: the patch above moves the roster,
+            // not it. Only refetches while the vote is on screen.
+            void queryClient.invalidateQueries({ queryKey: queryKeys.mvp(event.data.sessionId) });
             return;
           }
 

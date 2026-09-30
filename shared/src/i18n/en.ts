@@ -370,9 +370,6 @@ export const en = {
 
   mvp: {
     title: 'Best player',
-    body: 'Who was the best today? Tap a name.',
-    changeBody: 'Changed your mind? Tap somebody else.',
-    yours: 'your vote',
     takeItBack: 'Take my vote back',
     playersOnly: 'Only people who played can vote.',
     turnout: (cast: number, of: number) => `${cast} of ${of} voted`,
@@ -380,6 +377,27 @@ export const en = {
     leadingWith: (count: number) => (count === 1 ? 'with 1 vote' : `with ${count} votes`),
     shared: (count: number) => (count === 1 ? 'tied on 1 vote' : `tied on ${count} votes`),
     failed: 'Could not save your vote',
+    // Only ever true for the person reading it: nobody has voted, a tie that
+    // one vote would break, or simply how many are in. Never a nag.
+    hookFirst: 'Nobody has voted yet. Tap a card — your vote makes them MVP.',
+    hookTie: 'Tied at the top — your vote can break it.',
+    hookTurn: (cast: number, of: number) => `${cast} of ${of} have voted. Your turn — tap a card.`,
+    ballot: 'Ballot',
+    ballotLabel: (name: string) => `Vote for ${name}`,
+    stamp: 'Voted',
+    sealed: 'Your vote is in',
+    sealedNote: 'Sealed. Nobody sees who you picked.',
+    votedFor: (name: string) => `You voted for ${name}`,
+    change: 'Change',
+    keep: 'Keep it',
+    takenBack: 'Vote taken back',
+    kicker: 'MVP',
+    kickerShared: 'Joint MVP',
+    upForGrabs: 'Up for grabs',
+    // Under the number on the leader's card, three letters like the board's own.
+    codeVotes: 'VTS',
+    allIn: (of: number) => `All ${of} voted`,
+    countsToward: 'Counts on the MVP board.',
   },
 
   /* -------------------------------------------------------- trash talk */

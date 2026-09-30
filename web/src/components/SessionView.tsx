@@ -8,7 +8,7 @@ import {
   teamBoardLive,
   totalArrivedHeads,
 } from '@futsal/shared';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ConnectionState } from '../api/realtime.js';
 import { cancelSession } from '../api/sessions.js';
 import { platform } from '../platform/index.js';
@@ -58,6 +58,40 @@ export function SessionView({
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [rosterExpanded, setRosterExpanded] = useState(false);
   const rosterRef = useExpandPin<HTMLDivElement>(rosterExpanded);
+  /*
+   * Where the vote sits is decided once per viewing, never mid-read.
+   *
+   * A card that leapt from under the boards to the top at 21:30 would move
+   * everything under whoever was reading, and it would move on a realtime
+   * re-render nobody asked for — a kickoff corrected in the editor included.
+   * So the decision itself is kept, not just the clock it was made by.
+   *
+   * "A viewing" is not a mount. Home keeps this screen mounted for tonight's
+   * game, and a phone that was used for the scores at 19:45 and unlocked on
+   * the way home at 22:15 never remounts it — which is exactly the person who
+   * should find the vote at the top. So it is decided again whenever the
+   * screen comes back into view, when nobody can be mid-read, and for each new
+   * session shown.
+   */
+  const placeVote = () => {
+    const now = new Date();
+    const kicked = new Date(session.startsAt).getTime() <= now.getTime();
+    return {
+      sessionId: session.id,
+      atTop: kicked && session.status !== 'cancelled' && !teamBoardLive(session, now),
+    };
+  };
+  const [votePlace, setVotePlace] = useState(placeVote);
+  if (votePlace.sessionId !== session.id) setVotePlace(placeVote());
+  useEffect(
+    () =>
+      platform.visibility.subscribe((visible) => {
+        if (visible) setVotePlace(placeVote());
+      }),
+    // placeVote reads only these; re-subscribing is how it sees their latest.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [session.id, session.startsAt, session.status],
+  );
 
   const playing = registrations.filter((r) => r.status === 'in');
   const waiting = registrations.filter((r) => r.status === 'waitlist');
@@ -92,6 +126,13 @@ export function SessionView({
   // not happen are not a record of anything.
   const teamsLive = teamBoardLive(session);
   const showTeams = session.status !== 'cancelled' && (teamsLive || detail.teams !== null);
+  // Once the board has become a record, who was best is the question this
+  // screen answers first — it is what the group opens the app for on the way
+  // home, and under the pitch, the roster and the boards it was two or three
+  // screens down, which is most of why nobody voted. During the game it stays
+  // under the boards, which are the working tool while scores go in. The same
+  // two hours the board and the cron use, so the three agree.
+  const afterWhistle = showAttendance && votePlace.atTop;
   const arrived = totalArrivedHeads(registrations);
   const checked = attendanceChecked(registrations);
 
@@ -167,6 +208,8 @@ export function SessionView({
       </section>
 
       {error ? <ErrorBanner>{error}</ErrorBanner> : null}
+
+      {afterWhistle ? <MvpVote sessionId={session.id} /> : null}
 
       {session.status === 'cancelled' ? (
         <div className="error-banner">{m.session.wasCancelled}</div>
@@ -379,8 +422,9 @@ export function SessionView({
       ) : null}
 
       {/* Only once there is a game to judge. Asking who played best before
-          anybody has played is the same mistake as asking who turned up. */}
-      {showAttendance ? <MvpVote sessionId={session.id} /> : null}
+          anybody has played is the same mistake as asking who turned up. After
+          the whistle it moves to the top — see `afterWhistle`. */}
+      {showAttendance && !afterWhistle ? <MvpVote sessionId={session.id} /> : null}
 
       {/* Under the teams, because most of what gets said is about them. Open
           on any session that still exists — the winding up starts days before

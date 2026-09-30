@@ -126,10 +126,12 @@ export function useSessionMessages(sessionId: string, enabled = true) {
 /**
  * The MVP vote on a session.
  *
- * Its own read, like the thread: the roster paints first and this is below it.
- * The server withholds the tally until the caller has voted, so this cache
- * entry simply does not contain the numbers yet — there is nothing for a
- * curious client to find in it.
+ * Its own read, like the thread: the roster paints first. The standing goes to
+ * everybody who can see the session; only casting is reserved for the people
+ * who played (705d71f). Nothing in it says who voted for whom.
+ *
+ * `useLiveSession` invalidates it on roster and attendance events, because who
+ * played is what decides the ballot.
  */
 export function useMvp(sessionId: string, enabled = true) {
   return useQuery({

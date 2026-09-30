@@ -204,6 +204,10 @@ export type HapticName = 'in' | 'out';
  * turns off, and because these two are the ones you want to feel land without
  * looking: standing on a pitch, in the dark, deciding on the way to work.
  *
+ * One other press borrows `in`: casting an MVP vote. It happens once a week at
+ * most, and it is a promise to the group in the same sense — you said who was
+ * best. Changing your mind back to the same card does not buzz.
+ *
  * A separate switch from the sound rather than the same one. They are different
  * senses and the reasons to want them differ — a phone already on silent still
  * vibrates by design, which is exactly the case where somebody wants the buzz
