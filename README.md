@@ -125,7 +125,7 @@ clipboard in webviews, canvas compression) in one reviewable file.
 
 ## Local development
 
-Prerequisites: Node 20+ (developed on 24), a Rust toolchain with the
+Prerequisites: Node 20.19+ or 22.12+ (developed on 24), a Rust toolchain with the
 `wasm32-unknown-unknown` target, and a Cloudflare account for deployment. Local
 development needs no cloud resources at all — `wrangler dev` runs D1 and R2 on
 your machine.
