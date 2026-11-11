@@ -31,7 +31,7 @@ interface TextFieldProps {
   label: string;
   value: string;
   onChange(value: string): void;
-  type?: 'text' | 'number' | 'datetime-local' | 'url' | 'textarea';
+  type?: 'text' | 'number' | 'datetime-local' | 'url' | 'textarea' | 'password';
   placeholder?: string;
   supportingText?: string;
   errorText?: string;
@@ -39,6 +39,14 @@ interface TextFieldProps {
   disabled?: boolean;
   inputMode?: string;
   autoFocus?: boolean;
+  /** `username`, `current-password`, `new-password` — what password managers key on. */
+  autoComplete?: string;
+  /**
+   * Enter, or Go on a phone keyboard. Opt-in and per field: the real input is
+   * in the element's shadow root, which has no form owner, so the browser never
+   * submits a form from it on its own.
+   */
+  onEnter?(): void;
 }
 
 export function TextField({
@@ -53,8 +61,24 @@ export function TextField({
   disabled,
   inputMode,
   autoFocus,
+  autoComplete,
+  onEnter,
 }: TextFieldProps) {
   const ref = useRef<HTMLElement & { value: string }>(null);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element || !onEnter || type === 'textarea') return;
+    const handler = (event: KeyboardEvent) => {
+      // Not while an IME is composing: Enter there confirms the composition.
+      if (event.key === 'Enter' && !event.isComposing) {
+        event.preventDefault();
+        onEnter();
+      }
+    };
+    element.addEventListener('keydown', handler);
+    return () => element.removeEventListener('keydown', handler);
+  }, [onEnter, type]);
 
   // The element owns its value, so listen to the DOM event directly rather
   // than relying on React's synthetic system to reach inside a shadow root.
@@ -90,6 +114,7 @@ export function TextField({
       required={required}
       disabled={disabled}
       inputmode={inputMode}
+      autocomplete={autoComplete}
       rows={type === 'textarea' ? 3 : undefined}
     />
   );

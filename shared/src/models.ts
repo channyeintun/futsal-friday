@@ -634,8 +634,21 @@ export const identitySchema = z.object({
   language: z.enum(['en', 'my']),
   /** And on their preferred clock. */
   hour12: z.boolean().default(false),
+  /**
+   * False while they still sign in with the group's shared password, which
+   * anybody in the chat knows. The app asks them to choose their own until
+   * they do. Defaults to true so an older API never makes it nag.
+   */
+  hasPassword: z.boolean().default(true),
 });
 export type Identity = z.infer<typeof identitySchema>;
+
+/**
+ * Bounds on a password somebody chooses, in characters. The Worker enforces the
+ * same two numbers (`password.rs`); these are for saying so before it has to.
+ */
+export const PASSWORD_MIN_LENGTH = 6;
+export const PASSWORD_MAX_LENGTH = 200;
 
 /**
  * Redeeming a claim link.

@@ -24,6 +24,10 @@ pub mod code {
     pub const INTERNAL: &str = "internal";
     /// Not in the original union, but `createDisabledPubSub` emits it verbatim.
     pub const REALTIME_DISABLED: &str = "realtime_disabled";
+    /// A new password that is too short or too long.
+    pub const PASSWORD_LENGTH: &str = "password_length";
+    /// A new password that is the group's shared one.
+    pub const PASSWORD_IS_DEFAULT: &str = "password_is_default";
 }
 
 #[derive(Serialize)]

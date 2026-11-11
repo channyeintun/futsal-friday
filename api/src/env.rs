@@ -32,6 +32,12 @@ pub fn auth_secret(env: &Env) -> String {
     var(env, "AUTH_SECRET").unwrap_or_default()
 }
 
+/// The group's shared password, for anybody who has not set their own. Unset
+/// turns that way in off; a password somebody chose keeps working either way.
+pub fn default_password(env: &Env) -> Option<String> {
+    truthy_var(env, "DEFAULT_PASSWORD")
+}
+
 /// `Number.parseInt(env.SSE_MAX_DURATION_SECS ?? '', 10)`, kept when finite and
 /// positive, otherwise **600**.
 pub fn sse_max_duration_secs(env: &Env) -> i64 {

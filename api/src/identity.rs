@@ -48,6 +48,13 @@ pub const PROVIDER_NAME: &str = "token";
 
 const COOKIE_NAME: &str = "ff_token";
 const SESSION_TTL_SECONDS: i64 = 60 * 60 * 24 * 90; // 90 days
+/// A token with less than this left is swapped for a fresh one the next time
+/// the app opens. Without it a token simply ran out on day 90 — and since most
+/// of the group signed in during the same week, most of the group was signed
+/// out during the same week, organizer included. Now a phone stays signed in
+/// for as long as it is opened at least once every 60 days: a token is left
+/// alone for its first 30, so the guarantee is the TTL minus that, not the TTL.
+const RENEW_WHEN_LEFT_SECONDS: f64 = 60.0 * 60.0 * 24.0 * 60.0; // 60 days
 const SSE_TICKET_TTL_SECONDS: i64 = 120;
 
 /// A link is useful for a week; long enough to be seen, short enough to rot.
@@ -85,6 +92,8 @@ pub struct Resolved {
     /// Compared against `members.token_version` on every request. See
     /// [`Claims::version`] for what a token without one resolves to.
     pub token_version: i64,
+    /// The token's `exp`, epoch seconds — what decides whether to renew it.
+    pub expires_at: f64,
 }
 
 /* ------------------------------------------------------------------ tokens */
@@ -349,7 +358,18 @@ pub async fn authenticate(request: &Request, env: &Env) -> ApiResult<Option<Reso
     let Some(sub) = claims.sub() else {
         return Ok(None);
     };
-    Ok(Some(Resolved { member_id: sub.to_string(), token_version: claims.version() }))
+    Ok(Some(Resolved {
+        member_id: sub.to_string(),
+        token_version: claims.version(),
+        // A verified token always has a numeric `exp`; verification checks.
+        expires_at: claims.exp().unwrap_or(0.0),
+    }))
+}
+
+/// Whether a token expiring at `expires_at` (epoch seconds) is due a
+/// replacement at `now_ms`.
+pub fn due_for_renewal(expires_at: f64, now_ms: f64) -> bool {
+    expires_at - now_ms / 1000.0 < RENEW_WHEN_LEFT_SECONDS
 }
 
 /// `Authorization: Bearer …` first, the cookie second.
@@ -365,7 +385,8 @@ fn credential(authorization: Option<&str>, cookie_header: Option<&str>) -> Optio
         .or_else(|| read_cookie(cookie_header, COOKIE_NAME).map(str::to_string))
 }
 
-/// Mint a credential for a member who has just redeemed a claim link.
+/// Mint a credential for a member who has just redeemed a claim link, signed in
+/// with a password, or is having an old token renewed.
 pub async fn issue(
     identity: &Identity,
     token_version: i64,
@@ -448,6 +469,8 @@ pub async fn verify_sse_ticket(env: &Env, ticket: Option<&str>) -> ApiResult<Opt
         // route re-checks nothing else; carrying the flag would only let a
         // stale ticket assert it.
         approved: true,
+        // Not carried either, and the stream has no use for it.
+        has_password: false,
     }))
 }
 
@@ -797,10 +820,23 @@ mod tests {
         assert_ne!(nonce, new_claim_nonce());
     }
 
+    /// A fresh token is left alone for its first 30 days, then renewed.
+    #[test]
+    fn renews_a_token_once_a_month_has_gone() {
+        let issued_ms = 1_700_000_000_000.0;
+        let exp = issued_ms / 1000.0 + SESSION_TTL_SECONDS as f64;
+        let day_ms = 86_400_000.0;
+        assert!(!due_for_renewal(exp, issued_ms));
+        assert!(!due_for_renewal(exp, issued_ms + 29.0 * day_ms));
+        assert!(due_for_renewal(exp, issued_ms + 31.0 * day_ms));
+        assert!(due_for_renewal(exp, issued_ms + 89.0 * day_ms));
+    }
+
     /// The lifetimes, spelled out so a typo in the arithmetic cannot pass.
     #[test]
     fn keeps_the_documented_lifetimes() {
         assert_eq!(SESSION_TTL_SECONDS, 7_776_000);
+        assert_eq!(RENEW_WHEN_LEFT_SECONDS, 5_184_000.0);
         assert_eq!(SSE_TICKET_TTL_SECONDS, 120);
         assert_eq!(CLAIM_TTL_MS, 604_800_000.0);
         assert_eq!(GROUP_INVITE_TTL_MS, 2_592_000_000.0);

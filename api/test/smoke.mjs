@@ -11,7 +11,8 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { createHmac, pbkdf2Sync, randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 const BASE = process.env.API_URL ?? 'http://localhost:8787';
 
@@ -95,6 +96,21 @@ function seedClaimNonce(memberId) {
     `UPDATE members SET claim_nonce='${nonce}', claim_expires_at='${expires}' WHERE id='${memberId}';`],
     { encoding: 'utf8', stdio: 'pipe' });
   return nonce;
+}
+
+/** `api/.dev.vars` as an object, or `{}` when there is none. */
+function readDevVars() {
+  try {
+    const text = readFileSync(new URL('../.dev.vars', import.meta.url), 'utf8');
+    return Object.fromEntries(
+      text.split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith('#') && line.includes('='))
+        .map((line) => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)]),
+    );
+  } catch {
+    return {};
+  }
 }
 
 /** Run arbitrary SQL against the local dev database. */
@@ -699,7 +715,7 @@ const run = async () => {
 
   const afterRevoke = await call('GET', '/auth/me', { token: bobToken });
   check('the revoked token stops working immediately', afterRevoke.status === 401, afterRevoke.status);
-  check('and says what to do', /new link/i.test(afterRevoke.body?.error?.message ?? ''),
+  check('and says what to do', /sign in again/i.test(afterRevoke.body?.error?.message ?? ''),
     afterRevoke.body?.error?.message);
 
   const memberRevoke = await call('DELETE', `/members/${carol.id}/claim`, { token: alice.token });
@@ -1869,6 +1885,167 @@ const run = async () => {
         sql(`UPDATE sessions SET status = 'scheduled'
               WHERE id IN (${parked.map((id) => `'${id}'`).join(',')});`);
       }
+    }
+  }
+
+  section('passwords');
+  {
+    // Both secrets come from `.dev.vars`, which is where `wrangler dev` reads
+    // them. Neither is written into this file: the repository is public, and
+    // the shared password is a real one.
+    const devVars = readDevVars();
+    const shared = devVars.DEFAULT_PASSWORD;
+    if (!shared) console.log('  (no DEFAULT_PASSWORD in .dev.vars — skipping the shared-password checks)');
+
+    const dave = await addAndLogIn(organizer, `Pat ${stamp}`);
+    const signIn = (name, password) => call('POST', '/auth/password', { body: { name, password } });
+    const change = (token, body) => call('PUT', '/auth/password', { token, body });
+
+    const before = await call('GET', '/auth/me', { token: dave.token });
+    check('somebody who came in by link has no password yet', before.body?.identity?.hasPassword === false,
+      before.body?.identity);
+
+    const unknown = await signIn(`Nobody ${stamp}`, 'whatever-at-all');
+    check('an unknown name is refused', unknown.status === 401, unknown.body);
+    const wrong = await signIn(dave.name, 'not-the-password');
+    check('a wrong password is refused', wrong.status === 401, wrong.body);
+    check('with the same words as an unknown name',
+      wrong.body?.error?.message === unknown.body?.error?.message, [wrong.body, unknown.body]);
+    const empty = await signIn(dave.name, '');
+    check('an empty password is refused', empty.status === 401, empty.body);
+
+    let sharedToken = null;
+    if (shared) {
+      const viaShared = await signIn(`  ${dave.name.toLowerCase()} `, shared);
+      check('the shared password signs in somebody who has not chosen one',
+        viaShared.status === 200 && !!viaShared.body?.token, viaShared.body);
+      check('matching the name without regard to case or the spaces around it',
+        viaShared.body?.identity?.memberId === dave.id, viaShared.body?.identity);
+      check('and says they are still on it', viaShared.body?.identity?.hasPassword === false,
+        viaShared.body?.identity);
+      sharedToken = viaShared.body?.token ?? null;
+
+      const isShared = await change(dave.token, { newPassword: shared });
+      check('the shared password cannot be chosen as your own',
+        isShared.status === 400 && isShared.body?.error?.code === 'password_is_default', isShared.body);
+    }
+
+    const short = await change(dave.token, { newPassword: '12345' });
+    check('a five-character password is refused',
+      short.status === 400 && short.body?.error?.code === 'password_length', short.body);
+
+    // Somebody on the shared password could mint a link for "another device"
+    // and keep it. Choosing a password has to cancel it, or it is a way back.
+    const lurking = await call('POST', '/auth/my-device-link', { token: dave.token });
+    check('a link can be minted for another device', lurking.status === 200 && !!lurking.body?.url,
+      lurking.body);
+
+    const chosen = 'goal of the season';
+    const first = await change(dave.token, { newPassword: chosen });
+    check('choosing one the first time needs no current password', first.status === 200, first.body);
+    check('and hands back a fresh token', !!first.body?.token && first.body.token !== dave.token,
+      first.body);
+    check('that says they have one now', first.body?.identity?.hasPassword === true, first.body?.identity);
+    const daveToken = first.body?.token;
+
+    const oldDevice = await call('GET', '/auth/me', { token: dave.token });
+    check('every other device is signed out', oldDevice.status === 401, oldDevice.status);
+    if (sharedToken) {
+      const sharedDevice = await call('GET', '/auth/me', { token: sharedToken });
+      check('including one signed in with the shared password', sharedDevice.status === 401,
+        sharedDevice.status);
+    }
+    const thisDevice = await call('GET', '/auth/me', { token: daveToken });
+    check('but not this one', thisDevice.status === 200 && thisDevice.body?.identity?.hasPassword === true,
+      thisDevice.body);
+    const viaLink = await call('POST', '/auth/claim', { body: { nonce: nonceOf(lurking.body.url) } });
+    check('and a link minted before the change no longer works', viaLink.status === 401, viaLink.body);
+
+    // The Worker hashed with WebCrypto; node hashes the same way with OpenSSL.
+    // Agreeing is what says the parameters are the ones the hash claims.
+    const [stored] = sqlRows(`SELECT password_hash FROM members WHERE id = '${dave.id}';`);
+    const [scheme, rounds, salt, hash] = (stored?.password_hash ?? '').split('$');
+    check('the stored hash is PBKDF2-SHA-256', scheme === 'pbkdf2-sha256' && Number(rounds) >= 10_000,
+      stored);
+    check('and node derives the same bytes from it', !!salt &&
+      pbkdf2Sync(chosen, Buffer.from(salt, 'base64url'), Number(rounds), 32, 'sha256')
+        .toString('base64url') === hash);
+    check('the password itself is not in the row', !(stored?.password_hash ?? '').includes(chosen));
+
+    const roster = await call('GET', '/members', { token: organizer });
+    check('the roster never carries the hash', !JSON.stringify(roster.body).includes('pbkdf2'));
+
+    if (shared) {
+      const sharedAfter = await signIn(dave.name, shared);
+      check('the shared password stops working once they have their own', sharedAfter.status === 401,
+        sharedAfter.body);
+    }
+    const own = await signIn(dave.name, chosen);
+    check('their own password signs them in', own.status === 200 && own.body?.identity?.hasPassword === true,
+      own.body);
+    const ownToken = own.body?.token;
+
+    const noCurrent = await change(ownToken, { newPassword: 'another one entirely' });
+    check('changing it again needs the current one', noCurrent.status === 403, noCurrent.body);
+    const badCurrent = await change(ownToken, { currentPassword: 'guess', newPassword: 'another one entirely' });
+    check('the right current one', badCurrent.status === 403, badCurrent.body);
+    const stillIn = await call('GET', '/auth/me', { token: ownToken });
+    check('and getting it wrong does not sign you out', stillIn.status === 200, stillIn.status);
+    const changed = await change(ownToken, { currentPassword: chosen, newPassword: 'another one entirely' });
+    check('with it, the password changes', changed.status === 200 && !!changed.body?.token, changed.body);
+    const oldPassword = await signIn(dave.name, chosen);
+    check('and the old one stops working', oldPassword.status === 401, oldPassword.body);
+
+    const reset = await call('DELETE', `/members/${dave.id}/claim`, { token: organizer });
+    check('"sign out everywhere" still works', reset.status === 200, reset.body);
+    const [afterReset] = sqlRows(`SELECT password_hash FROM members WHERE id = '${dave.id}';`);
+    check('and puts them back on the shared password', afterReset?.password_hash === null, afterReset);
+    const forgotten = await signIn(dave.name, 'another one entirely');
+    check('so the password they forgot no longer works', forgotten.status === 401, forgotten.body);
+    if (shared) {
+      const back = await signIn(dave.name, shared);
+      check('and the shared one gets them back in', back.status === 200, back.body);
+      const [row] = sqlRows(`SELECT claimed_at FROM members WHERE id = '${dave.id}';`);
+      check('signing in with a password marks them as joined', !!row?.claimed_at, row);
+    }
+
+    // A token renews itself once it has less than 60 days left. Minting one
+    // that old needs the signing secret, which `.dev.vars` also holds.
+    if (devVars.AUTH_SECRET) {
+      const [{ token_version: version }] = sqlRows(`SELECT token_version FROM members WHERE id = '${dave.id}';`);
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      const mint = (exp) => {
+        const body = Buffer.from(JSON.stringify({
+          scope: 'session', sub: dave.id, name: dave.name, org: false, v: version, exp,
+        })).toString('base64url');
+        const mac = createHmac('sha256', devVars.AUTH_SECRET).update(body).digest('base64url');
+        return `${body}.${mac}`;
+      };
+
+      const aging = await call('GET', '/auth/me', { token: mint(nowSeconds + 10 * 86_400) });
+      check('a token with ten days left is renewed on /auth/me',
+        aging.status === 200 && typeof aging.body?.token === 'string', aging.body);
+      const renewed = aging.body?.token;
+      const renewedExp = renewed
+        ? JSON.parse(Buffer.from(renewed.split('.')[0], 'base64url').toString()).exp
+        : 0;
+      check('for another ninety days', renewedExp - nowSeconds > 89 * 86_400, renewedExp - nowSeconds);
+      const renewedMe = await call('GET', '/auth/me', { token: renewed });
+      check('and the new one works, without renewing again',
+        renewedMe.status === 200 && renewedMe.body?.token === undefined, renewedMe.body);
+
+      const fresh = await call('GET', '/auth/me', { token: mint(nowSeconds + 85 * 86_400) });
+      check('a token with most of its life left is not', fresh.status === 200 && fresh.body?.token === undefined,
+        fresh.body);
+    } else {
+      console.log('  (no AUTH_SECRET in .dev.vars — skipping the renewal checks)');
+    }
+
+    const removed = await call('DELETE', `/members/${dave.id}`, { token: organizer });
+    check('removing somebody', removed.status === 200, removed.body);
+    if (shared) {
+      const gone = await signIn(dave.name, shared);
+      check('means no password signs them in', gone.status === 401, gone.body);
     }
   }
 

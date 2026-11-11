@@ -1,12 +1,16 @@
 # Copy to `.dev.vars` (gitignored) for local development.
 # In production these are set with `wrangler secret put <NAME>`.
 
-# There is no shared invite code any more — sign in with a claim link:
+# Sign in as `Organizer` with DEFAULT_PASSWORD below, or with a claim link:
 #   npm run claim:bootstrap -w @futsal/api -- mem_organizer --local
 
 # HMAC key for identity tokens. Generate a real one for production:
 #   openssl rand -base64 32
 AUTH_SECRET=dev-only-secret-do-not-use-in-production
+
+# The group's shared password, for anybody who has not chosen their own. The
+# smoke test reads it from here. Never the production one — that is a secret.
+DEFAULT_PASSWORD=dev-group-password
 
 # Optional. Without these, realtime is disabled and the frontend polls every
 # 30s instead — which is a perfectly usable way to develop.

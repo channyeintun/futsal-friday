@@ -50,12 +50,57 @@ export function onUnauthorized(handler: () => void): void {
   unauthorizedHandler = handler;
 }
 
+/**
+ * A password change in flight. It bumps the server's token version before its
+ * response — carrying the replacement — gets back, so any other request that
+ * went out with the old token in that gap comes back 401. That is expected,
+ * not a sign-out, and is held until the change settles.
+ */
+let credentialChange: Promise<void> | null = null;
+
+/** Run `change`, which ends by installing a new token, with 401s held for it. */
+export async function duringCredentialChange<T>(change: () => Promise<T>): Promise<T> {
+  let settle!: () => void;
+  const pending = new Promise<void>((resolve) => (settle = resolve));
+  credentialChange = pending;
+  try {
+    return await change();
+  } finally {
+    settle();
+    if (credentialChange === pending) credentialChange = null;
+  }
+}
+
+/**
+ * The server refused `sentWith`. Forget it — but only it.
+ *
+ * Every tab reads the token once, at load, so a tab can be holding one that
+ * another tab has since replaced: choosing a password in one signs out the
+ * token every other tab is still sending. Their 401 must not delete the new
+ * token from storage, so a newer stored one is adopted instead.
+ */
+async function rejected(sentWith: string | null, isTheChange: boolean): Promise<void> {
+  // Not for the change's own request: that would wait on itself.
+  if (credentialChange && !isTheChange) await credentialChange;
+  // A different credential has been installed since; it is not this one's 401.
+  if (token !== sentWith) return;
+  const stored = platform.storage.get(TOKEN_KEY);
+  if (stored && stored !== sentWith) {
+    token = stored;
+    return;
+  }
+  clearToken();
+  unauthorizedHandler?.();
+}
+
 interface RequestOptions {
   body?: unknown;
   /** Raw payload for binary uploads; bypasses JSON encoding. */
   raw?: BodyInit;
   contentType?: string;
   signal?: AbortSignal;
+  /** This is the request inside `duringCredentialChange`. */
+  credentialChange?: boolean;
 }
 
 export async function request<T>(
@@ -118,11 +163,8 @@ export async function request<T>(
     );
     // A 401 means the credential *this request used* is dead; drop it so the
     // app cannot loop retrying with something that will never work. Only if it
-    // is still the current one — see `sentWith`.
-    if (apiError.isAuthError && token === sentWith) {
-      clearToken();
-      unauthorizedHandler?.();
-    }
+    // is still the current one — see `sentWith` and `rejected`.
+    if (apiError.isAuthError) await rejected(sentWith, options.credentialChange === true);
     throw apiError;
   }
 
@@ -163,10 +205,7 @@ export async function getBlob(path: string, signal?: AbortSignal): Promise<Blob>
   });
 
   if (!response.ok) {
-    if (response.status === 401 && token === sentWith) {
-      clearToken();
-      unauthorizedHandler?.();
-    }
+    if (response.status === 401) await rejected(sentWith, false);
     throw new ApiError(response.status, 'fetch_failed', 'Could not load that image');
   }
   return response.blob();

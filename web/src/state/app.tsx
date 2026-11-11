@@ -6,6 +6,8 @@ interface AppValue {
   identity: Identity;
   /** Re-reads the identity, e.g. after the organizer renames someone. */
   refresh(): Promise<void>;
+  /** Takes an identity the server has just answered with, e.g. after a password change. */
+  adopt(identity: Identity): void;
   signOut(): Promise<void>;
   /** Transient message at the bottom of the screen. */
   toast(message: string): void;
@@ -43,7 +45,7 @@ export function AppProvider({
   }, [onSignOut]);
 
   const value = useMemo<AppValue>(
-    () => ({ identity, refresh, signOut, toast, toastMessage }),
+    () => ({ identity, refresh, adopt: setIdentity, signOut, toast, toastMessage }),
     [identity, refresh, signOut, toast, toastMessage],
   );
 

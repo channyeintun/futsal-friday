@@ -61,6 +61,8 @@
   // Secrets — set with `wrangler secret put <NAME>`, never in this file:
   //   GROUP_INVITE_CODE        shared code that gates the whole app
   //   AUTH_SECRET              HMAC key for identity tokens (32+ random bytes)
+  //   DEFAULT_PASSWORD         the group's shared password, for anybody who has
+  //                            not chosen their own; unset turns that off
   //   UPSTASH_REDIS_REST_URL   from the Upstash console
   //   UPSTASH_REDIS_REST_TOKEN from the Upstash console
   //

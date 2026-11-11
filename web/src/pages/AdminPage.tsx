@@ -14,6 +14,7 @@ import { Avatar } from '../components/Avatar.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
 import { Icon } from '../components/Icon.js';
 import { GroupInviteCard, MemberInviteControls, MyDeviceCard } from '../components/InviteLink.js';
+import { PasswordCard } from '../components/Password.js';
 import { PaymentDetailsCard } from '../components/PaymentDetailsCard.js';
 import { PendingApprovals } from '../components/PendingApprovals.js';
 import { platform } from '../platform/index.js';
@@ -38,12 +39,16 @@ export function AdminPage() {
   if (!identity.isOrganizer) {
     return (
       <>
+        {/* First while they are still on the group password, which anybody in
+            the chat can use to be them. */}
+        {identity.hasPassword === false ? <PasswordCard /> : null}
         {/* Reminders are everyone's setting, not an organizer tool. */}
         <LanguageCard />
         <ClockCard />
         <SoundCard />
         <HapticsCard />
         <PitchViewCard />
+        {identity.hasPassword === false ? null : <PasswordCard />}
         <MyDeviceCard />
         <ReminderSettings />
         <div className="card">
@@ -69,11 +74,14 @@ export function AdminPage() {
       {/* First on the screen when it has anything to show: somebody is stuck
           on a waiting screen until this gets a tap. */}
       <PendingApprovals onChanged={() => void queryClient.invalidateQueries({ queryKey: queryKeys.members })} />
+      {/* An organizer on the shared password is the whole group's problem. */}
+      {identity.hasPassword === false ? <PasswordCard /> : null}
       <LanguageCard />
       <ClockCard />
       <SoundCard />
       <HapticsCard />
       <PitchViewCard />
+      {identity.hasPassword === false ? null : <PasswordCard />}
       <MyDeviceCard />
       <ReminderSettings />
       {/* Above the roster: sharing one link is the normal way to onboard, and

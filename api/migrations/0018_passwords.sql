@@ -1,0 +1,16 @@
+-- Migration 0018 — signing in with a name and a password.
+--
+-- Session tokens last 90 days, and most of the group claimed theirs in the
+-- same week, so most of the group was signed out in the same week too. With
+-- the organizer among them there was nobody left to mint a link, and a link
+-- was the only way in.
+--
+-- So a name and a password works as well. NULL here is the ordinary state and
+-- means "has not chosen one": the group's shared password, the `DEFAULT_PASSWORD`
+-- secret, signs them in until they do. It is a secret rather than a row because
+-- it is the same for everybody, and because the repository is public.
+--
+-- A PBKDF2-SHA-256 hash in the form `pbkdf2-sha256$<iterations>$<salt>$<hash>`,
+-- salt and hash base64url. The iteration count travels with the hash, so it can
+-- be raised later without invalidating anybody's password.
+ALTER TABLE members ADD COLUMN password_hash TEXT;

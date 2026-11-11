@@ -3,18 +3,19 @@ import { LOCALES, LOCALE_LABELS } from '@futsal/shared';
 import { useEffect, useRef, useState } from 'react';
 import { claim } from '../api/auth.js';
 import { Icon } from '../components/Icon.js';
+import { PasswordSignIn } from '../components/Password.js';
 import { PasteInvite } from '../components/PasteInvite.js';
 import { Button, ErrorBanner, Spinner } from '../components/ui.js';
 import { platform } from '../platform/index.js';
 import { useLocale } from '../state/locale.js';
 
 /**
- * The only way in: open the link somebody sent you.
+ * Opening the link somebody sent you.
  *
- * There is no name picker and no shared password, so this screen has exactly
- * two states — redeeming, or explaining that you need a link. Nothing here
- * reveals who is in the group, which is the point: before this change, anyone
- * with the group code could read the roster and pick any name on it.
+ * Two states — redeeming, or saying the link did not work and offering the
+ * password instead. Nothing here reveals who is in the group, which is the
+ * point: before links, anyone with the group code could read the roster and
+ * pick any name on it.
  */
 export function ClaimPage({
   onSignedIn,
@@ -86,6 +87,8 @@ export function ClaimPage({
         ) : (
           <>
             {error ? <ErrorBanner>{error}</ErrorBanner> : null}
+            {/* A spent link is usually an old one; the password still works. */}
+            <PasswordSignIn onSignedIn={onSignedIn} />
             <div className="card">
               <p className="card-sub" style={{ margin: 0 }}>
                 {m.claim.askOrganizer}
@@ -109,11 +112,13 @@ export function ClaimPage({
   );
 }
 
-/** Shown when someone opens the app without ever having claimed an identity. */
+/** Shown whenever nobody is signed in: a password, or a link. */
 export function SignInNeeded({
   onInvite,
+  onSignedIn,
 }: {
   onInvite(kind: InviteKind, nonce: string): void;
+  onSignedIn(identity: Identity): void;
 }) {
   const { m, locale, setLocale } = useLocale();
 
@@ -128,13 +133,15 @@ export function SignInNeeded({
           </p>
         </div>
 
+        <PasswordSignIn onSignedIn={onSignedIn} />
+
+        <PasteInvite onInvite={onInvite} />
+
         <div className="card">
           <p className="card-sub" style={{ margin: 0 }}>
             {m.claim.askOrganizer}
           </p>
         </div>
-
-        <PasteInvite onInvite={onInvite} />
 
         <div className="row" style={{ justifyContent: 'center', gap: 4 }}>
           {LOCALES.map((code) => (

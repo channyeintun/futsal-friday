@@ -32,6 +32,7 @@ mod identity;
 mod js;
 mod middleware;
 mod notifications;
+mod password;
 mod push;
 mod realtime;
 mod routes;

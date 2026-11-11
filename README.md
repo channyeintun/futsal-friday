@@ -22,8 +22,8 @@ Available in English and Burmese (မြန်မာ).
 | Cron | `0 * * * *` — hourly |
 | Push | VAPID configured; reminders live |
 
-Getting in is by invite link — one for the whole group, or one per person.
-See [Who can get in](#who-can-get-in).
+Getting in is by name and password, or by invite link — one for the whole
+group, or one per person. See [Who can get in](#who-can-get-in).
 
 ---
 
@@ -168,7 +168,8 @@ The API is on `http://localhost:8787` and the app on `http://localhost:5173`.
 Vite proxies `/api` to the Worker, so everything is same-origin in development
 and there is no CORS to think about.
 
-To sign in locally, mint yourself a link:
+To sign in locally, put a `DEFAULT_PASSWORD` in `api/.dev.vars` and sign in as
+`Organizer` with it, or mint yourself a link:
 
 ```bash
 npm run claim:bootstrap -w @futsal/api -- mem_organizer --local
@@ -233,6 +234,14 @@ npx wrangler secret put AUTH_SECRET
 Use something long and random — `openssl rand -base64 32`. Changing it later
 signs everybody out, which is one way to revoke access in a hurry (the targeted
 way is per-member, below).
+
+The group's shared password, for anybody who has not chosen their own — see
+[Passwords](#passwords). Leave it unset and only people who have chosen one, or
+who have a link, can get in:
+
+```bash
+npx wrangler secret put DEFAULT_PASSWORD
+```
 
 Optional, for realtime. Create a free Redis database at
 [console.upstash.com](https://console.upstash.com) and set both:
@@ -851,8 +860,9 @@ one.
 
 ### Who can get in
 
-There is no password and no shared code. The organizer pastes **one link** into
-the group chat and everyone gets in through it.
+Two ways: a **name and password**, or a **link**. The organizer pastes one link
+into the group chat and everyone can get in through it; once in, people sign in
+again with a password.
 
 Tapping the link shows the names that are still free. You tap yours and it locks
 to your phone. If you are not on the list — which is the normal case, because the
@@ -927,9 +937,10 @@ Worth knowing:
   the bootstrap path mint one with a single SQL statement and no secrets.
 - **Tapped the wrong name?** The organizer clears it from the roster (the `×`
   next to a joined member), and it goes back on the list for them to try again.
-- **Lost phone?** *Sign out their devices* on the roster bumps that member's
-  `token_version`, which invalidates every session token they hold — session
-  tokens are stateless and otherwise last 90 days. Then send a new link.
+- **Lost phone, or forgot their password?** *Sign out everywhere* on the
+  roster bumps that member's `token_version`, which invalidates every session
+  token they hold, and puts them back on the shared password. Then they sign in
+  with that, or you send a new link.
 - **Second device?** Anyone can mint a link for themselves under **Setup → Add
   another device**, without waiting on the organizer. That is not a privilege
   escalation: they already have the access they are copying.
@@ -939,10 +950,53 @@ Worth knowing:
   takes a two-minute, stream-only ticket in its query string instead of the
   long-lived token.
 
+#### Passwords
+
+Session tokens are stateless and last 90 days. They used to simply run out on
+day 90 — and because most of the group signed in during the same week, most of
+the group was signed out during the same week, organizer included, with nobody
+left who could send a link. Two changes came out of that:
+
+- **Tokens renew themselves.** `GET /auth/me`, which the app calls every time it
+  opens, hands back a fresh 90-day token once the current one has less than 60
+  days left. Opening the app once every two months keeps you signed in for good.
+- **A name and a password also gets you in.** Somebody who has never chosen a
+  password signs in with the group's shared one, the `DEFAULT_PASSWORD` secret.
+  It is a secret rather than anything in this repository because the repository
+  is public. Until they choose their own, Home and Setup ask them to, because
+  anybody who knows the shared password and their name can be them — and that
+  includes the organizers, so they should go first.
+
+Details worth knowing:
+
+- **The name is matched ignoring ASCII case**, the same way the roster keeps
+  names unique, and an unknown name gets the same answer as a wrong password.
+  The sign-in screen does not list names: it is public, and a list would hand
+  the roster to anybody who opened the address.
+- **Choosing a password signs you out everywhere else** and hands this device a
+  fresh token. If somebody had used the shared password to be you, that is what
+  ends it. The first time needs no current password — being signed in already
+  proves who you are — and after that it does. The shared password itself is
+  refused as a choice.
+- **Hashed with PBKDF2-SHA-256 through WebCrypto**, 50,000 rounds, salted, as
+  `pbkdf2-sha256$<rounds>$<salt>$<hash>`. Not more, and not Argon2: the free
+  plan allows about 10 ms of CPU per request, and native PBKDF2 at this count
+  is about 6 ms. Changing a password you already have checks the old one and
+  hashes the new, so that one request is about 12 ms — over the line, which the
+  free plan tolerates when it is occasional. The round count travels with each
+  hash, so raising it later breaks nobody.
+- **Choosing a password also cancels any unused link** for that member, for the
+  same reason it signs out their other devices: somebody on the shared password
+  could have minted one under *Sign in somewhere else*.
+- **There is no rate limit on sign-in.** A password somebody chose costs a
+  guesser one PBKDF2 per try. The shared password is the weaker door, which is
+  why the app keeps asking people to close it.
+
 #### Locked out
 
 If nobody can sign in — the first organizer, or one who lost their only device —
-mint a link straight from the database. It needs no secrets:
+sign in with the shared password, if they never chose their own, or mint a link
+straight from the database. It needs no secrets:
 
 ```bash
 npm run claim:bootstrap -w @futsal/api -- <memberId>

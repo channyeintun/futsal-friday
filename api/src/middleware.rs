@@ -26,14 +26,18 @@ pub struct Identity {
     pub language: String,
     pub hour12: bool,
     pub approved: bool,
+    /// False while they still sign in with the group's shared password, which
+    /// is what the app nags about. Last, so the order above is undisturbed.
+    pub has_password: bool,
 }
 
-/// The one column the revocation check reads. Optional so that a row without a
+/// The columns the revocation check reads. Optional so that a row without a
 /// value reads as absent rather than as a deserialization failure, which is
 /// what `current?.token_version ?? 1` did.
 #[derive(Deserialize)]
 struct TokenVersionRow {
     token_version: Option<i64>,
+    has_password: Option<i64>,
 }
 
 /// Require a signed-in member.
@@ -58,17 +62,21 @@ pub async fn require_member(req: &Request, env: &Env) -> ApiResult<Identity> {
     // Revocation. The row is already loaded to re-check membership, so cutting
     // off a lost phone costs nothing extra.
     let current: Option<TokenVersionRow> = db_handle
-        .prepare("SELECT token_version FROM members WHERE id = ?1")
+        .prepare(
+            "SELECT token_version, password_hash IS NOT NULL AS has_password
+               FROM members WHERE id = ?1",
+        )
         .bind(&[member.id.as_str().into()])?
         .first(None)
         .await?;
+    let has_password = current.as_ref().and_then(|row| row.has_password) == Some(1);
     // No row — this second read has no `active = 1` filter but the row can
     // still have gone between the two queries — counts as version 1, the
     // column's default and what a token minted before revocation existed
     // resolves to.
     let current_version = current.and_then(|row| row.token_version).unwrap_or(1);
     if current_version != resolved.token_version {
-        return Err(http::unauthorized("This device was signed out. Ask for a new link."));
+        return Err(http::unauthorized("This device was signed out. Sign in again."));
     }
 
     Ok(Identity {
@@ -78,6 +86,7 @@ pub async fn require_member(req: &Request, env: &Env) -> ApiResult<Identity> {
         language: member.language,
         hour12: member.hour12,
         approved: member.approved_at.is_some(),
+        has_password,
     })
 }
 

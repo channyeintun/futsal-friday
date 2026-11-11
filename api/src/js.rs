@@ -9,11 +9,54 @@ use wasm_bindgen::prelude::*;
 extern "C" {
     #[wasm_bindgen(js_namespace = crypto, js_name = randomUUID)]
     fn crypto_random_uuid() -> String;
+
+    #[wasm_bindgen(js_namespace = ["crypto", "subtle"], js_name = importKey, catch)]
+    fn subtle_import_key(
+        format: &str,
+        key_data: &js_sys::Uint8Array,
+        algorithm: &str,
+        extractable: bool,
+        usages: &js_sys::Array,
+    ) -> Result<js_sys::Promise, JsValue>;
+
+    #[wasm_bindgen(js_namespace = ["crypto", "subtle"], js_name = deriveBits, catch)]
+    fn subtle_derive_bits(
+        algorithm: &js_sys::Object,
+        base_key: &JsValue,
+        length: u32,
+    ) -> Result<js_sys::Promise, JsValue>;
 }
 
 /// `crypto.randomUUID()` — lowercase hex with hyphens, v4.
 pub fn random_uuid() -> String {
     crypto_random_uuid()
+}
+
+/// `crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', … })`.
+///
+/// The host's, not RustCrypto's, unlike the HMAC and Web Push code: PBKDF2 is
+/// tens of thousands of hashes in a row, and native code does them several
+/// times faster than Wasm can — which on a 10 ms CPU budget is the difference
+/// between a sign-in and an error page.
+pub async fn pbkdf2_sha256(
+    password: &[u8],
+    salt: &[u8],
+    iterations: u32,
+    bits: u32,
+) -> Result<Vec<u8>, JsValue> {
+    let usages = js_sys::Array::of1(&JsValue::from_str("deriveBits"));
+    let key = subtle_import_key("raw", &js_sys::Uint8Array::from(password), "PBKDF2", false, &usages)?;
+    let key = wasm_bindgen_futures::JsFuture::from(key).await?;
+
+    let algorithm = js_sys::Object::new();
+    js_sys::Reflect::set(&algorithm, &"name".into(), &"PBKDF2".into())?;
+    js_sys::Reflect::set(&algorithm, &"hash".into(), &"SHA-256".into())?;
+    js_sys::Reflect::set(&algorithm, &"salt".into(), &js_sys::Uint8Array::from(salt))?;
+    js_sys::Reflect::set(&algorithm, &"iterations".into(), &JsValue::from(iterations))?;
+
+    let derived = subtle_derive_bits(&algorithm, &key, bits)?;
+    let derived = wasm_bindgen_futures::JsFuture::from(derived).await?;
+    Ok(js_sys::Uint8Array::new(&derived).to_vec())
 }
 
 /// `new Date().toISOString()`.

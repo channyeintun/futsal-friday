@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useSplashDown } from '../boot.js';
 import { Icon } from '../components/Icon.js';
+import { PasswordNudge } from '../components/Password.js';
 import { VirtualList } from '../components/VirtualList.js';
 import { SessionView } from '../components/SessionView.js';
 import { ErrorBanner, Spinner } from '../components/ui.js';
@@ -47,6 +48,7 @@ export function HomePage() {
   return (
     <>
       {overview.error ? <ErrorBanner>{overview.error.message}</ErrorBanner> : null}
+      <PasswordNudge />
 
       {upcomingId && live.detail ? (
         <SessionView

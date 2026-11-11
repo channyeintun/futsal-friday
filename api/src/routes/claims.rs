@@ -173,13 +173,17 @@ async fn revoke_claim(env: &Env, identity: &Identity, id: &str) -> ApiResult<Res
         ));
     }
 
+    // The password goes too, back to the group's shared one. This is also how
+    // somebody who forgot theirs gets back in, and a stolen phone's thief who
+    // watched them type it should not be able to walk back in afterwards.
     db_handle
         .prepare(
             "UPDATE members
           SET token_version = token_version + 1,
               claim_nonce = NULL,
               claim_expires_at = NULL,
-              claimed_at = NULL
+              claimed_at = NULL,
+              password_hash = NULL
         WHERE id = ?1",
         )
         .bind(&[text(id)])?
@@ -335,6 +339,7 @@ async fn claim_name(req: &mut Request, env: &Env) -> ApiResult<Response> {
         language: member.language,
         hour12: member.hour12,
         approved: member.approved_at.is_some(),
+        has_password: row.password_hash.is_some(),
     };
 
     let credential = identity::issue(&identity, row.token_version, env).await?;
@@ -405,6 +410,7 @@ async fn self_add(req: &mut Request, env: &Env, ctx: &Context) -> ApiResult<Resp
         language: member.language,
         hour12: member.hour12,
         approved: false,
+        has_password: false,
     };
 
     let credential = identity::issue(&identity, row.token_version, env).await?;

@@ -49,6 +49,11 @@ pub struct MemberRow {
     pub avatar_updated_at: Option<String>,
     pub approved_at: Option<String>,
     pub hour12: i64,
+    /// NULL until they choose one; the group's shared password signs them in
+    /// until then. Never leaves the Worker: `to_member` does not copy it.
+    /// Defaulted, so a query naming its columns need not name this one.
+    #[serde(default)]
+    pub password_hash: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

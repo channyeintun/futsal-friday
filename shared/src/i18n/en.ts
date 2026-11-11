@@ -161,7 +161,40 @@ export const en = {
     noLink: 'This page needs an invite link.',
     failed: 'Could not sign you in',
     askOrganizer:
-      'Ask the organizer to send you your personal link. It signs you in as you — no password to remember.',
+      'New to the group? Ask the organizer for a link. Forgot your password? Ask them to reset it — you can then sign in with the group password.',
+  },
+
+  password: {
+    // The sign-in screen.
+    signInTitle: 'Sign in',
+    signInBody:
+      "Your name as it appears in the app, and your password. Haven't chosen one? Use the group password from the chat.",
+    name: 'Your name',
+    password: 'Password',
+    signIn: 'Sign in',
+    signingIn: 'Signing in…',
+    wrong: "That name and password don't match. Check how your name is spelled in the app.",
+    failed: 'Could not sign you in',
+    // Setup.
+    setTitle: 'Choose your own password',
+    setBody:
+      "You haven't chosen a password yet, so the group password — which everyone in the chat knows — signs in as you. Choose your own to stop that.",
+    changeTitle: 'Password',
+    changeBody: 'Changing it signs you out on every other phone and browser.',
+    current: 'Current password',
+    new: 'New password',
+    confirm: 'New password again',
+    save: 'Save password',
+    tooShort: (min: number) => `Use at least ${min} characters.`,
+    mismatch: "The two new passwords don't match.",
+    wrongCurrent: "That isn't your current password.",
+    isDefault: "That's the group password. Pick one of your own.",
+    saved: 'Password saved. Your other devices are signed out.',
+    couldNotSave: 'Could not save the password',
+    // Home, until they have done it.
+    nudgeTitle: 'Choose your own password',
+    nudgeBody: "You haven't chosen a password yet, so anyone who knows the group password can sign in as you.",
+    nudgeAction: 'Choose a password',
   },
 
   join: {
@@ -227,7 +260,7 @@ export const en = {
       'Open this link in another browser, or on another phone or laptop, to sign in there too. Each browser signs in on its own — being signed in on Chrome does not sign you in on Safari.',
     removeAccess: 'Sign out everywhere',
     removeAccessBody:
-      'Signs them out of every browser they are signed in on, and cancels any unused link. They will need a new one.',
+      'Signs them out of every browser they are signed in on, cancels any unused link, and puts them back on the group password. Use it when somebody has forgotten theirs.',
     confirmRemove: (name: string) => `Sign ${name} out of everywhere?`,
     removed: (name: string) => `${name} signed out everywhere`,
     couldNotRemove: 'Could not do that',
@@ -615,7 +648,7 @@ export const en = {
       'It stops being offered for new sessions. Sessions already played there keep it.',
     confirmSignOut: 'Sign out of this browser?',
     confirmSignOutBody:
-      'You will need an invite link to get back in — there is no password to type.',
+      "To get back in you'll need your name and password, or a link from the organizer.",
     removeNote:
       'Removing someone keeps their past sessions and payments — they just stop appearing on the sign-in list.',
     couldNotAdd: 'Could not add that person',

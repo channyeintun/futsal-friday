@@ -1,5 +1,14 @@
 import type { ClaimLink, GroupInvite, Identity, JoinableMember } from '@futsal/shared';
-import { clearToken, del, get, post, setToken } from './client.js';
+import {
+  clearToken,
+  del,
+  duringCredentialChange,
+  get,
+  getToken,
+  post,
+  request,
+  setToken,
+} from './client.js';
 
 /**
  * Redeem a claim link. The nonce comes from the URL fragment, never the query
@@ -11,10 +20,44 @@ export async function claim(nonce: string): Promise<Identity> {
   return result.identity;
 }
 
+/**
+ * Sign in with a name and a password — your own, or the group's shared one if
+ * you have not chosen one yet.
+ */
+export async function signInWithPassword(name: string, password: string): Promise<Identity> {
+  const result = await post<{ token: string; identity: Identity }>('/auth/password', {
+    name,
+    password,
+  });
+  setToken(result.token);
+  return result.identity;
+}
+
+/**
+ * Choose a password, or change it. Every other device is signed out; this one
+ * is handed a fresh token, which is installed before this resolves — and until
+ * it is, a 401 for the old token is not taken as being signed out.
+ */
+export function changePassword(currentPassword: string, newPassword: string): Promise<Identity> {
+  return duringCredentialChange(async () => {
+    const result = await request<{ token: string; identity: Identity }>('PUT', '/auth/password', {
+      body: { currentPassword, newPassword },
+      credentialChange: true,
+    });
+    setToken(result.token);
+    return result.identity;
+  });
+}
+
 /** Resolves null when there is no usable credential. */
 export async function currentIdentity(): Promise<Identity | null> {
+  // The server swaps a month-old token for a fresh one here. Only install it
+  // if nothing has replaced the token this request went out with — the boot
+  // probe races a sign-in, and the newer credential must win.
+  const sentWith = getToken();
   try {
-    const result = await get<{ identity: Identity }>('/auth/me');
+    const result = await get<{ identity: Identity; token?: string }>('/auth/me');
+    if (result.token && getToken() === sentWith) setToken(result.token);
     return result.identity;
   } catch {
     // `request()` has already cleared a rejected token; anything else here

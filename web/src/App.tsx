@@ -120,7 +120,10 @@ export function App() {
         ) : route === 'claim' ? (
           <ClaimPage onSignedIn={setIdentity} nonce={pastedInvite?.nonce} />
         ) : (
-          <SignInNeeded onInvite={(kind, nonce) => setPastedInvite({ kind, nonce })} />
+          <SignInNeeded
+            onInvite={(kind, nonce) => setPastedInvite({ kind, nonce })}
+            onSignedIn={setIdentity}
+          />
         )}
       </LocaleProvider>
     );
